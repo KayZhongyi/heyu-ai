@@ -79,3 +79,43 @@ jobs:
         run: docker compose config --quiet
       - name: Build application image
         run: docker compose build api
+      - name: Start PostgreSQL stack
+        run: docker compose up -d --wait
+      - name: Verify PostgreSQL-backed workflow and persistence
+        shell: bash
+        run: |
+          set -euo pipefail
+          health=$(curl --fail --silent --show-error http://127.0.0.1:8000/health)
+          test "$(jq -r .status <<<"$health")" = "ok"
+
+          token=$(curl --fail --silent --show-error \
+            -H 'Content-Type: application/json' \
+            -d '{"organization_name":"Docker Farm","organization_slug":"docker-farm","email":"owner@docker.example","display_name":"Docker Owner","password":"correct-horse-battery"}' \
+            http://127.0.0.1:8000/v1/auth/bootstrap | jq -r .access_token)
+          test -n "$token" && test "$token" != "null"
+
+          brand_id=$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $token" \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"Docker Demo Farm","story":"PostgreSQL persistence check","voice":"trustworthy"}' \
+            http://127.0.0.1:8000/v1/brands | jq -r .id)
+          test -n "$brand_id" && test "$brand_id" != "null"
+
+          docker compose restart api
+          timeout 60 bash -c 'until curl --fail --silent http://127.0.0.1:8000/health >/dev/null; do sleep 2; done'
+
+          login_token=$(curl --fail --silent --show-error \
+            -H 'Content-Type: application/json' \
+            -d '{"organization_slug":"docker-farm","email":"owner@docker.example","password":"correct-horse-battery"}' \
+            http://127.0.0.1:8000/v1/auth/login | jq -r .access_token)
+          brands=$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $login_token" \
+            http://127.0.0.1:8000/v1/brands)
+          test "$(jq -r 'length' <<<"$brands")" = "1"
+          test "$(jq -r '.[0].id' <<<"$brands")" = "$brand_id"
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Stop PostgreSQL stack
+        if: always()
+        run: docker compose down -v
