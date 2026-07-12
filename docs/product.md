@@ -50,6 +50,11 @@ same approved-source citations and prohibited-claim warnings.
 - Knowledge review follows the same explicit governance pattern as content:
   `draft` → `pending_review` → `approved` or `rejected`. Only approved sources
   enter AI context, and completed decisions cannot be silently overwritten.
+- Reviewed knowledge is corrected by creating a new draft revision, never by
+  overwriting the reviewed record. Each linear revision chain retains its group
+  ID, parent revision, revision number, change summary, and independent SHA-256
+  digest. Generation selects the latest approved revision in the chain; a
+  rejected revision leaves the previous approved revision active.
 - Text knowledge can be entered manually or imported from a local UTF-8 TXT,
   Markdown, or CSV file up to 1 MB. The original file is not persisted; the
   submitted text, source filename, media type, and SHA-256 digest are retained.

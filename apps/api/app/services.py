@@ -16,6 +16,7 @@ from app.models import (
     KnowledgeSource,
     Product,
     ReviewStatus,
+    new_id,
 )
 from app.schemas import (
     Actor,
@@ -25,6 +26,7 @@ from app.schemas import (
     ContentVersionCreate,
     KnowledgeReview,
     KnowledgeSourceCreate,
+    KnowledgeSourceRevisionCreate,
     ProductCreate,
 )
 
@@ -131,11 +133,13 @@ def create_knowledge_source(
         if data.brand_id and product.brand_id != data.brand_id:
             raise HTTPException(status_code=422, detail="Product does not belong to brand")
     source = KnowledgeSource(
+        id=new_id(),
         organization_id=actor.organization_id,
         created_by=actor.user_id,
         **data.model_dump(),
         content_sha256=hashlib.sha256(data.content.encode("utf-8")).hexdigest(),
     )
+    source.source_group_id = source.id
     db.add(source)
     db.flush()
     audit(
@@ -153,6 +157,66 @@ def create_knowledge_source(
     db.commit()
     db.refresh(source)
     return source
+
+
+def revise_knowledge_source(
+    db: Session,
+    actor: Actor,
+    source_id: str,
+    data: KnowledgeSourceRevisionCreate,
+) -> KnowledgeSource:
+    parent = db.scalar(
+        select(KnowledgeSource).where(
+            KnowledgeSource.id == source_id,
+            KnowledgeSource.organization_id == actor.organization_id,
+        )
+    )
+    if parent is None:
+        raise HTTPException(status_code=404, detail="Knowledge source not found")
+    if parent.status not in {ReviewStatus.approved, ReviewStatus.rejected}:
+        raise HTTPException(
+            status_code=409,
+            detail="Only reviewed knowledge sources can be revised",
+        )
+    latest_revision = db.scalar(
+        select(func.max(KnowledgeSource.revision_number)).where(
+            KnowledgeSource.organization_id == actor.organization_id,
+            KnowledgeSource.source_group_id == parent.source_group_id,
+        )
+    )
+    if parent.revision_number != latest_revision:
+        raise HTTPException(
+            status_code=409,
+            detail="Only the latest knowledge revision can be revised",
+        )
+    revision = KnowledgeSource(
+        organization_id=actor.organization_id,
+        created_by=actor.user_id,
+        source_group_id=parent.source_group_id,
+        parent_source_id=parent.id,
+        revision_number=(latest_revision or 0) + 1,
+        content_sha256=hashlib.sha256(data.content.encode("utf-8")).hexdigest(),
+        **data.model_dump(),
+    )
+    db.add(revision)
+    db.flush()
+    audit(
+        db,
+        actor,
+        "knowledge.revised",
+        "knowledge_source",
+        revision.id,
+        {
+            "parent_source_id": parent.id,
+            "source_group_id": parent.source_group_id,
+            "revision_number": revision.revision_number,
+            "change_summary": revision.change_summary,
+            "content_sha256": revision.content_sha256,
+        },
+    )
+    db.commit()
+    db.refresh(revision)
+    return revision
 
 
 def list_knowledge_sources(db: Session, actor: Actor) -> list[KnowledgeSource]:
@@ -266,15 +330,24 @@ def generate_content(
         raise HTTPException(status_code=404, detail="Content project not found")
     brand = _tenant_brand(db, actor, project.brand_id)
     product = _tenant_product(db, actor, project.product_id)
-    sources = list(
+    approved_sources = list(
         db.scalars(
-            select(KnowledgeSource).where(
+            select(KnowledgeSource)
+            .where(
                 KnowledgeSource.organization_id == actor.organization_id,
                 KnowledgeSource.status == ReviewStatus.approved,
                 (KnowledgeSource.product_id == product.id) | (KnowledgeSource.brand_id == brand.id),
             )
+            .order_by(
+                KnowledgeSource.source_group_id,
+                KnowledgeSource.revision_number.desc(),
+            )
         )
     )
+    latest_approved_by_group: dict[str, KnowledgeSource] = {}
+    for source in approved_sources:
+        latest_approved_by_group.setdefault(source.source_group_id, source)
+    sources = list(latest_approved_by_group.values())
     provider = get_ai_provider()
     result = provider.generate_script(project, brand, product, sources)
     normalized_input = {

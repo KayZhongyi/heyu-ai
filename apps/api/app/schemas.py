@@ -107,6 +107,10 @@ class KnowledgeSourceCreate(BaseModel):
     product_id: str | None = None
 
 
+class KnowledgeSourceRevisionCreate(KnowledgeSourceCreate):
+    change_summary: str = Field(min_length=1, max_length=255)
+
+
 class KnowledgeSourceRead(ORMModel):
     id: str
     organization_id: str
@@ -119,6 +123,10 @@ class KnowledgeSourceRead(ORMModel):
     source_filename: str
     media_type: str
     content_sha256: str
+    source_group_id: str
+    parent_source_id: str | None
+    revision_number: int
+    change_summary: str
     status: ReviewStatus
     created_by: str
     reviewed_by: str | None

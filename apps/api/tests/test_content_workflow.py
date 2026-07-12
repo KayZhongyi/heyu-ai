@@ -399,3 +399,119 @@ def test_knowledge_requires_submission_before_review(client, auth):
 
     events = client.get("/v1/audit-events", headers=auth).json()
     assert any(event["action"] == "knowledge.submitted" for event in events)
+
+
+def test_knowledge_revisions_are_immutable_linear_and_generation_uses_latest_approved(client, auth):
+    brand, product = create_brand_and_product(client, auth)
+
+    def create_revision(parent_id, content, summary):
+        return client.post(
+            f"/v1/knowledge/{parent_id}/revisions",
+            headers=auth,
+            json={
+                "title": "Revisioned product facts",
+                "kind": "product_fact",
+                "content": content,
+                "citation_label": summary,
+                "brand_id": brand["id"],
+                "product_id": product["id"],
+                "change_summary": summary,
+            },
+        )
+
+    def submit_and_review(source_id, status):
+        assert client.post(f"/v1/knowledge/{source_id}/submit", headers=auth).status_code == 200
+        response = client.post(
+            f"/v1/knowledge/{source_id}/review",
+            headers=auth,
+            json={"status": status},
+        )
+        assert response.status_code == 200
+        return response.json()
+
+    first = client.post(
+        "/v1/knowledge",
+        headers=auth,
+        json={
+            "title": "Revisioned product facts",
+            "kind": "product_fact",
+            "content": "Original approved facts.",
+            "citation_label": "R1",
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+        },
+    ).json()
+    assert first["source_group_id"] == first["id"]
+    assert first["parent_source_id"] is None
+    assert first["revision_number"] == 1
+    assert first["change_summary"] == ""
+    assert create_revision(first["id"], "Too early.", "invalid").status_code == 409
+
+    submit_and_review(first["id"], "approved")
+    second_response = create_revision(first["id"], "Corrected facts.", "R2 correction")
+    assert second_response.status_code == 201, second_response.text
+    second = second_response.json()
+    assert second["id"] != first["id"]
+    assert second["source_group_id"] == first["source_group_id"]
+    assert second["parent_source_id"] == first["id"]
+    assert second["revision_number"] == 2
+    assert second["status"] == "draft"
+    assert second["change_summary"] == "R2 correction"
+    assert second["content_sha256"] == hashlib.sha256(b"Corrected facts.").hexdigest()
+    assert create_revision(first["id"], "Fork.", "invalid fork").status_code == 409
+
+    unchanged_first = next(
+        item
+        for item in client.get("/v1/knowledge", headers=auth).json()
+        if item["id"] == first["id"]
+    )
+    assert unchanged_first["content"] == "Original approved facts."
+    submit_and_review(second["id"], "rejected")
+
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "title": "Revision selection",
+            "content_type": "short_video_30s",
+        },
+    ).json()
+    generated_with_rejected_r2 = client.post(
+        f"/v1/content-projects/{project['id']}/generate", headers=auth
+    ).json()
+    assert generated_with_rejected_r2["source_ids"] == [first["id"]]
+
+    third = create_revision(second["id"], "Latest approved facts.", "R3 correction").json()
+    assert third["revision_number"] == 3
+    submit_and_review(third["id"], "approved")
+    generated_with_approved_r3 = client.post(
+        f"/v1/content-projects/{project['id']}/generate", headers=auth
+    ).json()
+    assert generated_with_approved_r3["source_ids"] == [third["id"]]
+
+    events = client.get("/v1/audit-events", headers=auth).json()
+    revision_event = next(
+        event
+        for event in events
+        if event["action"] == "knowledge.revised" and event["entity_id"] == third["id"]
+    )
+    assert revision_event["details"]["parent_source_id"] == second["id"]
+    assert revision_event["details"]["revision_number"] == 3
+
+    second_tenant = bootstrap(client, "revision-second", "revision-second@example.com")
+    second_auth = {"Authorization": f"Bearer {second_tenant['access_token']}"}
+    assert (
+        client.post(
+            f"/v1/knowledge/{third['id']}/revisions",
+            headers=second_auth,
+            json={
+                "title": "Cross tenant",
+                "kind": "other",
+                "content": "Forbidden.",
+                "change_summary": "Should not work",
+            },
+        ).status_code
+        == 404
+    )

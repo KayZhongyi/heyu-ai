@@ -112,6 +112,7 @@ class Product(Base):
 
 class KnowledgeSource(Base):
     __tablename__ = "knowledge_sources"
+    __table_args__ = (UniqueConstraint("organization_id", "source_group_id", "revision_number"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
     brand_id: Mapped[str | None] = mapped_column(ForeignKey("brands.id"), index=True)
@@ -123,6 +124,12 @@ class KnowledgeSource(Base):
     source_filename: Mapped[str] = mapped_column(String(255), default="")
     media_type: Mapped[str] = mapped_column(String(120), default="text/plain")
     content_sha256: Mapped[str] = mapped_column(String(64), default="")
+    source_group_id: Mapped[str] = mapped_column(String(36), index=True)
+    parent_source_id: Mapped[str | None] = mapped_column(
+        ForeignKey("knowledge_sources.id"), index=True
+    )
+    revision_number: Mapped[int] = mapped_column(default=1)
+    change_summary: Mapped[str] = mapped_column(String(255), default="")
     status: Mapped[ReviewStatus] = mapped_column(Enum(ReviewStatus), default=ReviewStatus.draft)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     reviewed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))

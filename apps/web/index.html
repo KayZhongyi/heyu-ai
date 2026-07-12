@@ -132,13 +132,16 @@
               </div>
               <input name="source_filename" type="hidden">
               <input name="media_type" type="hidden" value="text/plain">
+              <input name="parent_source_id" type="hidden">
               <label>资料标题<input name="title" required></label>
               <label>资料类型<select name="kind"><option value="product_fact">产品事实</option><option value="brand_story">品牌故事</option><option value="regional_culture">地域文化</option><option value="faq">常见问题</option><option value="policy">政策文件</option><option value="other">其他</option></select></label>
               <label>关联品牌<select name="brand_id" class="brand-select"><option value="">不关联</option></select></label>
               <label>关联产品<select name="product_id" class="product-select"><option value="">不关联</option></select></label>
               <label>事实内容<textarea name="content" rows="7" required></textarea></label>
               <label>引用标签<input name="citation_label" placeholder="例如：合作社产品档案 2026-07"></label>
-              <button class="primary">保存为待审核资料</button>
+              <label id="knowledge-change-field" hidden>修订说明<input name="change_summary" maxlength="255" placeholder="说明本次更正了哪些事实"></label>
+              <button class="primary" id="knowledge-save-button">保存为知识草稿</button>
+              <button class="ghost wide" id="knowledge-revision-cancel" type="button" hidden>取消修订</button>
             </form>
             <div class="panel"><div class="panel-heading"><div><p class="eyebrow">SOURCE REVIEW</p><h2>资料审核</h2></div><span class="pill">Owner 可审核</span></div><div id="knowledge-list" class="stack empty">暂无知识资料</div></div>
           </div>

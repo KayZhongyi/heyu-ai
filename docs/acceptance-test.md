@@ -44,6 +44,16 @@ commit SHA, deployment profile, reviewer, and pass/fail evidence.
       visible and traceable.
 - [ ] Reject a second source and confirm it is not eligible for generation.
 - [ ] Confirm an approved or rejected source cannot be reviewed again.
+- [ ] Create a revision from a reviewed source and confirm the original record
+      remains unchanged while the new record starts as `draft`.
+- [ ] Confirm the revision retains the same source group ID, points to its parent,
+      increments the revision number, records a change summary, and has its own
+      SHA-256 digest.
+- [ ] Confirm only the latest revision can be revised, preventing history forks.
+- [ ] Approve a newer revision and confirm generation cites it instead of the
+      older approved revision.
+- [ ] Reject a newer revision and confirm the previous approved revision remains
+      eligible for generation.
 
 ## 5. AI content workflow
 

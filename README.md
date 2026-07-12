@@ -12,6 +12,7 @@ history, and auditability.
 - Brand and agricultural product records
 - Source-backed knowledge documents with review status
 - Explicit draft → pending review → approved/rejected knowledge governance
+- Immutable, linear knowledge revision chains with per-revision integrity metadata
 - Browser-side UTF-8 TXT, Markdown, and CSV knowledge import with source
   filename, media type, and SHA-256 integrity metadata
 - Structured AI content briefs and script generation
@@ -114,6 +115,8 @@ For backups, upgrades, and recovery, see
 - Authorization is enforced in application services, not just the UI.
 - AI outputs record provider, model, prompt version, source IDs, and latency.
 - Source documents must be approved before production generation can cite them.
+- Generation uses the latest approved revision in each knowledge chain. A rejected
+  revision does not displace the preceding approved revision.
 - The repository contains synthetic examples only; supplied business materials
   are not committed without explicit authorization.
 
