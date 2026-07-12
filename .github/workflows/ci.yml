@@ -85,6 +85,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          timeout 90 bash -c 'until curl --fail --silent http://127.0.0.1:8000/health >/dev/null; do sleep 2; done'
           health=$(curl --fail --silent --show-error http://127.0.0.1:8000/health)
           test "$(jq -r .status <<<"$health")" = "ok"
 
