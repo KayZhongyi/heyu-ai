@@ -246,6 +246,34 @@ class PerformanceSnapshotRead(ORMModel):
     created_at: datetime
 
 
+class DiagnosisFinding(BaseModel):
+    category: str = Field(min_length=1, max_length=80)
+    severity: str = Field(pattern=r"^(observation|opportunity|risk)$")
+    evidence: str = Field(min_length=1)
+    recommendation: str = Field(default="")
+
+
+class VideoDiagnosisCreate(BaseModel):
+    observed_at: datetime
+    title: str = Field(min_length=1, max_length=255)
+    summary: str = ""
+    transcript_excerpt: str = ""
+    findings: list[DiagnosisFinding] = Field(min_length=1, max_length=50)
+
+
+class VideoDiagnosisRead(ORMModel):
+    id: str
+    organization_id: str
+    publication_id: str
+    observed_at: datetime
+    title: str
+    summary: str
+    transcript_excerpt: str
+    findings: list[DiagnosisFinding]
+    created_by: str
+    created_at: datetime
+
+
 class GenerationRead(BaseModel):
     run_id: str
     version: ContentVersionRead

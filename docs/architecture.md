@@ -23,6 +23,7 @@ flowchart LR
   API --> Domain["Brands, products, knowledge, content, operations"]
   Domain --> DB["PostgreSQL"]
   Domain --> Gateway["AI gateway"]
+  Domain --> Diagnosis["Evidence-led video diagnosis"]
   Gateway --> Mock["Deterministic local provider"]
   Gateway --> Providers["Configured external providers"]
   Domain --> Audit["Audit and provenance records"]

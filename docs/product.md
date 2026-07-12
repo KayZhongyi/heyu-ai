@@ -77,3 +77,8 @@ same approved-source citations and prohibited-claim warnings.
   reference, and raw performance snapshots such as views, likes, comments,
   shares, saves, follower gains, orders, and revenue. It deliberately does not
   invent a cross-platform score or claim predictive performance.
+- Video diagnosis is initially an evidence-led human workflow. Each immutable
+  report is linked to a publication and stores observation time, summary,
+  optional transcript excerpt, and structured findings with evidence and
+  recommendations. Automated media extraction can be added later without
+  changing the audit model.

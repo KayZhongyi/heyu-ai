@@ -47,6 +47,8 @@ from app.schemas import (
     PublicationCreate,
     PublicationRead,
     TokenResponse,
+    VideoDiagnosisCreate,
+    VideoDiagnosisRead,
 )
 from app.security import (
     create_token,
@@ -64,6 +66,7 @@ from app.services import (
     create_performance_snapshot,
     create_product,
     create_publication,
+    create_video_diagnosis,
     generate_content,
     list_brands,
     list_content_projects,
@@ -73,6 +76,7 @@ from app.services import (
     list_performance_snapshots,
     list_products,
     list_publications,
+    list_video_diagnoses,
     review_content_version,
     review_knowledge_source,
     revise_knowledge_source,
@@ -486,6 +490,34 @@ def get_performance_snapshots(
     actor: Actor = Depends(current_actor),
 ) -> list[PerformanceSnapshotRead]:
     return list_performance_snapshots(db, actor, publication_id)
+
+
+@app.post(
+    "/v1/publications/{publication_id}/video-diagnoses",
+    response_model=VideoDiagnosisRead,
+    status_code=201,
+)
+def add_video_diagnosis(
+    publication_id: str,
+    data: VideoDiagnosisCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> VideoDiagnosisRead:
+    return create_video_diagnosis(db, actor, publication_id, data)
+
+
+@app.get(
+    "/v1/publications/{publication_id}/video-diagnoses",
+    response_model=list[VideoDiagnosisRead],
+)
+def get_video_diagnoses(
+    publication_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> list[VideoDiagnosisRead]:
+    return list_video_diagnoses(db, actor, publication_id)
 
 
 @app.post(

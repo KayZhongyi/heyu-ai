@@ -96,7 +96,19 @@ commit SHA, deployment profile, reviewer, and pass/fail evidence.
 - [ ] Confirm the interface does not present an unvalidated viral score,
       prediction, or cross-platform comparison.
 
-## 8. Recovery and release evidence
+## 8. Structured video diagnosis
+
+- [ ] Create a diagnosis for a publication with an observation time, summary,
+      transcript excerpt, and at least one evidence-backed finding.
+- [ ] Confirm findings accept only `observation`, `opportunity`, or `risk` and
+      reject unsupported score labels.
+- [ ] Add a follow-up diagnosis and confirm it does not overwrite the first.
+- [ ] Confirm another organization cannot read the diagnosis history.
+- [ ] Confirm diagnosis creation appears in the audit trail.
+- [ ] Confirm the interface clearly presents diagnosis as evidence-led review,
+      not an automated performance prediction.
+
+## 9. Recovery and release evidence
 
 - [ ] Back up the database using `docs/operations.md`.
 - [ ] Restore it into an isolated environment.

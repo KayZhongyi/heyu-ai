@@ -625,3 +625,133 @@ def test_publication_and_performance_snapshots_form_append_only_operations_histo
         ).status_code
         == 404
     )
+
+
+def test_video_diagnoses_are_structured_append_only_and_tenant_scoped(client, auth):
+    brand, product = create_brand_and_product(client, auth)
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "title": "Video diagnosis",
+            "content_type": "short_video_30s",
+        },
+    ).json()
+    version = client.post(f"/v1/content-projects/{project['id']}/generate", headers=auth).json()[
+        "version"
+    ]
+    client.post(
+        f"/v1/content-projects/{project['id']}/versions/{version['id']}/submit",
+        headers=auth,
+    )
+    client.post(
+        f"/v1/content-projects/{project['id']}/versions/{version['id']}/review",
+        headers=auth,
+        json={"status": "approved"},
+    )
+    publication = client.post(
+        "/v1/publications",
+        headers=auth,
+        json={
+            "project_id": project["id"],
+            "content_version_id": version["id"],
+            "platform": "douyin",
+            "published_at": "2026-07-13T01:00:00Z",
+        },
+    ).json()
+    first_payload = {
+        "observed_at": "2026-07-13T02:00:00Z",
+        "title": "Opening and evidence review",
+        "summary": "Human review based on the published video.",
+        "transcript_excerpt": "Fresh produce from the cooperative.",
+        "findings": [
+            {
+                "category": "opening",
+                "severity": "opportunity",
+                "evidence": "The product appears before the main benefit is stated.",
+                "recommendation": "State the verified origin fact in the first sentence.",
+            },
+            {
+                "category": "claims",
+                "severity": "risk",
+                "evidence": "One phrase is broader than the approved source.",
+                "recommendation": "Replace it with the approved product fact.",
+            },
+        ],
+    }
+    first_response = client.post(
+        f"/v1/publications/{publication['id']}/video-diagnoses",
+        headers=auth,
+        json=first_payload,
+    )
+    assert first_response.status_code == 201, first_response.text
+    first = first_response.json()
+    assert len(first["findings"]) == 2
+    assert first["findings"][1]["severity"] == "risk"
+
+    second_payload = {
+        **first_payload,
+        "observed_at": "2026-07-13T05:00:00Z",
+        "title": "Follow-up diagnosis",
+        "summary": "A separate observation after performance data was recorded.",
+        "findings": [
+            {
+                "category": "call_to_action",
+                "severity": "observation",
+                "evidence": "The call to action appears only at the end.",
+                "recommendation": "Test an earlier factual call to action.",
+            }
+        ],
+    }
+    second_response = client.post(
+        f"/v1/publications/{publication['id']}/video-diagnoses",
+        headers=auth,
+        json=second_payload,
+    )
+    assert second_response.status_code == 201, second_response.text
+    diagnoses = client.get(
+        f"/v1/publications/{publication['id']}/video-diagnoses",
+        headers=auth,
+    ).json()
+    assert [item["title"] for item in diagnoses] == [
+        "Follow-up diagnosis",
+        "Opening and evidence review",
+    ]
+    assert diagnoses[1]["findings"] == first["findings"]
+
+    invalid = client.post(
+        f"/v1/publications/{publication['id']}/video-diagnoses",
+        headers=auth,
+        json={
+            **first_payload,
+            "findings": [
+                {
+                    "category": "opening",
+                    "severity": "viral_score",
+                    "evidence": "Unsupported score.",
+                }
+            ],
+        },
+    )
+    assert invalid.status_code == 422
+
+    events = client.get("/v1/audit-events", headers=auth).json()
+    diagnosis_event = next(
+        event
+        for event in events
+        if event["action"] == "video_diagnosis.created"
+        and event["entity_id"] == second_response.json()["id"]
+    )
+    assert diagnosis_event["details"]["finding_count"] == 1
+
+    other = bootstrap(client, "diagnosis-second", "diagnosis@example.com")
+    other_auth = {"Authorization": f"Bearer {other['access_token']}"}
+    assert (
+        client.get(
+            f"/v1/publications/{publication['id']}/video-diagnoses",
+            headers=other_auth,
+        ).status_code
+        == 404
+    )

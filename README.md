@@ -19,6 +19,7 @@ history, and auditability.
 - Immutable content versions and human approval workflow
 - Explicit draft → pending review → approved/rejected content governance
 - Approved-content publication records and append-only performance snapshots
+- Append-only, evidence-based structured video diagnosis reports
 - Provider-neutral AI gateway with a deterministic local development provider
 - Docker-based local environment, automated tests, and CI
 
@@ -121,6 +122,9 @@ For backups, upgrades, and recovery, see
 - A publication can reference only an approved content version. Operational
   metrics are stored as timestamped raw snapshots so later observations do not
   overwrite earlier evidence.
+- Video diagnosis starts as a structured human-review record linked to a
+  publication. Findings require a category, evidence, and an observation,
+  opportunity, or risk label; the system does not invent an automatic score.
 - The repository contains synthetic examples only; supplied business materials
   are not committed without explicit authorization.
 

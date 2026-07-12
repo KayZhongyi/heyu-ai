@@ -18,6 +18,7 @@ from app.models import (
     Product,
     Publication,
     ReviewStatus,
+    VideoDiagnosis,
     new_id,
 )
 from app.schemas import (
@@ -32,6 +33,7 @@ from app.schemas import (
     PerformanceSnapshotCreate,
     ProductCreate,
     PublicationCreate,
+    VideoDiagnosisCreate,
 )
 
 
@@ -436,6 +438,66 @@ def list_performance_snapshots(
                 PerformanceSnapshot.organization_id == actor.organization_id,
             )
             .order_by(PerformanceSnapshot.captured_at.desc())
+        )
+    )
+
+
+def create_video_diagnosis(
+    db: Session,
+    actor: Actor,
+    publication_id: str,
+    data: VideoDiagnosisCreate,
+) -> VideoDiagnosis:
+    publication = db.scalar(
+        select(Publication).where(
+            Publication.id == publication_id,
+            Publication.organization_id == actor.organization_id,
+        )
+    )
+    if publication is None:
+        raise HTTPException(status_code=404, detail="Publication not found")
+    diagnosis = VideoDiagnosis(
+        organization_id=actor.organization_id,
+        publication_id=publication.id,
+        created_by=actor.user_id,
+        **data.model_dump(),
+    )
+    db.add(diagnosis)
+    db.flush()
+    audit(
+        db,
+        actor,
+        "video_diagnosis.created",
+        "video_diagnosis",
+        diagnosis.id,
+        {
+            "publication_id": publication.id,
+            "observed_at": diagnosis.observed_at.isoformat(),
+            "finding_count": len(diagnosis.findings),
+        },
+    )
+    db.commit()
+    db.refresh(diagnosis)
+    return diagnosis
+
+
+def list_video_diagnoses(db: Session, actor: Actor, publication_id: str) -> list[VideoDiagnosis]:
+    publication = db.scalar(
+        select(Publication.id).where(
+            Publication.id == publication_id,
+            Publication.organization_id == actor.organization_id,
+        )
+    )
+    if publication is None:
+        raise HTTPException(status_code=404, detail="Publication not found")
+    return list(
+        db.scalars(
+            select(VideoDiagnosis)
+            .where(
+                VideoDiagnosis.publication_id == publication_id,
+                VideoDiagnosis.organization_id == actor.organization_id,
+            )
+            .order_by(VideoDiagnosis.observed_at.desc())
         )
     )
 
