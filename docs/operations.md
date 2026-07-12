@@ -9,8 +9,8 @@ when possible.
 ### Install and start
 
 1. Install Python 3.12.
-2. Run `安装禾语AI.bat` once.
-3. Run `启动禾语AI.bat` whenever the workspace is needed.
+2. Run `瀹夎绂捐AI.bat` once.
+3. Run `鍚姩绂捐AI.bat` whenever the workspace is needed.
 4. Open `http://127.0.0.1:8000/`.
 
 The installer creates `.venv` and runtime data inside the extracted repository.
@@ -58,8 +58,8 @@ Use the actual Compose service name and credentials from `compose.yaml` and
 `.env`.
 
 ```bash
-docker compose exec -T db pg_dump -U heyu -d heyu -Fc > heyu.backup
-docker compose exec -T db pg_restore -U heyu -d heyu --clean --if-exists < heyu.backup
+docker compose exec -T db pg_dump -U agri -d agri -Fc > heyu.backup
+docker compose exec -T db pg_restore -U agri -d agri --clean --if-exists --no-owner --no-privileges < heyu.backup
 ```
 
 For a production deployment, store encrypted backups outside the host, test
@@ -97,6 +97,8 @@ Application rollback and database rollback are separate decisions.
 
 ## Current verification boundary
 
-The Windows/SQLite profile has been exercised locally. Docker configuration and
-migrations are checked in CI, but a fresh-clone Docker Compose startup and a
-PostgreSQL backup/restore drill still require an environment with Docker.
+The Windows/SQLite profile has been exercised locally. CI validates a clean
+Windows install, Docker image construction, empty PostgreSQL migration,
+container restart persistence, and backup restoration into a newly created
+PostgreSQL volume. A human still needs to complete the full acceptance script
+before a release is approved.

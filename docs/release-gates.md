@@ -1,6 +1,6 @@
 # Release gates
 
-No milestone is called “commercial-grade” solely because it has a polished UI.
+No milestone is called "commercial-grade" solely because it has a polished UI.
 
 ## MVP release gate
 
@@ -15,6 +15,7 @@ No milestone is called “commercial-grade” solely because it has a polished U
 - [x] Content edits create versions instead of overwriting review history.
 - [x] CI runs formatting/linting, tests, and migration validation.
 - [x] Backup/restore and deployment instructions are documented.
+- [ ] PostgreSQL backup restores into a fresh data volume in CI.
 - [ ] A human reviewer completes the end-to-end acceptance script.
 
 Evidence and limits:
@@ -28,11 +29,12 @@ Evidence and limits:
   checkout, applied Alembic migrations, bootstrapped a tenant, created a brand,
   restarted the API container, logged in again, and verified the persisted
   record.
-- `docs/operations.md` and `docs/acceptance-test.md` define the remaining
-  operator and human checks.
-- PostgreSQL backup/restore and the complete human acceptance script remain
-  open. CI currently proves restart persistence, not a full disaster-recovery
-  drill.
+- `docs/operations.md` and `docs/acceptance-test.md` define the operator and
+  human checks.
+- CI creates a PostgreSQL custom-format backup, destroys the original Compose
+  volume, restores into a newly created volume, logs in with the original
+  account, and verifies the original brand ID and name.
+- The complete human acceptance script remains open.
 
 ## Anti-toy red lines
 
