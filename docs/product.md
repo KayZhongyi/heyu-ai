@@ -35,6 +35,12 @@ products communicate clearly, accurately, and consistently.
 - Social post
 - Titles and cover copy
 
+The local deterministic provider returns a structure appropriate to each
+content type rather than relabeling one generic script: timed shot lists for
+short video, run-of-show segments for livestreams, and dedicated fields for
+comment replies, social posts, titles, and cover copy. Every format retains the
+same approved-source citations and prohibited-claim warnings.
+
 ## Product principles
 
 - MVP means minimum scope, not disposable engineering.

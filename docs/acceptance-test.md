@@ -42,6 +42,10 @@ commit SHA, deployment profile, reviewer, and pass/fail evidence.
 - [ ] Inspect the generation record and confirm provider, model, prompt
       version, normalized brief, status, latency, and source IDs are present.
 - [ ] Repeat with at least one livestream content type.
+- [ ] Confirm short video returns timed shots while livestream generation
+      returns a run-of-show instead of a relabeled short-video template.
+- [ ] Generate one comment reply, social post, or title-and-cover task and
+      confirm the result uses fields appropriate to that content type.
 
 ## 6. Versions and review
 

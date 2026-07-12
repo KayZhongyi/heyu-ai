@@ -78,7 +78,7 @@ def test_approved_knowledge_is_cited_and_versions_are_append_only(client, auth):
     assert generated.status_code == 201, generated.text
     result = generated.json()
     assert result["provider"] == "mock"
-    assert result["prompt_version"] == "1.0.0"
+    assert result["prompt_version"] == "1.1.0"
     assert result["source_ids"] == [source.json()["id"]]
     assert unapproved["id"] not in result["source_ids"]
     assert result["version"]["content"]["citations"][0]["source_id"] == source.json()["id"]
@@ -111,6 +111,66 @@ def test_approved_knowledge_is_cited_and_versions_are_append_only(client, auth):
     ).json()
     assert [item["version_number"] for item in versions] == [2, 1]
     assert versions[1]["status"] == "draft"
+
+
+def test_generation_structure_matches_content_type(client, auth):
+    brand, product = create_brand_and_product(client, auth)
+    source = client.post(
+        "/v1/knowledge",
+        headers=auth,
+        json={
+            "title": "直播事实卡",
+            "kind": "product_fact",
+            "content": "产品按批次记录采收信息。",
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+        },
+    ).json()
+    client.post(
+        f"/v1/knowledge/{source['id']}/review",
+        headers=auth,
+        json={"status": "approved"},
+    )
+
+    expected_formats = {
+        "short_video_60s": "short_video_script",
+        "livestream_opening": "livestream_opening",
+        "livestream_product_pitch": "livestream_product_pitch",
+        "livestream_interaction": "livestream_interaction",
+        "comment_reply": "comment_reply",
+        "social_post": "social_post",
+        "title_and_cover": "title_and_cover",
+    }
+    sixty_second_project_id = None
+    for content_type, expected_format in expected_formats.items():
+        project = client.post(
+            "/v1/content-projects",
+            headers=auth,
+            json={
+                "brand_id": brand["id"],
+                "product_id": product["id"],
+                "title": f"{content_type} task",
+                "content_type": content_type,
+                "objective": "清楚介绍产品",
+            },
+        ).json()
+        generated = client.post(
+            f"/v1/content-projects/{project['id']}/generate",
+            headers=auth,
+        )
+        assert generated.status_code == 201, generated.text
+        content = generated.json()["version"]["content"]
+        assert content["format"] == expected_format
+        assert content["citations"][0]["source_id"] == source["id"]
+        assert content["risk_notes"] == ["禁止使用：治疗疾病"]
+        if content_type == "short_video_60s":
+            sixty_second_project_id = project["id"]
+
+    sixty_second_version = client.get(
+        f"/v1/content-projects/{sixty_second_project_id}/versions",
+        headers=auth,
+    ).json()[0]
+    assert sixty_second_version["content"]["duration_seconds"] == 60
 
 
 def test_cross_tenant_cannot_use_knowledge_or_content_project(client, auth):
