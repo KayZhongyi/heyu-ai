@@ -82,6 +82,22 @@ def test_approved_knowledge_is_cited_and_versions_are_append_only(client, auth):
     assert result["source_ids"] == [source.json()["id"]]
     assert unapproved["id"] not in result["source_ids"]
     assert result["version"]["content"]["citations"][0]["source_id"] == source.json()["id"]
+    generation_runs = client.get(
+        f"/v1/content-projects/{project.json()['id']}/generation-runs",
+        headers=auth,
+    )
+    assert generation_runs.status_code == 200
+    persisted_run = generation_runs.json()[0]
+    assert persisted_run["id"] == result["run_id"]
+    assert persisted_run["normalized_input"]["content_type"] == "short_video_30s"
+    assert persisted_run["output"] == result["version"]["content"]
+    assert persisted_run["sources"] == [
+        {
+            "id": source.json()["id"],
+            "title": "产品事实卡",
+            "citation_label": "产品事实卡，第1条",
+        }
+    ]
 
     edited = dict(result["version"]["content"])
     edited["hook"] = "人工审核后的开场"
@@ -198,6 +214,13 @@ def test_cross_tenant_cannot_use_knowledge_or_content_project(client, auth):
     assert (
         client.get(
             f"/v1/content-projects/{project['id']}/versions",
+            headers=second_auth,
+        ).status_code
+        == 404
+    )
+    assert (
+        client.get(
+            f"/v1/content-projects/{project['id']}/generation-runs",
             headers=second_auth,
         ).status_code
         == 404

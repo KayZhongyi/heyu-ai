@@ -288,6 +288,27 @@ def generate_content(
     return run, version
 
 
+def list_generation_runs(db: Session, actor: Actor, project_id: str) -> list[GenerationRun]:
+    project_exists = db.scalar(
+        select(ContentProject.id).where(
+            ContentProject.id == project_id,
+            ContentProject.organization_id == actor.organization_id,
+        )
+    )
+    if project_exists is None:
+        raise HTTPException(status_code=404, detail="Content project not found")
+    return list(
+        db.scalars(
+            select(GenerationRun)
+            .where(
+                GenerationRun.project_id == project_id,
+                GenerationRun.organization_id == actor.organization_id,
+            )
+            .order_by(GenerationRun.created_at.desc())
+        )
+    )
+
+
 def list_content_versions(db: Session, actor: Actor, project_id: str) -> list[ContentVersion]:
     project_exists = db.scalar(
         select(ContentProject.id).where(

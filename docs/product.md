@@ -48,4 +48,7 @@ same approved-source citations and prohibited-claim warnings.
 - Generated claims must be grounded in approved sources.
 - Unsupported performance predictions are excluded.
 - Provider-specific AI behavior stays behind an internal gateway.
+- Generation provenance remains queryable after reload, including normalized
+  input, full output, provider/model, prompt version, latency, and resolved
+  source titles and citation labels.
 - Tenant isolation is tested as a security invariant.

@@ -41,6 +41,8 @@ commit SHA, deployment profile, reviewer, and pass/fail evidence.
 - [ ] Confirm the output is structured and cites only approved source IDs.
 - [ ] Inspect the generation record and confirm provider, model, prompt
       version, normalized brief, status, latency, and source IDs are present.
+- [ ] Reload the workspace, select the project again, and confirm its
+      generation history still resolves source titles and citation labels.
 - [ ] Repeat with at least one livestream content type.
 - [ ] Confirm short video returns timed shots while livestream generation
       returns a run-of-show instead of a relabeled short-video template.

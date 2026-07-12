@@ -10,7 +10,14 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import Base, engine, get_db
-from app.models import AuditEvent, Membership, Organization, Role, User
+from app.models import (
+    AuditEvent,
+    KnowledgeSource,
+    Membership,
+    Organization,
+    Role,
+    User,
+)
 from app.schemas import (
     Actor,
     AuditEventRead,
@@ -23,6 +30,8 @@ from app.schemas import (
     ContentVersionCreate,
     ContentVersionRead,
     GenerationRead,
+    GenerationRunRead,
+    GenerationSourceRead,
     KnowledgeReview,
     KnowledgeSourceCreate,
     KnowledgeSourceRead,
@@ -52,6 +61,7 @@ from app.services import (
     list_brands,
     list_content_projects,
     list_content_versions,
+    list_generation_runs,
     list_knowledge_sources,
     list_products,
     review_content_version,
@@ -416,6 +426,54 @@ def generate_project_content(
         source_ids=run.source_ids,
         latency_ms=run.latency_ms,
     )
+
+
+@app.get(
+    "/v1/content-projects/{project_id}/generation-runs",
+    response_model=list[GenerationRunRead],
+)
+def get_generation_runs(
+    project_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> list[GenerationRunRead]:
+    runs = list_generation_runs(db, actor, project_id)
+    source_ids = {source_id for run in runs for source_id in run.source_ids}
+    sources = {
+        source.id: source
+        for source in db.scalars(
+            select(KnowledgeSource).where(
+                KnowledgeSource.organization_id == actor.organization_id,
+                KnowledgeSource.id.in_(source_ids),
+            )
+        )
+    }
+    return [
+        GenerationRunRead(
+            id=run.id,
+            project_id=run.project_id,
+            provider=run.provider,
+            model=run.model,
+            prompt_name=run.prompt_name,
+            prompt_version=run.prompt_version,
+            sources=[
+                GenerationSourceRead(
+                    id=source_id,
+                    title=sources[source_id].title,
+                    citation_label=sources[source_id].citation_label,
+                )
+                for source_id in run.source_ids
+                if source_id in sources
+            ],
+            normalized_input=run.normalized_input,
+            output=run.output,
+            status=run.status,
+            latency_ms=run.latency_ms,
+            created_by=run.created_by,
+            created_at=run.created_at,
+        )
+        for run in runs
+    ]
 
 
 @app.get(

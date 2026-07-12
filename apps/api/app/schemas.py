@@ -1,6 +1,8 @@
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models import ContentType, KnowledgeKind, ReviewStatus, Role
+from app.models import ContentType, GenerationStatus, KnowledgeKind, ReviewStatus, Role
 
 
 class ORMModel(BaseModel):
@@ -183,6 +185,28 @@ class GenerationRead(BaseModel):
     prompt_version: str
     source_ids: list[str]
     latency_ms: int
+
+
+class GenerationSourceRead(BaseModel):
+    id: str
+    title: str
+    citation_label: str
+
+
+class GenerationRunRead(ORMModel):
+    id: str
+    project_id: str
+    provider: str
+    model: str
+    prompt_name: str
+    prompt_version: str
+    sources: list[GenerationSourceRead]
+    normalized_input: dict
+    output: dict
+    status: GenerationStatus
+    latency_ms: int
+    created_by: str
+    created_at: datetime
 
 
 class AuditEventRead(ORMModel):
