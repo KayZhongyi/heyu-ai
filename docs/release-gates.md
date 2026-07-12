@@ -6,7 +6,7 @@ No milestone is called "commercial-grade" solely because it has a polished UI.
 
 - [x] Fresh clone starts with one documented Docker Compose command.
 - [x] Database schema migration succeeds on an empty PostgreSQL database.
-- [ ] Tests cover happy paths and cross-tenant denial for every tenant module.
+- [x] Tests cover happy paths and cross-tenant denial for every tenant module.
 - [x] Authentication and authorization are enforced server-side.
 - [x] No committed secret or private business document.
 - [x] AI generation works with the deterministic local provider.
@@ -29,6 +29,9 @@ Evidence and limits:
   checkout, applied Alembic migrations, bootstrapped a tenant, created a brand,
   restarted the API container, logged in again, and verified the persisted
   record.
+- GitHub Actions run `29199231230` passed for commit `68dbdb0`: all 13 API
+  tests passed, including cross-tenant denial for brands, products, knowledge,
+  content projects, versions, reviews, generation, and audit records.
 - `docs/operations.md` and `docs/acceptance-test.md` define the operator and
   human checks.
 - CI creates a PostgreSQL custom-format backup, destroys the original Compose
