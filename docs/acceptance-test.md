@@ -61,7 +61,11 @@ commit SHA, deployment profile, reviewer, and pass/fail evidence.
 
 - [ ] Create a successor content version without overwriting the AI draft.
 - [ ] Confirm version numbers and change summaries are retained.
+- [ ] Confirm a draft cannot be approved or rejected before it is explicitly
+      submitted for review.
+- [ ] Submit a draft and confirm its status becomes `pending_review`.
 - [ ] Approve one version and reject another with a reviewer note.
+- [ ] Confirm an approved or rejected version cannot be reviewed again.
 - [ ] Confirm the full version and review history remains available.
 - [ ] Confirm audit events identify actor, organization, action, and target.
 

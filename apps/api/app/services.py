@@ -378,6 +378,39 @@ def create_content_version(
     return version
 
 
+def submit_content_version(
+    db: Session,
+    actor: Actor,
+    project_id: str,
+    version_id: str,
+) -> ContentVersion:
+    version = db.scalar(
+        select(ContentVersion).where(
+            ContentVersion.id == version_id,
+            ContentVersion.project_id == project_id,
+            ContentVersion.organization_id == actor.organization_id,
+        )
+    )
+    if version is None:
+        raise HTTPException(status_code=404, detail="Content version not found")
+    if version.status != ReviewStatus.draft:
+        raise HTTPException(
+            status_code=409,
+            detail="Only draft content versions can be submitted for review",
+        )
+    version.status = ReviewStatus.pending_review
+    audit(
+        db,
+        actor,
+        "content_version.submitted",
+        "content_version",
+        version.id,
+    )
+    db.commit()
+    db.refresh(version)
+    return version
+
+
 def review_content_version(
     db: Session,
     actor: Actor,
@@ -396,6 +429,11 @@ def review_content_version(
     )
     if version is None:
         raise HTTPException(status_code=404, detail="Content version not found")
+    if version.status != ReviewStatus.pending_review:
+        raise HTTPException(
+            status_code=409,
+            detail="Only pending content versions can be reviewed",
+        )
     version.status = data.status
     version.reviewed_by = actor.user_id
     version.review_note = data.note

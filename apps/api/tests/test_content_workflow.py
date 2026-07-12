@@ -130,6 +130,13 @@ def test_approved_knowledge_is_cited_and_versions_are_append_only(client, auth):
     assert second.status_code == 201
     assert second.json()["version_number"] == 2
 
+    submitted = client.post(
+        f"/v1/content-projects/{project.json()['id']}/versions/{second.json()['id']}/submit",
+        headers=auth,
+    )
+    assert submitted.status_code == 200
+    assert submitted.json()["status"] == "pending_review"
+
     reviewed = client.post(
         f"/v1/content-projects/{project.json()['id']}/versions/{second.json()['id']}/review",
         headers=auth,
@@ -238,6 +245,103 @@ def test_cross_tenant_cannot_use_knowledge_or_content_project(client, auth):
     assert (
         client.get(
             f"/v1/content-projects/{project['id']}/generation-runs",
+            headers=second_auth,
+        ).status_code
+        == 404
+    )
+
+
+def test_content_version_requires_submission_before_review(client, auth):
+    brand, product = create_brand_and_product(client, auth)
+    source = client.post(
+        "/v1/knowledge",
+        headers=auth,
+        json={
+            "title": "审核状态机资料",
+            "kind": "product_fact",
+            "content": "产品信息经过人工维护。",
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+        },
+    ).json()
+    client.post(
+        f"/v1/knowledge/{source['id']}/review",
+        headers=auth,
+        json={"status": "approved"},
+    )
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "title": "审核状态机",
+            "content_type": "short_video_30s",
+        },
+    ).json()
+    version = client.post(
+        f"/v1/content-projects/{project['id']}/generate",
+        headers=auth,
+    ).json()["version"]
+
+    early_review = client.post(
+        f"/v1/content-projects/{project['id']}/versions/{version['id']}/review",
+        headers=auth,
+        json={"status": "approved", "note": "不能直接审核草稿"},
+    )
+    assert early_review.status_code == 409
+
+    submitted = client.post(
+        f"/v1/content-projects/{project['id']}/versions/{version['id']}/submit",
+        headers=auth,
+    )
+    assert submitted.status_code == 200
+    assert (
+        client.post(
+            f"/v1/content-projects/{project['id']}/versions/{version['id']}/submit",
+            headers=auth,
+        ).status_code
+        == 409
+    )
+
+    reviewed = client.post(
+        f"/v1/content-projects/{project['id']}/versions/{version['id']}/review",
+        headers=auth,
+        json={"status": "rejected", "note": "补充产地表达"},
+    )
+    assert reviewed.status_code == 200
+    assert reviewed.json()["review_note"] == "补充产地表达"
+    assert (
+        client.post(
+            f"/v1/content-projects/{project['id']}/versions/{version['id']}/review",
+            headers=auth,
+            json={"status": "approved"},
+        ).status_code
+        == 409
+    )
+
+    events = client.get("/v1/audit-events", headers=auth).json()
+    assert any(event["action"] == "content_version.submitted" for event in events)
+
+
+def test_content_version_submission_is_tenant_scoped(client, auth):
+    brand, product = create_brand_and_product(client, auth)
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "title": "Tenant submission",
+            "content_type": "short_video_30s",
+        },
+    ).json()
+    second = bootstrap(client, "submission-second", "submission@example.com")
+    second_auth = {"Authorization": f"Bearer {second['access_token']}"}
+
+    assert (
+        client.post(
+            f"/v1/content-projects/{project['id']}/versions/missing/submit",
             headers=second_auth,
         ).status_code
         == 404

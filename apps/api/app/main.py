@@ -66,6 +66,7 @@ from app.services import (
     list_products,
     review_content_version,
     review_knowledge_source,
+    submit_content_version,
 )
 
 
@@ -502,6 +503,21 @@ def add_content_version(
     ),
 ) -> ContentVersionRead:
     return create_content_version(db, actor, project_id, data)
+
+
+@app.post(
+    "/v1/content-projects/{project_id}/versions/{version_id}/submit",
+    response_model=ContentVersionRead,
+)
+def submit_version(
+    project_id: str,
+    version_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> ContentVersionRead:
+    return submit_content_version(db, actor, project_id, version_id)
 
 
 @app.post(

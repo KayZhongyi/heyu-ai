@@ -21,8 +21,9 @@ products communicate clearly, accurately, and consistently.
 4. Create a structured content brief.
 5. Generate a source-backed script through the AI gateway.
 6. Edit the generated content into a new immutable version.
-7. Submit a version for review and approve or reject it.
-8. Inspect the audit trail and generation provenance.
+7. Explicitly submit a draft version for review.
+8. Approve or reject only a version currently pending review.
+9. Inspect the audit trail and generation provenance.
 
 ## Content types in the first release
 
@@ -59,3 +60,6 @@ same approved-source citations and prohibited-claim warnings.
   input, full output, provider/model, prompt version, latency, and resolved
   source titles and citation labels.
 - Tenant isolation is tested as a security invariant.
+- Content review follows an explicit state machine: `draft` →
+  `pending_review` → `approved` or `rejected`. Drafts cannot be reviewed
+  directly, and completed reviews cannot be silently overwritten.

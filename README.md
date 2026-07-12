@@ -15,6 +15,7 @@ history, and auditability.
   filename, media type, and SHA-256 integrity metadata
 - Structured AI content briefs and script generation
 - Immutable content versions and human approval workflow
+- Explicit draft → pending review → approved/rejected content governance
 - Provider-neutral AI gateway with a deterministic local development provider
 - Docker-based local environment, automated tests, and CI
 
