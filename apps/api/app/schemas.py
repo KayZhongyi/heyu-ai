@@ -175,6 +175,7 @@ class ContentVersionRead(ORMModel):
     project_id: str
     generation_run_id: str | None
     parent_version_id: str | None
+    improvement_brief_id: str | None
     version_number: int
     content: dict
     change_summary: str
@@ -274,10 +275,44 @@ class VideoDiagnosisRead(ORMModel):
     created_at: datetime
 
 
+class ImprovementAction(BaseModel):
+    category: str = Field(min_length=1, max_length=80)
+    instruction: str = Field(min_length=1)
+    evidence: str = Field(min_length=1)
+
+
+class ImprovementBriefCreate(BaseModel):
+    video_diagnosis_id: str
+    title: str = Field(min_length=1, max_length=255)
+    objective: str = ""
+    actions: list[ImprovementAction] = Field(min_length=1, max_length=50)
+    guardrails: list[str] = Field(default_factory=list, max_length=50)
+
+
+class ImprovementBriefRead(ORMModel):
+    id: str
+    organization_id: str
+    publication_id: str
+    video_diagnosis_id: str
+    source_content_version_id: str
+    title: str
+    objective: str
+    actions: list[ImprovementAction]
+    guardrails: list[str]
+    created_by: str
+    created_at: datetime
+
+
+class ImprovementDraftCreate(BaseModel):
+    content: dict
+    change_summary: str = Field(min_length=1, max_length=255)
+
+
 class PublicationDetailRead(BaseModel):
     publication: PublicationRead
     performance_snapshots: list[PerformanceSnapshotRead]
     video_diagnoses: list[VideoDiagnosisRead]
+    improvement_briefs: list[ImprovementBriefRead]
 
 
 class GenerationRead(BaseModel):

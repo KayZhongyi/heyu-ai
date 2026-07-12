@@ -32,6 +32,9 @@ from app.schemas import (
     GenerationRead,
     GenerationRunRead,
     GenerationSourceRead,
+    ImprovementBriefCreate,
+    ImprovementBriefRead,
+    ImprovementDraftCreate,
     KnowledgeReview,
     KnowledgeSourceCreate,
     KnowledgeSourceRead,
@@ -63,6 +66,8 @@ from app.services import (
     create_brand,
     create_content_project,
     create_content_version,
+    create_draft_from_improvement_brief,
+    create_improvement_brief,
     create_knowledge_source,
     create_performance_snapshot,
     create_product,
@@ -74,6 +79,7 @@ from app.services import (
     list_content_projects,
     list_content_versions,
     list_generation_runs,
+    list_improvement_briefs,
     list_knowledge_sources,
     list_performance_snapshots,
     list_products,
@@ -529,6 +535,51 @@ def get_video_diagnoses(
     actor: Actor = Depends(current_actor),
 ) -> list[VideoDiagnosisRead]:
     return list_video_diagnoses(db, actor, publication_id)
+
+
+@app.post(
+    "/v1/publications/{publication_id}/improvement-briefs",
+    response_model=ImprovementBriefRead,
+    status_code=201,
+)
+def add_improvement_brief(
+    publication_id: str,
+    data: ImprovementBriefCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> ImprovementBriefRead:
+    return create_improvement_brief(db, actor, publication_id, data)
+
+
+@app.get(
+    "/v1/publications/{publication_id}/improvement-briefs",
+    response_model=list[ImprovementBriefRead],
+)
+def get_improvement_briefs(
+    publication_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> list[ImprovementBriefRead]:
+    return list_improvement_briefs(db, actor, publication_id)
+
+
+@app.post(
+    "/v1/publications/{publication_id}/improvement-briefs/{brief_id}/draft",
+    response_model=ContentVersionRead,
+    status_code=201,
+)
+def add_draft_from_improvement_brief(
+    publication_id: str,
+    brief_id: str,
+    data: ImprovementDraftCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> ContentVersionRead:
+    return create_draft_from_improvement_brief(db, actor, publication_id, brief_id, data)
 
 
 @app.post(

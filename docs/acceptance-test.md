@@ -110,7 +110,18 @@ commit SHA, deployment profile, reviewer, and pass/fail evidence.
 - [ ] Confirm the interface clearly presents diagnosis as evidence-led review,
       not an automated performance prediction.
 
-## 9. Recovery and release evidence
+## 9. Diagnosis-driven improvement workflow
+
+- [ ] Create an improvement brief from one diagnosis with evidence-backed
+      actions and explicit guardrails.
+- [ ] Create a second brief and confirm it does not overwrite the first.
+- [ ] Explicitly create a successor content draft from a brief.
+- [ ] Confirm the draft links to the brief and the exact published source
+      version while the approved source remains unchanged.
+- [ ] Confirm another organization cannot read the briefs or create a draft.
+- [ ] Confirm brief and successor-draft creation appear in the audit trail.
+
+## 10. Recovery and release evidence
 
 - [ ] Back up the database using `docs/operations.md`.
 - [ ] Restore it into an isolated environment.

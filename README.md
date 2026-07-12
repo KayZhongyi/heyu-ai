@@ -21,6 +21,7 @@ history, and auditability.
 - Approved-content publication records and append-only performance snapshots
 - Append-only, evidence-based structured video diagnosis reports
 - Tenant-scoped publication detail views grouping raw metrics and diagnoses
+- Immutable diagnosis-derived improvement briefs and explicitly created successor drafts
 - Provider-neutral AI gateway with a deterministic local development provider
 - Docker-based local environment, automated tests, and CI
 
@@ -127,7 +128,11 @@ For backups, upgrades, and recovery, see
   publication. Findings require a category, evidence, and an observation,
   opportunity, or risk label; the system does not invent an automatic score.
 - `GET /v1/publications/{publication_id}` returns the publication, newest-first
-  performance snapshots, and diagnosis history without deriving a score.
+  performance snapshots, diagnosis history, and improvement briefs without
+  deriving a score.
+- An improvement brief references one diagnosis and the exact published source
+  version. Creating a successor draft is an explicit action; the approved,
+  published version is never overwritten.
 - The repository contains synthetic examples only; supplied business materials
   are not committed without explicit authorization.
 

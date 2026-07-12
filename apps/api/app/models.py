@@ -184,6 +184,9 @@ class ContentVersion(Base):
     parent_version_id: Mapped[str | None] = mapped_column(
         ForeignKey("content_versions.id"), index=True
     )
+    improvement_brief_id: Mapped[str | None] = mapped_column(
+        ForeignKey("improvement_briefs.id"), index=True
+    )
     version_number: Mapped[int] = mapped_column()
     content: Mapped[dict] = mapped_column(JSON)
     change_summary: Mapped[str] = mapped_column(String(255), default="")
@@ -240,6 +243,23 @@ class VideoDiagnosis(Base):
     summary: Mapped[str] = mapped_column(Text, default="")
     transcript_excerpt: Mapped[str] = mapped_column(Text, default="")
     findings: Mapped[list] = mapped_column(JSON, default=list)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class ImprovementBrief(Base):
+    __tablename__ = "improvement_briefs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    publication_id: Mapped[str] = mapped_column(ForeignKey("publications.id"), index=True)
+    video_diagnosis_id: Mapped[str] = mapped_column(ForeignKey("video_diagnoses.id"), index=True)
+    source_content_version_id: Mapped[str] = mapped_column(
+        ForeignKey("content_versions.id"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(255))
+    objective: Mapped[str] = mapped_column(Text, default="")
+    actions: Mapped[list] = mapped_column(JSON, default=list)
+    guardrails: Mapped[list] = mapped_column(JSON, default=list)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 

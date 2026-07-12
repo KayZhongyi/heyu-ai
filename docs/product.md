@@ -85,3 +85,7 @@ same approved-source citations and prohibited-claim warnings.
 - A tenant-scoped publication detail endpoint groups the immutable publication
   record, raw performance history, and diagnosis history for the operations
   workspace without replacing the underlying records.
+- Teams can convert a diagnosis into an immutable improvement brief containing
+  evidence-backed actions and guardrails. A creator may then explicitly create
+  a successor draft linked to both the brief and the published source version;
+  no diagnosis automatically changes approved content.

@@ -734,6 +734,82 @@ def test_video_diagnoses_are_structured_append_only_and_tenant_scoped(client, au
         "Opening and evidence review",
     ]
 
+    brief_payload = {
+        "video_diagnosis_id": second_response.json()["id"],
+        "title": "Move the factual call to action earlier",
+        "objective": "Improve clarity while preserving approved claims.",
+        "actions": [
+            {
+                "category": "call_to_action",
+                "instruction": "Add an earlier factual call to action.",
+                "evidence": "The diagnosis observed that it appears only at the end.",
+            }
+        ],
+        "guardrails": [
+            "Use only approved knowledge sources.",
+            "Do not overwrite the published version.",
+        ],
+    }
+    brief_response = client.post(
+        f"/v1/publications/{publication['id']}/improvement-briefs",
+        headers=auth,
+        json=brief_payload,
+    )
+    assert brief_response.status_code == 201, brief_response.text
+    brief = brief_response.json()
+    assert brief["source_content_version_id"] == version["id"]
+    assert brief["actions"][0]["category"] == "call_to_action"
+
+    second_brief_response = client.post(
+        f"/v1/publications/{publication['id']}/improvement-briefs",
+        headers=auth,
+        json={
+            **brief_payload,
+            "title": "Separate follow-up brief",
+        },
+    )
+    assert second_brief_response.status_code == 201
+    briefs = client.get(
+        f"/v1/publications/{publication['id']}/improvement-briefs",
+        headers=auth,
+    ).json()
+    assert len(briefs) == 2
+    assert {item["id"] for item in briefs} == {
+        brief["id"],
+        second_brief_response.json()["id"],
+    }
+
+    improved_content = {
+        **version["content"],
+        "call_to_action": "查看经审核的产地与产品信息。",
+    }
+    draft_response = client.post(
+        f"/v1/publications/{publication['id']}/improvement-briefs/{brief['id']}/draft",
+        headers=auth,
+        json={
+            "content": improved_content,
+            "change_summary": "Applied the reviewed call-to-action brief",
+        },
+    )
+    assert draft_response.status_code == 201, draft_response.text
+    improved_draft = draft_response.json()
+    assert improved_draft["status"] == "draft"
+    assert improved_draft["parent_version_id"] == version["id"]
+    assert improved_draft["improvement_brief_id"] == brief["id"]
+    assert improved_draft["content"]["call_to_action"] == "查看经审核的产地与产品信息。"
+
+    original_versions = client.get(
+        f"/v1/content-projects/{project['id']}/versions",
+        headers=auth,
+    ).json()
+    published_source = next(item for item in original_versions if item["id"] == version["id"])
+    assert published_source["status"] == "approved"
+    assert published_source["improvement_brief_id"] is None
+    assert published_source["content"] == version["content"]
+
+    detail = client.get(f"/v1/publications/{publication['id']}", headers=auth).json()
+    assert len(detail["improvement_briefs"]) == 2
+
     invalid = client.post(
         f"/v1/publications/{publication['id']}/video-diagnoses",
         headers=auth,
@@ -758,6 +834,17 @@ def test_video_diagnoses_are_structured_append_only_and_tenant_scoped(client, au
         and event["entity_id"] == second_response.json()["id"]
     )
     assert diagnosis_event["details"]["finding_count"] == 1
+    brief_event = next(
+        event
+        for event in events
+        if event["action"] == "improvement_brief.created" and event["entity_id"] == brief["id"]
+    )
+    assert brief_event["details"]["action_count"] == 1
+    assert any(
+        event["action"] == "improvement_brief.draft_created"
+        and event["entity_id"] == improved_draft["id"]
+        for event in events
+    )
 
     other = bootstrap(client, "diagnosis-second", "diagnosis@example.com")
     other_auth = {"Authorization": f"Bearer {other['access_token']}"}
@@ -765,6 +852,21 @@ def test_video_diagnoses_are_structured_append_only_and_tenant_scoped(client, au
         client.get(
             f"/v1/publications/{publication['id']}/video-diagnoses",
             headers=other_auth,
+        ).status_code
+        == 404
+    )
+    assert (
+        client.get(
+            f"/v1/publications/{publication['id']}/improvement-briefs",
+            headers=other_auth,
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            f"/v1/publications/{publication['id']}/improvement-briefs/{brief['id']}/draft",
+            headers=other_auth,
+            json={"content": improved_content, "change_summary": "Cross tenant"},
         ).status_code
         == 404
     )

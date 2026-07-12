@@ -14,6 +14,7 @@ from app.models import (
     ContentVersion,
     GenerationRun,
     GenerationStatus,
+    ImprovementBrief,
     KnowledgeSource,
     PerformanceSnapshot,
     Product,
@@ -28,6 +29,8 @@ from app.schemas import (
     ContentProjectCreate,
     ContentReview,
     ContentVersionCreate,
+    ImprovementBriefCreate,
+    ImprovementDraftCreate,
     KnowledgeReview,
     KnowledgeSourceCreate,
     KnowledgeSourceRevisionCreate,
@@ -423,10 +426,21 @@ def get_publication_detail(db: Session, actor: Actor, publication_id: str) -> di
             .order_by(VideoDiagnosis.observed_at.desc())
         )
     )
+    briefs = list(
+        db.scalars(
+            select(ImprovementBrief)
+            .where(
+                ImprovementBrief.publication_id == publication.id,
+                ImprovementBrief.organization_id == actor.organization_id,
+            )
+            .order_by(ImprovementBrief.created_at.desc())
+        )
+    )
     return {
         "publication": publication,
         "performance_snapshots": snapshots,
         "video_diagnoses": diagnoses,
+        "improvement_briefs": briefs,
     }
 
 
@@ -549,6 +563,142 @@ def list_video_diagnoses(db: Session, actor: Actor, publication_id: str) -> list
             .order_by(VideoDiagnosis.observed_at.desc())
         )
     )
+
+
+def create_improvement_brief(
+    db: Session,
+    actor: Actor,
+    publication_id: str,
+    data: ImprovementBriefCreate,
+) -> ImprovementBrief:
+    publication = db.scalar(
+        select(Publication).where(
+            Publication.id == publication_id,
+            Publication.organization_id == actor.organization_id,
+        )
+    )
+    if publication is None:
+        raise HTTPException(status_code=404, detail="Publication not found")
+    diagnosis = db.scalar(
+        select(VideoDiagnosis).where(
+            VideoDiagnosis.id == data.video_diagnosis_id,
+            VideoDiagnosis.publication_id == publication.id,
+            VideoDiagnosis.organization_id == actor.organization_id,
+        )
+    )
+    if diagnosis is None:
+        raise HTTPException(status_code=404, detail="Video diagnosis not found")
+    brief = ImprovementBrief(
+        organization_id=actor.organization_id,
+        publication_id=publication.id,
+        video_diagnosis_id=diagnosis.id,
+        source_content_version_id=publication.content_version_id,
+        created_by=actor.user_id,
+        **data.model_dump(exclude={"video_diagnosis_id"}),
+    )
+    db.add(brief)
+    db.flush()
+    audit(
+        db,
+        actor,
+        "improvement_brief.created",
+        "improvement_brief",
+        brief.id,
+        {
+            "publication_id": publication.id,
+            "video_diagnosis_id": diagnosis.id,
+            "source_content_version_id": publication.content_version_id,
+            "action_count": len(brief.actions),
+        },
+    )
+    db.commit()
+    db.refresh(brief)
+    return brief
+
+
+def list_improvement_briefs(
+    db: Session, actor: Actor, publication_id: str
+) -> list[ImprovementBrief]:
+    publication = db.scalar(
+        select(Publication.id).where(
+            Publication.id == publication_id,
+            Publication.organization_id == actor.organization_id,
+        )
+    )
+    if publication is None:
+        raise HTTPException(status_code=404, detail="Publication not found")
+    return list(
+        db.scalars(
+            select(ImprovementBrief)
+            .where(
+                ImprovementBrief.publication_id == publication_id,
+                ImprovementBrief.organization_id == actor.organization_id,
+            )
+            .order_by(ImprovementBrief.created_at.desc())
+        )
+    )
+
+
+def create_draft_from_improvement_brief(
+    db: Session,
+    actor: Actor,
+    publication_id: str,
+    brief_id: str,
+    data: ImprovementDraftCreate,
+) -> ContentVersion:
+    brief = db.scalar(
+        select(ImprovementBrief).where(
+            ImprovementBrief.id == brief_id,
+            ImprovementBrief.publication_id == publication_id,
+            ImprovementBrief.organization_id == actor.organization_id,
+        )
+    )
+    if brief is None:
+        raise HTTPException(status_code=404, detail="Improvement brief not found")
+    publication = db.scalar(
+        select(Publication).where(
+            Publication.id == publication_id,
+            Publication.organization_id == actor.organization_id,
+        )
+    )
+    if publication is None:
+        raise HTTPException(status_code=404, detail="Publication not found")
+    max_version = db.scalar(
+        select(func.max(ContentVersion.version_number)).where(
+            ContentVersion.project_id == publication.project_id,
+            ContentVersion.organization_id == actor.organization_id,
+        )
+    )
+    version = ContentVersion(
+        organization_id=actor.organization_id,
+        project_id=publication.project_id,
+        parent_version_id=brief.source_content_version_id,
+        improvement_brief_id=brief.id,
+        version_number=(max_version or 0) + 1,
+        content=data.content,
+        change_summary=data.change_summary,
+        created_by=actor.user_id,
+    )
+    db.add(version)
+    flush_or_conflict(
+        db,
+        "A content version was created concurrently; refresh the project and try again",
+    )
+    audit(
+        db,
+        actor,
+        "improvement_brief.draft_created",
+        "content_version",
+        version.id,
+        {
+            "improvement_brief_id": brief.id,
+            "publication_id": publication.id,
+            "parent_version_id": brief.source_content_version_id,
+        },
+    )
+    db.commit()
+    db.refresh(version)
+    return version
 
 
 def generate_content(

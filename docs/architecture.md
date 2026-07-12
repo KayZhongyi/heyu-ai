@@ -25,10 +25,14 @@ flowchart LR
   Domain --> Gateway["AI gateway"]
   Domain --> Diagnosis["Evidence-led video diagnosis"]
   Domain --> PublicationDetail["Publication operations detail"]
+  Diagnosis --> Brief["Immutable improvement brief"]
+  Brief --> Version["Explicit successor content draft"]
   Gateway --> Mock["Deterministic local provider"]
   Gateway --> Providers["Configured external providers"]
   Domain --> Audit["Audit and provenance records"]
   PublicationDetail --> DB
+  Brief --> DB
+  Version --> DB
 ```
 
 ## Tenant isolation
