@@ -133,6 +133,10 @@ For backups, upgrades, and recovery, see
 - An improvement brief references one diagnosis and the exact published source
   version. Creating a successor draft is an explicit action; the approved,
   published version is never overwritten.
+- The publication operations workspace exposes this flow directly: open a
+  diagnosis, create an evidence-backed improvement brief, then explicitly
+  create a successor draft. The new draft continues through the normal content
+  review workflow.
 - The repository contains synthetic examples only; supplied business materials
   are not committed without explicit authorization.
 

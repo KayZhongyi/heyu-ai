@@ -112,10 +112,19 @@ commit SHA, deployment profile, reviewer, and pass/fail evidence.
 
 ## 9. Diagnosis-driven improvement workflow
 
+- [ ] In the publication operations workspace, expand a diagnosis and create an
+      improvement brief using its evidence, action, and guardrail fields.
+- [ ] Confirm the new brief appears beneath the same publication without a page
+      reload.
 - [ ] Create an improvement brief from one diagnosis with evidence-backed
       actions and explicit guardrails.
 - [ ] Create a second brief and confirm it does not overwrite the first.
-- [ ] Explicitly create a successor content draft from a brief.
+- [ ] From the displayed brief, enter valid JSON content and explicitly create a
+      successor content draft.
+- [ ] Confirm invalid JSON is rejected in the interface before an API request is
+      accepted.
+- [ ] Open the content review workspace and continue the new draft through the
+      normal submission and approval workflow.
 - [ ] Confirm the draft links to the brief and the exact published source
       version while the approved source remains unchanged.
 - [ ] Confirm another organization cannot read the briefs or create a draft.
