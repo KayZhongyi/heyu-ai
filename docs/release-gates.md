@@ -15,7 +15,7 @@ No milestone is called "commercial-grade" solely because it has a polished UI.
 - [x] Content edits create versions instead of overwriting review history.
 - [x] CI runs formatting/linting, tests, and migration validation.
 - [x] Backup/restore and deployment instructions are documented.
-- [ ] PostgreSQL backup restores into a fresh data volume in CI.
+- [x] PostgreSQL backup restores into a fresh data volume in CI.
 - [ ] A human reviewer completes the end-to-end acceptance script.
 
 Evidence and limits:
