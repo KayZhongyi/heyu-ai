@@ -90,6 +90,8 @@ commit SHA, deployment profile, reviewer, and pass/fail evidence.
       optional external URL/content ID, and note.
 - [ ] Add at least two timestamped performance snapshots and confirm the newer
       observation does not overwrite the older one.
+- [ ] Open the publication detail endpoint and confirm it groups the publication,
+      newest-first snapshots, and diagnosis history without a derived score.
 - [ ] Confirm negative raw metrics are rejected.
 - [ ] Confirm another organization cannot see the publication or its snapshots.
 - [ ] Confirm publication and snapshot creation appear in the audit trail.

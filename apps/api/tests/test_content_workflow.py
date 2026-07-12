@@ -603,6 +603,11 @@ def test_publication_and_performance_snapshots_form_append_only_operations_histo
     assert [item["views"] for item in snapshots] == [350, 100]
     assert snapshots[1]["note"] == "One hour"
     assert client.get("/v1/publications", headers=auth).json()[0]["id"] == publication["id"]
+    detail = client.get(f"/v1/publications/{publication['id']}", headers=auth)
+    assert detail.status_code == 200
+    assert detail.json()["publication"]["id"] == publication["id"]
+    assert [item["views"] for item in detail.json()["performance_snapshots"]] == [350, 100]
+    assert detail.json()["video_diagnoses"] == []
 
     invalid_metric = client.post(
         f"/v1/publications/{publication['id']}/performance-snapshots",
@@ -624,6 +629,9 @@ def test_publication_and_performance_snapshots_form_append_only_operations_histo
             headers=second_auth,
         ).status_code
         == 404
+    )
+    assert (
+        client.get(f"/v1/publications/{publication['id']}", headers=second_auth).status_code == 404
     )
 
 
@@ -720,6 +728,11 @@ def test_video_diagnoses_are_structured_append_only_and_tenant_scoped(client, au
         "Opening and evidence review",
     ]
     assert diagnoses[1]["findings"] == first["findings"]
+    detail = client.get(f"/v1/publications/{publication['id']}", headers=auth).json()
+    assert [item["title"] for item in detail["video_diagnoses"]] == [
+        "Follow-up diagnosis",
+        "Opening and evidence review",
+    ]
 
     invalid = client.post(
         f"/v1/publications/{publication['id']}/video-diagnoses",

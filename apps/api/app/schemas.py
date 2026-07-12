@@ -274,6 +274,12 @@ class VideoDiagnosisRead(ORMModel):
     created_at: datetime
 
 
+class PublicationDetailRead(BaseModel):
+    publication: PublicationRead
+    performance_snapshots: list[PerformanceSnapshotRead]
+    video_diagnoses: list[VideoDiagnosisRead]
+
+
 class GenerationRead(BaseModel):
     run_id: str
     version: ContentVersionRead

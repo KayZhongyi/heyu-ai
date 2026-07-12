@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.ai import PROMPT_NAME, PROMPT_VERSION, get_ai_provider
@@ -55,6 +56,14 @@ def audit(
             details=details or {},
         )
     )
+
+
+def flush_or_conflict(db: Session, detail: str) -> None:
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=detail) from exc
 
 
 def create_brand(db: Session, actor: Actor, data: BrandCreate) -> Brand:
@@ -205,7 +214,11 @@ def revise_knowledge_source(
         **data.model_dump(),
     )
     db.add(revision)
-    db.flush()
+    flush_or_conflict(
+        db,
+        "A newer knowledge revision was created concurrently; "
+        "refresh and revise the latest revision",
+    )
     audit(
         db,
         actor,
@@ -379,6 +392,42 @@ def list_publications(db: Session, actor: Actor) -> list[Publication]:
             .order_by(Publication.published_at.desc())
         )
     )
+
+
+def get_publication_detail(db: Session, actor: Actor, publication_id: str) -> dict:
+    publication = db.scalar(
+        select(Publication).where(
+            Publication.id == publication_id,
+            Publication.organization_id == actor.organization_id,
+        )
+    )
+    if publication is None:
+        raise HTTPException(status_code=404, detail="Publication not found")
+    snapshots = list(
+        db.scalars(
+            select(PerformanceSnapshot)
+            .where(
+                PerformanceSnapshot.publication_id == publication.id,
+                PerformanceSnapshot.organization_id == actor.organization_id,
+            )
+            .order_by(PerformanceSnapshot.captured_at.desc())
+        )
+    )
+    diagnoses = list(
+        db.scalars(
+            select(VideoDiagnosis)
+            .where(
+                VideoDiagnosis.publication_id == publication.id,
+                VideoDiagnosis.organization_id == actor.organization_id,
+            )
+            .order_by(VideoDiagnosis.observed_at.desc())
+        )
+    )
+    return {
+        "publication": publication,
+        "performance_snapshots": snapshots,
+        "video_diagnoses": diagnoses,
+    }
 
 
 def create_performance_snapshot(
@@ -576,7 +625,10 @@ def generate_content(
         created_by=actor.user_id,
     )
     db.add(version)
-    db.flush()
+    flush_or_conflict(
+        db,
+        "A content version was created concurrently; refresh the project and try again",
+    )
     audit(
         db,
         actor,
@@ -661,7 +713,10 @@ def create_content_version(
         created_by=actor.user_id,
     )
     db.add(version)
-    db.flush()
+    flush_or_conflict(
+        db,
+        "A content version was created concurrently; refresh the project and try again",
+    )
     audit(db, actor, "content_version.created", "content_version", version.id)
     db.commit()
     db.refresh(version)

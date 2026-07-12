@@ -24,9 +24,11 @@ flowchart LR
   Domain --> DB["PostgreSQL"]
   Domain --> Gateway["AI gateway"]
   Domain --> Diagnosis["Evidence-led video diagnosis"]
+  Domain --> PublicationDetail["Publication operations detail"]
   Gateway --> Mock["Deterministic local provider"]
   Gateway --> Providers["Configured external providers"]
   Domain --> Audit["Audit and provenance records"]
+  PublicationDetail --> DB
 ```
 
 ## Tenant isolation

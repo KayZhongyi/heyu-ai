@@ -20,6 +20,7 @@ history, and auditability.
 - Explicit draft → pending review → approved/rejected content governance
 - Approved-content publication records and append-only performance snapshots
 - Append-only, evidence-based structured video diagnosis reports
+- Tenant-scoped publication detail views grouping raw metrics and diagnoses
 - Provider-neutral AI gateway with a deterministic local development provider
 - Docker-based local environment, automated tests, and CI
 
@@ -125,6 +126,8 @@ For backups, upgrades, and recovery, see
 - Video diagnosis starts as a structured human-review record linked to a
   publication. Findings require a category, evidence, and an observation,
   opportunity, or risk label; the system does not invent an automatic score.
+- `GET /v1/publications/{publication_id}` returns the publication, newest-first
+  performance snapshots, and diagnosis history without deriving a score.
 - The repository contains synthetic examples only; supplied business materials
   are not committed without explicit authorization.
 

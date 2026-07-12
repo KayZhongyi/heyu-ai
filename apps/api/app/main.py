@@ -45,6 +45,7 @@ from app.schemas import (
     ProductCreate,
     ProductRead,
     PublicationCreate,
+    PublicationDetailRead,
     PublicationRead,
     TokenResponse,
     VideoDiagnosisCreate,
@@ -68,6 +69,7 @@ from app.services import (
     create_publication,
     create_video_diagnosis,
     generate_content,
+    get_publication_detail,
     list_brands,
     list_content_projects,
     list_content_versions,
@@ -462,6 +464,15 @@ def get_publications(
     db: Session = Depends(get_db), actor: Actor = Depends(current_actor)
 ) -> list[PublicationRead]:
     return list_publications(db, actor)
+
+
+@app.get("/v1/publications/{publication_id}", response_model=PublicationDetailRead)
+def get_publication(
+    publication_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> PublicationDetailRead:
+    return get_publication_detail(db, actor, publication_id)
 
 
 @app.post(

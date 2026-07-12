@@ -82,3 +82,6 @@ same approved-source citations and prohibited-claim warnings.
   optional transcript excerpt, and structured findings with evidence and
   recommendations. Automated media extraction can be added later without
   changing the audit model.
+- A tenant-scoped publication detail endpoint groups the immutable publication
+  record, raw performance history, and diagnosis history for the operations
+  workspace without replacing the underlying records.
