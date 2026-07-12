@@ -1,4 +1,6 @@
-const state={token:localStorage.getItem("heyu_token")||"",brands:[],products:[],knowledge:[],projects:[],versions:[],audit:[],currentVersion:null};
+const state={token:localStorage.getItem("heyu_token")||"",actor:null,members:[],brands:[],products:[],knowledge:[],projects:[],versions:[],audit:[],currentVersion:null};
+const roleLabels={owner:"所有者",admin:"管理员",product_manager:"产品经理",creator:"内容创作者",reviewer:"审核员",viewer:"只读成员"};
+const roleOptions=(selected="",allowOwner=true)=>Object.entries(roleLabels).filter(([role])=>allowOwner||role!=="owner").map(([role,label])=>`<option value="${role}"${role===selected?" selected":""}>${label}</option>`).join("");
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const api=async(path,options={})=>{const headers={"Content-Type":"application/json",...(options.headers||{})};if(state.token)headers.Authorization=`Bearer ${state.token}`;const response=await fetch(path,{...options,headers});if(!response.ok){let message=`请求失败 (${response.status})`;try{const body=await response.json();message=body.detail||message}catch{}throw new Error(message)}return response.status===204?null:response.json()};
 const formData=form=>Object.fromEntries(new FormData(form));
@@ -14,11 +16,16 @@ function showWorkspace(){
 function navigate(page){
   $$(".nav").forEach(x=>x.classList.toggle("active",x.dataset.page===page));
   $$(".page").forEach(x=>x.classList.toggle("active",x.dataset.pagePanel===page));
-  const titles={overview:"经营概览",assets:"品牌与农产品",knowledge:"可信知识库",studio:"内容创作台",review:"审核与版本",audit:"审计记录"};
+  const titles={overview:"经营概览",assets:"品牌与农产品",knowledge:"可信知识库",studio:"内容创作台",review:"审核与版本",audit:"审计记录",members:"团队与权限"};
   $("#page-title").textContent=titles[page];
 }
 async function refresh(){
+  state.actor=await api("/v1/me");
+  const canManageMembers=["owner","admin"].includes(state.actor.role);
   [state.brands,state.products,state.knowledge,state.projects,state.audit]=await Promise.all([api("/v1/brands"),api("/v1/products"),api("/v1/knowledge"),api("/v1/content-projects"),api("/v1/audit-events")]);
+  state.members=canManageMembers?await api("/v1/members"):[];
+  $$(".member-nav").forEach(x=>x.hidden=!canManageMembers);
+  if(!canManageMembers&&$(".nav.active")?.dataset.page==="members")navigate("overview");
   render();
 }
 function options(items,placeholder){
@@ -37,8 +44,16 @@ function render(){
   $("#asset-list").innerHTML=[...state.brands.map(b=>`<article><span class="pill">品牌</span><h3>${escapeHtml(b.name)}</h3><p>${escapeHtml(b.story||"尚未填写品牌故事")}</p></article>`),...state.products.map(p=>`<article><span class="pill">农产品</span><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.origin||"产地待补充")} · ${escapeHtml(p.specification||"规格待补充")}</p></article>`)].join("")||"暂无品牌与产品";
   $("#knowledge-list").innerHTML=state.knowledge.map(k=>`<article><h3>${escapeHtml(k.title)}</h3><p>${escapeHtml(k.content.slice(0,130))}</p><span class="badge ${k.status}">${k.status}</span>${k.status!=="approved"?`<div class="row-actions"><button class="approve" data-review-source="${k.id}" data-status="approved">审核通过</button><button class="reject" data-review-source="${k.id}" data-status="rejected">驳回</button></div>`:""}</article>`).join("")||"暂无知识资料";
   $("#audit-list").innerHTML=state.audit.map(item=>`<article><h3>${escapeHtml(actionLabel(item.action))}</h3><p>${escapeHtml(item.entity_type)} · ${escapeHtml(item.entity_id)}</p><div class="audit-meta"><span>操作者 ${escapeHtml(item.actor_id.slice(0,8))}</span><span>${escapeHtml(JSON.stringify(item.details))}</span></div></article>`).join("")||"暂无审计记录";
+  renderMembers();
 }
-const actionLabel=action=>({"brand.created":"创建品牌","product.created":"创建农产品","knowledge.created":"录入知识","knowledge.approved":"知识审核通过","knowledge.rejected":"知识被驳回","content_project.created":"创建内容任务","content.generated":"AI 生成内容","content_version.created":"创建内容版本","content_version.approved":"内容审核通过","content_version.rejected":"内容被驳回"}[action]||action);
+const actionLabel=action=>({"membership.created":"创建团队成员","membership.role_changed":"调整成员角色","brand.created":"创建品牌","product.created":"创建农产品","knowledge.created":"录入知识","knowledge.approved":"知识审核通过","knowledge.rejected":"知识被驳回","content_project.created":"创建内容任务","content.generated":"AI 生成内容","content_version.created":"创建内容版本","content_version.approved":"内容审核通过","content_version.rejected":"内容被驳回"}[action]||action);
+function renderMembers(){
+  if(!state.actor)return;
+  const allowOwner=state.actor.role==="owner";
+  $(".role-select").innerHTML=roleOptions("creator",allowOwner);
+  $("#member-count").textContent=`${state.members.length} 位成员`;
+  $("#member-list").innerHTML=state.members.map(member=>`<article class="member-row"><div><h3>${escapeHtml(member.display_name)}${member.user_id===state.actor.user_id?' <span class="badge approved">当前账号</span>':""}</h3><p>${escapeHtml(member.email)}</p></div><label>角色<select data-member-role="${member.membership_id}" ${member.user_id===state.actor.user_id&&member.role==="owner"?"disabled":""}>${roleOptions(member.role,allowOwner)}</select></label></article>`).join("")||"暂无团队成员";
+}
 function renderFocus(approvedKnowledge,pendingKnowledge){
   let focus={status:"工作空间已就绪",detail:"先完善知识，再开始创作",title:"从最关键的资料开始。",copy:"先建立品牌和产品档案，再录入一条经过审核的事实，AI 才能生成可信内容。",label:"建立第一份档案",target:"assets"};
   if(state.brands.length&&!state.products.length)focus={status:"品牌已建档",detail:"下一步补充农产品事实",title:"让品牌拥有具体的产品。",copy:"补充产地、规格、储存方式、核心卖点与禁止表述，为可信生成建立事实边界。",label:"完善产品档案",target:"assets"};
@@ -57,11 +72,13 @@ $("#brand-form").addEventListener("submit",event=>{event.preventDefault();reques
 $("#product-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{const data=formData(event.target);data.selling_points=lines(data.selling_points);data.prohibited_claims=lines(data.prohibited_claims);await api("/v1/products",{method:"POST",body:JSON.stringify(data)});event.target.reset();await refresh()},"产品已保存")});
 $("#knowledge-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{const data=formData(event.target);data.brand_id=data.brand_id||null;data.product_id=data.product_id||null;await api("/v1/knowledge",{method:"POST",body:JSON.stringify(data)});event.target.reset();await refresh()},"知识资料已保存，请进行审核")});
 $("#project-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{await api("/v1/content-projects",{method:"POST",body:JSON.stringify(formData(event.target))});event.target.reset();await refresh()},"内容任务已创建")});
+$("#member-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{await api("/v1/members",{method:"POST",body:JSON.stringify(formData(event.target))});event.target.reset();await refresh()},"团队成员已创建")});
 $("#generate-button").addEventListener("click",()=>request(async()=>{const id=$("#project-select").value;if(!id)throw new Error("请先选择内容任务");const result=await api(`/v1/content-projects/${id}/generate`,{method:"POST"});state.currentVersion=result.version;const content=JSON.stringify(result.version.content,null,2);$("#generation-output").textContent=content;$("#version-editor").value=content;$("#edit-version").hidden=false;let provenance=$("#generation-provenance");if(!provenance){provenance=document.createElement("div");provenance.id="generation-provenance";provenance.className="provenance";$("#generation-output").before(provenance)}provenance.innerHTML=`<span>Provider: ${escapeHtml(result.provider)}</span><span>Model: ${escapeHtml(result.model)}</span><span>Prompt: ${escapeHtml(result.prompt_name)} v${escapeHtml(result.prompt_version)}</span><span>Sources: ${result.source_ids.length}</span><span>${result.latency_ms} ms</span>`;state.versions=await api(`/v1/content-projects/${id}/versions`);state.audit=await api("/v1/audit-events");renderReviews(id)},"内容已生成并进入审核"));
 $("#save-version-button").addEventListener("click",()=>request(async()=>{if(!state.currentVersion)throw new Error("请先生成内容");let content;try{content=JSON.parse($("#version-editor").value)}catch{throw new Error("修改内容必须是有效的 JSON 格式")}const projectId=state.currentVersion.project_id;const version=await api(`/v1/content-projects/${projectId}/versions`,{method:"POST",body:JSON.stringify({parent_version_id:state.currentVersion.id,content,change_summary:$("#change-summary").value})});state.currentVersion=version;$("#generation-output").textContent=JSON.stringify(version.content,null,2);state.versions=await api(`/v1/content-projects/${projectId}/versions`);renderReviews(projectId)},"人工修改已保存为新版本"));
 $("#review-project-select").addEventListener("change",event=>request(()=>renderReviews(event.target.value)));
 $$("[data-auth-mode]").forEach(button=>button.addEventListener("click",()=>{$$("[data-auth-mode]").forEach(x=>x.classList.toggle("active",x===button));$$("[data-auth-panel]").forEach(panel=>panel.hidden=panel.dataset.authPanel!==button.dataset.authMode)}));
 document.addEventListener("click",event=>{const nav=event.target.closest("[data-page]");if(nav)navigate(nav.dataset.page);const jump=event.target.closest("[data-target]");if(jump)navigate(jump.dataset.target);const review=event.target.closest("[data-review-source]");if(review)request(async()=>{await api(`/v1/knowledge/${review.dataset.reviewSource}/review`,{method:"POST",body:JSON.stringify({status:review.dataset.status})});await refresh()},"资料审核状态已更新");const versionReview=event.target.closest("[data-review-version]");if(versionReview)request(async()=>{await api(`/v1/content-projects/${versionReview.dataset.project}/versions/${versionReview.dataset.reviewVersion}/review`,{method:"POST",body:JSON.stringify({status:versionReview.dataset.status,note:"由禾语工作台审核"})});state.versions=await api(`/v1/content-projects/${versionReview.dataset.project}/versions`);renderReviews(versionReview.dataset.project)},"内容审核状态已更新")});
+document.addEventListener("change",event=>{const select=event.target.closest("[data-member-role]");if(select)request(async()=>{await api(`/v1/members/${select.dataset.memberRole}`,{method:"PATCH",body:JSON.stringify({role:select.value})});await refresh()},"成员角色已更新")});
 async function renderReviews(selectedId){
   if(!selectedId&&state.projects.length)selectedId=state.projects[0].id;
   if(selectedId)state.versions=await api(`/v1/content-projects/${selectedId}/versions`);

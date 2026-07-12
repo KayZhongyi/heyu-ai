@@ -27,6 +27,7 @@
         <span class="nav-label">质量治理</span>
         <button class="nav" data-page="review" data-index="05">审核与版本</button>
         <button class="nav" data-page="audit" data-index="06">审计记录</button>
+        <button class="nav member-nav" data-page="members" data-index="07" hidden>团队与权限</button>
       </nav>
       <div class="sidebar-note">
         <b><i></i>可信引擎运行中</b>
@@ -136,6 +137,25 @@
 
         <section class="page" data-page-panel="audit">
           <div class="panel"><div class="panel-heading"><div><p class="eyebrow">AUDIT TRAIL</p><h2>组织审计记录</h2></div><span class="pill">最近 100 条</span></div><p class="panel-intro">品牌、产品、知识审核、AI 生成与内容版本操作均按组织隔离记录。</p><div id="audit-list" class="stack empty">暂无审计记录</div></div>
+        </section>
+
+        <section class="page" data-page-panel="members">
+          <div class="two-col member-layout">
+            <form class="panel" id="member-form">
+              <div class="panel-heading"><div><p class="eyebrow">TEAM ACCESS</p><h2>新增团队成员</h2></div><span class="pill">Owner / Admin</span></div>
+              <p class="panel-intro">为真实协作建立独立账号。成员权限由角色控制，后续调整会立即使旧登录凭证失效。</p>
+              <label>成员邮箱<input type="email" name="email" placeholder="member@example.com" required></label>
+              <label>显示名称<input name="display_name" placeholder="例如：内容负责人" required></label>
+              <label>初始密码<input type="password" name="password" minlength="10" placeholder="至少 10 个字符" required></label>
+              <label>初始角色<select name="role" class="role-select"></select></label>
+              <button class="primary" type="submit">创建成员账号</button>
+            </form>
+            <div class="panel">
+              <div class="panel-heading"><div><p class="eyebrow">ROLE GOVERNANCE</p><h2>成员与权限</h2></div><span class="pill" id="member-count">0 位成员</span></div>
+              <p class="panel-intro">每个成员只访问所属组织的数据。Owner 负责最高权限，Admin 可管理 Owner 之外的成员。</p>
+              <div id="member-list" class="stack member-list empty">暂无团队成员</div>
+            </div>
+          </div>
         </section>
       </div>
       <div id="toast" role="status"></div>

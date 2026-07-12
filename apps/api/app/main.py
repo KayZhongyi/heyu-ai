@@ -27,6 +27,9 @@ from app.schemas import (
     KnowledgeSourceCreate,
     KnowledgeSourceRead,
     LoginRequest,
+    MemberCreate,
+    MemberRead,
+    MemberRoleUpdate,
     ProductCreate,
     ProductRead,
     TokenResponse,
@@ -39,6 +42,7 @@ from app.security import (
     verify_password,
 )
 from app.services import (
+    audit,
     create_brand,
     create_content_project,
     create_content_version,
@@ -176,6 +180,125 @@ def login(data: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
 @app.get("/v1/me", response_model=Actor)
 def me(actor: Actor = Depends(current_actor)) -> Actor:
     return actor
+
+
+@app.get("/v1/members", response_model=list[MemberRead])
+def get_members(
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
+) -> list[MemberRead]:
+    rows = db.execute(
+        select(Membership, User)
+        .join(User, User.id == Membership.user_id)
+        .where(Membership.organization_id == actor.organization_id)
+        .order_by(User.display_name, User.email)
+    ).all()
+    return [
+        MemberRead(
+            membership_id=membership.id,
+            user_id=user.id,
+            email=user.email,
+            display_name=user.display_name,
+            role=membership.role,
+        )
+        for membership, user in rows
+    ]
+
+
+@app.post("/v1/members", response_model=MemberRead, status_code=201)
+def add_member(
+    data: MemberCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
+) -> MemberRead:
+    if data.role == Role.owner and actor.role != Role.owner:
+        raise HTTPException(status_code=403, detail="Only an owner can add another owner")
+    user = db.scalar(select(User).where(User.email == data.email))
+    if user is None:
+        user = User(
+            email=data.email,
+            display_name=data.display_name,
+            password_hash=hash_password(data.password),
+        )
+        db.add(user)
+        db.flush()
+    elif not verify_password(data.password, user.password_hash):
+        raise HTTPException(
+            status_code=409,
+            detail="This email already exists; provide its current password to add it",
+        )
+    existing = db.scalar(
+        select(Membership).where(
+            Membership.organization_id == actor.organization_id,
+            Membership.user_id == user.id,
+        )
+    )
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="User is already a member")
+    membership = Membership(
+        organization_id=actor.organization_id,
+        user_id=user.id,
+        role=data.role,
+    )
+    db.add(membership)
+    db.flush()
+    audit(
+        db,
+        actor,
+        "membership.created",
+        "membership",
+        membership.id,
+        {"user_id": user.id, "role": data.role.value},
+    )
+    db.commit()
+    return MemberRead(
+        membership_id=membership.id,
+        user_id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        role=membership.role,
+    )
+
+
+@app.patch("/v1/members/{membership_id}", response_model=MemberRead)
+def update_member_role(
+    membership_id: str,
+    data: MemberRoleUpdate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
+) -> MemberRead:
+    membership = db.scalar(
+        select(Membership).where(
+            Membership.id == membership_id,
+            Membership.organization_id == actor.organization_id,
+        )
+    )
+    if membership is None:
+        raise HTTPException(status_code=404, detail="Member not found")
+    if membership.role == Role.owner or data.role == Role.owner:
+        if actor.role != Role.owner:
+            raise HTTPException(status_code=403, detail="Only an owner can change owner roles")
+    if membership.user_id == actor.user_id and membership.role == Role.owner:
+        raise HTTPException(status_code=409, detail="An owner cannot demote themselves")
+    previous_role = membership.role
+    membership.role = data.role
+    user = db.get(User, membership.user_id)
+    audit(
+        db,
+        actor,
+        "membership.role_changed",
+        "membership",
+        membership.id,
+        {"from": previous_role.value, "to": data.role.value},
+    )
+    db.commit()
+    return MemberRead(
+        membership_id=membership.id,
+        user_id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        role=membership.role,
+    )
 
 
 @app.get("/v1/audit-events", response_model=list[AuditEventRead])

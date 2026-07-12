@@ -35,6 +35,25 @@ class Actor(BaseModel):
     role: Role
 
 
+class MemberCreate(BaseModel):
+    email: EmailStr
+    display_name: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=10, max_length=128)
+    role: Role
+
+
+class MemberRoleUpdate(BaseModel):
+    role: Role
+
+
+class MemberRead(BaseModel):
+    membership_id: str
+    user_id: str
+    email: EmailStr
+    display_name: str
+    role: Role
+
+
 class BrandCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     story: str = ""
