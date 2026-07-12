@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [ValidateRange(1024, 65535)]
-    [int]$Port = 8000
+    [int]$Port = 8000,
+    [switch]$OpenBrowser = $true
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,7 +29,9 @@ try {
     # Expected when the service is not already running.
 }
 if ($existing) {
-    Start-Process $workspaceUrl
+    if ($OpenBrowser) {
+        Start-Process $workspaceUrl
+    }
     Write-Host "Heyu AI is already running: $workspaceUrl"
     exit 0
 }
@@ -45,7 +48,9 @@ for ($attempt = 0; $attempt -lt 60; $attempt++) {
     }
     try {
         Invoke-RestMethod -Uri $healthUrl -TimeoutSec 1 | Out-Null
-        Start-Process $workspaceUrl
+        if ($OpenBrowser) {
+            Start-Process $workspaceUrl
+        }
         Write-Host "Startup complete. Closing this window will not stop the background service."
         exit 0
     } catch {

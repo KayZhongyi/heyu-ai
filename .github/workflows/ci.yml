@@ -24,6 +24,55 @@ jobs:
       - run: |
           export DATABASE_URL=sqlite:////tmp/heyu-migration.db
           alembic upgrade head
+          alembic check
           alembic downgrade base
           alembic upgrade head
       - run: pytest --cov=app --cov-report=term-missing --cov-fail-under=80
+
+  windows-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/pyproject.toml
+      - name: Install with the user-facing script
+        shell: powershell
+        run: |
+          $env:HEYU_PYTHON = (Get-Command python).Source
+          ./scripts/setup-windows.ps1
+      - name: Start and verify the packaged workspace
+        shell: powershell
+        run: |
+          ./scripts/start-windows.ps1 -Port 8765 -OpenBrowser:$false
+          $health = Invoke-RestMethod http://127.0.0.1:8765/health
+          if ($health.status -ne "ok") {
+            throw "Unexpected health response."
+          }
+          $workspace = Invoke-WebRequest http://127.0.0.1:8765/
+          if ($workspace.StatusCode -ne 200 -or $workspace.Content -notmatch "禾语 AI") {
+            throw "Workspace did not load from the Windows package."
+          }
+      - name: Upload Windows source package
+        shell: powershell
+        run: |
+          $exclude = @(".git", ".venv", "data", "outputs", "work", ".pytest_cache", ".ruff_cache")
+          Get-ChildItem -Force |
+            Where-Object { $_.Name -notin $exclude } |
+            Compress-Archive -DestinationPath heyu-ai-windows-source.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: heyu-ai-windows-source
+          path: heyu-ai-windows-source.zip
+          if-no-files-found: error
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+      - name: Build application image
+        run: docker compose build api

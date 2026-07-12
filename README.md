@@ -52,6 +52,10 @@ Docker Compose remains available for a
 production-like PostgreSQL environment, but it is not required for the basic
 demo.
 
+Every successful GitHub Actions run also publishes a
+`heyu-ai-windows-source` artifact. It contains the same source-package layout
+used by the automated Windows install-and-start verification.
+
 ### Windows source package
 
 The current source package can run without Docker. Python 3.12 is the only
