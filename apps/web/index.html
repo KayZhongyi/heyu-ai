@@ -24,10 +24,11 @@
         <button class="nav" data-page="assets" data-index="02">品牌与农产品</button>
         <button class="nav" data-page="knowledge" data-index="03">可信知识库</button>
         <button class="nav" data-page="studio" data-index="04">内容创作台</button>
+        <button class="nav" data-page="operations" data-index="05">发布与运营</button>
         <span class="nav-label">质量治理</span>
-        <button class="nav" data-page="review" data-index="05">审核与版本</button>
-        <button class="nav" data-page="audit" data-index="06">审计记录</button>
-        <button class="nav member-nav" data-page="members" data-index="07" hidden>团队与权限</button>
+        <button class="nav" data-page="review" data-index="06">审核与版本</button>
+        <button class="nav" data-page="audit" data-index="07">审计记录</button>
+        <button class="nav member-nav" data-page="members" data-index="08" hidden>团队与权限</button>
       </nav>
       <div class="sidebar-note">
         <b><i></i>可信引擎运行中</b>
@@ -156,6 +157,27 @@
 
         <section class="page" data-page-panel="review">
           <div class="panel"><div class="panel-heading"><div><p class="eyebrow">VERSION CONTROL</p><h2>内容版本与审核</h2></div><span class="pill">不可覆盖版本链</span></div><label>选择内容项目<select id="review-project-select"></select></label><div id="review-list" class="stack empty">暂无待审核内容</div></div>
+        </section>
+
+        <section class="page" data-page-panel="operations">
+          <div class="two-col">
+            <form id="publication-form" class="panel">
+              <div class="panel-heading"><div><p class="eyebrow">PUBLISH</p><h2>登记发布内容</h2></div><span class="pill">仅限已审核版本</span></div>
+              <label>内容项目<select name="project_id" id="publication-project-select" required></select></label>
+              <label>已审核版本<select name="content_version_id" id="publication-version-select" required><option value="">请先选择项目</option></select></label>
+              <label>发布平台<input name="platform" required placeholder="例如：抖音、小红书、视频号"></label>
+              <label>外部内容链接<input name="external_url" type="url" placeholder="可选"></label>
+              <label>平台内容 ID<input name="external_content_id" placeholder="可选"></label>
+              <label>发布时间<input name="published_at" type="datetime-local" required></label>
+              <label>备注<textarea name="note" rows="3"></textarea></label>
+              <button class="primary">保存发布记录</button>
+            </form>
+            <div class="panel">
+              <div class="panel-heading"><div><p class="eyebrow">OPERATIONS</p><h2>发布与数据快照</h2></div><span class="pill">保留历史</span></div>
+              <p class="panel-intro">每次数据录入都会形成独立快照，不覆盖历史数据，也不计算未经验证的“爆款分数”。</p>
+              <div id="publication-list" class="stack empty">暂无发布记录</div>
+            </div>
+          </div>
         </section>
 
         <section class="page" data-page-panel="audit">

@@ -1,4 +1,4 @@
-const state={token:localStorage.getItem("heyu_token")||"",actor:null,members:[],brands:[],products:[],knowledge:[],projects:[],versions:[],generationRuns:[],audit:[],currentVersion:null};
+const state={token:localStorage.getItem("heyu_token")||"",actor:null,members:[],brands:[],products:[],knowledge:[],projects:[],versions:[],generationRuns:[],publications:[],audit:[],currentVersion:null};
 const roleLabels={owner:"所有者",admin:"管理员",product_manager:"产品经理",creator:"内容创作者",reviewer:"审核员",viewer:"只读成员"};
 const roleOptions=(selected="",allowOwner=true)=>Object.entries(roleLabels).filter(([role])=>allowOwner||role!=="owner").map(([role,label])=>`<option value="${role}"${role===selected?" selected":""}>${label}</option>`).join("");
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -18,13 +18,13 @@ function showWorkspace(){
 function navigate(page){
   $$(".nav").forEach(x=>x.classList.toggle("active",x.dataset.page===page));
   $$(".page").forEach(x=>x.classList.toggle("active",x.dataset.pagePanel===page));
-  const titles={overview:"经营概览",assets:"品牌与农产品",knowledge:"可信知识库",studio:"内容创作台",review:"审核与版本",audit:"审计记录",members:"团队与权限"};
+  const titles={overview:"经营概览",assets:"品牌与农产品",knowledge:"可信知识库",studio:"内容创作台",operations:"发布与运营",review:"审核与版本",audit:"审计记录",members:"团队与权限"};
   $("#page-title").textContent=titles[page];
 }
 async function refresh(){
   state.actor=await api("/v1/me");
   const canManageMembers=["owner","admin"].includes(state.actor.role);
-  [state.brands,state.products,state.knowledge,state.projects,state.audit]=await Promise.all([api("/v1/brands"),api("/v1/products"),api("/v1/knowledge"),api("/v1/content-projects"),api("/v1/audit-events")]);
+  [state.brands,state.products,state.knowledge,state.projects,state.publications,state.audit]=await Promise.all([api("/v1/brands"),api("/v1/products"),api("/v1/knowledge"),api("/v1/content-projects"),api("/v1/publications"),api("/v1/audit-events")]);
   state.members=canManageMembers?await api("/v1/members"):[];
   $$(".member-nav").forEach(x=>x.hidden=!canManageMembers);
   if(!canManageMembers&&$(".nav.active")?.dataset.page==="members")navigate("overview");
@@ -43,14 +43,25 @@ function render(){
   $$(".product-select").forEach(x=>{const value=x.value;x.innerHTML=options(state.products,"请选择产品");x.value=value});
   $("#project-select").innerHTML=options(state.projects,"请选择内容任务");
   const reviewSelect=$("#review-project-select");const reviewValue=reviewSelect.value;reviewSelect.innerHTML=options(state.projects,"请选择内容项目");reviewSelect.value=reviewValue;
+  const publicationProject=$("#publication-project-select");const publicationProjectValue=publicationProject.value;publicationProject.innerHTML=options(state.projects,"请选择内容项目");publicationProject.value=publicationProjectValue;
   $("#asset-list").innerHTML=[...state.brands.map(b=>`<article><span class="pill">品牌</span><h3>${escapeHtml(b.name)}</h3><p>${escapeHtml(b.story||"尚未填写品牌故事")}</p></article>`),...state.products.map(p=>`<article><span class="pill">农产品</span><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.origin||"产地待补充")} · ${escapeHtml(p.specification||"规格待补充")}</p></article>`)].join("")||"暂无品牌与产品";
   const canSubmitKnowledge=["owner","admin","creator","product_manager"].includes(state.actor.role);
   const canReviewKnowledge=["owner","admin","reviewer"].includes(state.actor.role);
   $("#knowledge-list").innerHTML=state.knowledge.map(k=>`<article><h3>${escapeHtml(k.title)} <span class="badge">R${k.revision_number||1}</span></h3><p>${escapeHtml(k.content.slice(0,130))}</p><div class="source-meta">${k.source_filename?`<span>文件 ${escapeHtml(k.source_filename)}</span>`:"<span>手工录入</span>"}<span>${escapeHtml(k.media_type||"text/plain")}</span>${k.content_sha256?`<span title="${escapeHtml(k.content_sha256)}">SHA-256 ${escapeHtml(k.content_sha256.slice(0,12))}…</span>`:""}${k.citation_label?`<span>引用 ${escapeHtml(k.citation_label)}</span>`:""}${k.parent_source_id?`<span>源自 R${(k.revision_number||1)-1}</span>`:""}${k.change_summary?`<span>修订 ${escapeHtml(k.change_summary)}</span>`:""}${k.reviewed_by?`<span>审核人 ${escapeHtml(k.reviewed_by.slice(0,8))}</span>`:""}</div><span class="badge ${k.status}">${k.status}</span>${k.status==="draft"&&canSubmitKnowledge?`<div class="row-actions"><button class="approve" data-submit-source="${k.id}">提交审核</button></div>`:""}${["approved","rejected"].includes(k.status)&&canSubmitKnowledge?`<div class="row-actions"><button data-revise-source="${k.id}">创建修订版</button></div>`:""}${k.status==="pending_review"&&canReviewKnowledge?`<div class="row-actions"><button class="approve" data-review-source="${k.id}" data-status="approved">审核通过</button><button class="reject" data-review-source="${k.id}" data-status="rejected">驳回</button></div>`:""}</article>`).join("")||"暂无知识资料";
   $("#audit-list").innerHTML=state.audit.map(item=>`<article><h3>${escapeHtml(actionLabel(item.action))}</h3><p>${escapeHtml(item.entity_type)} · ${escapeHtml(item.entity_id)}</p><div class="audit-meta"><span>操作者 ${escapeHtml(item.actor_id.slice(0,8))}</span><span>${escapeHtml(JSON.stringify(item.details))}</span></div></article>`).join("")||"暂无审计记录";
+  renderPublications();
   renderMembers();
 }
-const actionLabel=action=>({"membership.created":"创建团队成员","membership.role_changed":"调整成员角色","brand.created":"创建品牌","product.created":"创建农产品","knowledge.created":"录入知识","knowledge.revised":"创建知识修订版","knowledge.submitted":"知识已提交审核","knowledge.approved":"知识审核通过","knowledge.rejected":"知识被驳回","content_project.created":"创建内容任务","content.generated":"AI 生成内容","content_version.created":"创建内容版本","content_version.submitted":"内容已提交审核","content_version.approved":"内容审核通过","content_version.rejected":"内容被驳回"}[action]||action);
+const actionLabel=action=>({"membership.created":"创建团队成员","membership.role_changed":"调整成员角色","brand.created":"创建品牌","product.created":"创建农产品","knowledge.created":"录入知识","knowledge.revised":"创建知识修订版","knowledge.submitted":"知识已提交审核","knowledge.approved":"知识审核通过","knowledge.rejected":"知识被驳回","content_project.created":"创建内容任务","content.generated":"AI 生成内容","content_version.created":"创建内容版本","content_version.submitted":"内容已提交审核","content_version.approved":"内容审核通过","content_version.rejected":"内容被驳回","publication.created":"登记发布内容","performance_snapshot.created":"录入运营数据快照"}[action]||action);
+function renderPublications(){
+  $("#publication-list").innerHTML=state.publications.map(item=>`<article><div class="panel-heading"><div><h3>${escapeHtml(item.platform)}</h3><p>${escapeHtml(new Date(item.published_at).toLocaleString())}</p></div><span class="badge approved">已发布</span></div>${item.external_url?`<p><a href="${escapeHtml(item.external_url)}" target="_blank" rel="noopener noreferrer">查看外部内容</a></p>`:""}<form class="snapshot-form" data-publication-id="${item.id}"><div class="source-meta"><label>采集时间<input name="captured_at" type="datetime-local" required></label><label>播放<input name="views" type="number" min="0"></label><label>点赞<input name="likes" type="number" min="0"></label><label>评论<input name="comments" type="number" min="0"></label><label>分享<input name="shares" type="number" min="0"></label><label>收藏<input name="saves" type="number" min="0"></label><label>新增粉丝<input name="followers_gained" type="number" min="0"></label><label>订单<input name="orders" type="number" min="0"></label><label>收入（分）<input name="revenue_minor" type="number" min="0"></label></div><button>添加数据快照</button></form><div class="snapshot-list" data-snapshot-list="${item.id}"></div></article>`).join("")||"暂无发布记录";
+  state.publications.forEach(item=>loadSnapshots(item.id));
+}
+async function loadSnapshots(publicationId){
+  const snapshots=await api(`/v1/publications/${publicationId}/performance-snapshots`);
+  const target=$(`[data-snapshot-list="${publicationId}"]`);
+  if(target)target.innerHTML=snapshots.map(row=>`<p class="source-meta"><span>${escapeHtml(new Date(row.captured_at).toLocaleString())}</span><span>播放 ${row.views??"-"}</span><span>点赞 ${row.likes??"-"}</span><span>评论 ${row.comments??"-"}</span><span>分享 ${row.shares??"-"}</span><span>收藏 ${row.saves??"-"}</span><span>订单 ${row.orders??"-"}</span></p>`).join("")||"<p>尚无数据快照</p>";
+}
 function renderMembers(){
   if(!state.actor)return;
   const allowOwner=state.actor.role==="owner";
@@ -107,9 +118,32 @@ $("#generate-button").addEventListener("click",()=>request(async()=>{const id=$(
 $("#save-version-button").addEventListener("click",()=>request(async()=>{if(!state.currentVersion)throw new Error("请先生成内容");let content;try{content=JSON.parse($("#version-editor").value)}catch{throw new Error("修改内容必须是有效的 JSON 格式")}const projectId=state.currentVersion.project_id;const version=await api(`/v1/content-projects/${projectId}/versions`,{method:"POST",body:JSON.stringify({parent_version_id:state.currentVersion.id,content,change_summary:$("#change-summary").value})});state.currentVersion=version;$("#generation-output").textContent=JSON.stringify(version.content,null,2);state.versions=await api(`/v1/content-projects/${projectId}/versions`);renderReviews(projectId)},"人工修改已保存为新版本"));
 $("#review-project-select").addEventListener("change",event=>request(()=>renderReviews(event.target.value)));
 $("#project-select").addEventListener("change",event=>request(()=>loadGenerationRuns(event.target.value)));
+$("#publication-project-select").addEventListener("change",event=>request(async()=>{
+  const select=$("#publication-version-select");
+  if(!event.target.value){select.innerHTML='<option value="">请先选择项目</option>';return}
+  const versions=await api(`/v1/content-projects/${event.target.value}/versions`);
+  const approved=versions.filter(item=>item.status==="approved");
+  select.innerHTML=approved.length?approved.map(item=>`<option value="${item.id}">版本 ${item.version_number} · ${escapeHtml(item.change_summary||"已审核内容")}</option>`).join(""):'<option value="">该项目暂无已审核版本</option>';
+}));
+$("#publication-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{
+  const data=formData(event.target);
+  data.published_at=new Date(data.published_at).toISOString();
+  await api("/v1/publications",{method:"POST",body:JSON.stringify(data)});
+  event.target.reset();
+  await refresh();
+},"发布记录已保存")});
 $$("[data-auth-mode]").forEach(button=>button.addEventListener("click",()=>{$$("[data-auth-mode]").forEach(x=>x.classList.toggle("active",x===button));$$("[data-auth-panel]").forEach(panel=>panel.hidden=panel.dataset.authPanel!==button.dataset.authMode)}));
 document.addEventListener("click",event=>{const nav=event.target.closest("[data-page]");if(nav)navigate(nav.dataset.page);const jump=event.target.closest("[data-target]");if(jump)navigate(jump.dataset.target);const revise=event.target.closest("[data-revise-source]");if(revise){const source=state.knowledge.find(item=>item.id===revise.dataset.reviseSource);const form=$("#knowledge-form");["title","kind","content","citation_label","source_filename","media_type","brand_id","product_id"].forEach(name=>{if(form.elements[name])form.elements[name].value=source[name]||""});form.elements.parent_source_id.value=source.id;$("#knowledge-change-field").hidden=false;$("#knowledge-revision-cancel").hidden=false;$("#knowledge-save-button").textContent=`保存为 R${(source.revision_number||1)+1} 修订草稿`;form.elements.change_summary.focus();form.scrollIntoView({behavior:"smooth",block:"start"})}const sourceSubmit=event.target.closest("[data-submit-source]");if(sourceSubmit)request(async()=>{await api(`/v1/knowledge/${sourceSubmit.dataset.submitSource}/submit`,{method:"POST"});await refresh()},"知识资料已提交审核");const review=event.target.closest("[data-review-source]");if(review)request(async()=>{await api(`/v1/knowledge/${review.dataset.reviewSource}/review`,{method:"POST",body:JSON.stringify({status:review.dataset.status})});await refresh()},"资料审核状态已更新");const submit=event.target.closest("[data-submit-version]");if(submit)request(async()=>{await api(`/v1/content-projects/${submit.dataset.project}/versions/${submit.dataset.submitVersion}/submit`,{method:"POST"});state.versions=await api(`/v1/content-projects/${submit.dataset.project}/versions`);renderReviews(submit.dataset.project)},"内容版本已提交审核");const versionReview=event.target.closest("[data-review-version]");if(versionReview)request(async()=>{await api(`/v1/content-projects/${versionReview.dataset.project}/versions/${versionReview.dataset.reviewVersion}/review`,{method:"POST",body:JSON.stringify({status:versionReview.dataset.status,note:"由禾语工作台审核"})});state.versions=await api(`/v1/content-projects/${versionReview.dataset.project}/versions`);renderReviews(versionReview.dataset.project)},"内容审核状态已更新")});
 document.addEventListener("change",event=>{const select=event.target.closest("[data-member-role]");if(select)request(async()=>{await api(`/v1/members/${select.dataset.memberRole}`,{method:"PATCH",body:JSON.stringify({role:select.value})});await refresh()},"成员角色已更新")});
+document.addEventListener("submit",event=>{const form=event.target.closest(".snapshot-form");if(!form)return;event.preventDefault();request(async()=>{
+  const data=formData(form);
+  data.captured_at=new Date(data.captured_at).toISOString();
+  ["views","likes","comments","shares","saves","followers_gained","orders","revenue_minor"].forEach(key=>{data[key]=data[key]===""?null:Number(data[key])});
+  data.currency="CNY";
+  await api(`/v1/publications/${form.dataset.publicationId}/performance-snapshots`,{method:"POST",body:JSON.stringify(data)});
+  form.reset();
+  await loadSnapshots(form.dataset.publicationId);
+},"运营数据快照已保存")});
 async function renderReviews(selectedId){
   if(!selectedId&&state.projects.length)selectedId=state.projects[0].id;
   if(selectedId)state.versions=await api(`/v1/content-projects/${selectedId}/versions`);

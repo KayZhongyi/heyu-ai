@@ -189,6 +189,63 @@ class ContentReview(BaseModel):
     note: str = ""
 
 
+class PublicationCreate(BaseModel):
+    project_id: str
+    content_version_id: str
+    platform: str = Field(min_length=1, max_length=80)
+    external_url: str = Field(default="", max_length=2048)
+    external_content_id: str = Field(default="", max_length=255)
+    published_at: datetime
+    note: str = ""
+
+
+class PublicationRead(ORMModel):
+    id: str
+    organization_id: str
+    project_id: str
+    content_version_id: str
+    platform: str
+    external_url: str
+    external_content_id: str
+    published_at: datetime
+    note: str
+    created_by: str
+    created_at: datetime
+
+
+class PerformanceSnapshotCreate(BaseModel):
+    captured_at: datetime
+    views: int | None = Field(default=None, ge=0)
+    likes: int | None = Field(default=None, ge=0)
+    comments: int | None = Field(default=None, ge=0)
+    shares: int | None = Field(default=None, ge=0)
+    saves: int | None = Field(default=None, ge=0)
+    followers_gained: int | None = Field(default=None, ge=0)
+    orders: int | None = Field(default=None, ge=0)
+    revenue_minor: int | None = Field(default=None, ge=0)
+    currency: str = Field(default="CNY", pattern=r"^[A-Z]{3}$")
+    note: str = ""
+
+
+class PerformanceSnapshotRead(ORMModel):
+    id: str
+    organization_id: str
+    publication_id: str
+    captured_at: datetime
+    views: int | None
+    likes: int | None
+    comments: int | None
+    shares: int | None
+    saves: int | None
+    followers_gained: int | None
+    orders: int | None
+    revenue_minor: int | None
+    currency: str
+    note: str
+    created_by: str
+    created_at: datetime
+
+
 class GenerationRead(BaseModel):
     run_id: str
     version: ContentVersionRead

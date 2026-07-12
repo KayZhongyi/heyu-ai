@@ -515,3 +515,113 @@ def test_knowledge_revisions_are_immutable_linear_and_generation_uses_latest_app
         ).status_code
         == 404
     )
+
+
+def test_publication_and_performance_snapshots_form_append_only_operations_history(client, auth):
+    brand, product = create_brand_and_product(client, auth)
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "title": "Published campaign",
+            "content_type": "short_video_30s",
+            "platform": "douyin",
+        },
+    ).json()
+    draft = client.post(f"/v1/content-projects/{project['id']}/generate", headers=auth).json()[
+        "version"
+    ]
+    publication_data = {
+        "project_id": project["id"],
+        "content_version_id": draft["id"],
+        "platform": "douyin",
+        "external_url": "https://example.invalid/video/123",
+        "external_content_id": "video-123",
+        "published_at": "2026-07-13T01:00:00Z",
+        "note": "Manual publication record",
+    }
+    assert client.post("/v1/publications", headers=auth, json=publication_data).status_code == 409
+
+    client.post(
+        f"/v1/content-projects/{project['id']}/versions/{draft['id']}/submit",
+        headers=auth,
+    )
+    client.post(
+        f"/v1/content-projects/{project['id']}/versions/{draft['id']}/review",
+        headers=auth,
+        json={"status": "approved"},
+    )
+    publication_response = client.post("/v1/publications", headers=auth, json=publication_data)
+    assert publication_response.status_code == 201, publication_response.text
+    publication = publication_response.json()
+    assert publication["content_version_id"] == draft["id"]
+    assert publication["platform"] == "douyin"
+
+    first = client.post(
+        f"/v1/publications/{publication['id']}/performance-snapshots",
+        headers=auth,
+        json={
+            "captured_at": "2026-07-13T02:00:00Z",
+            "views": 100,
+            "likes": 12,
+            "comments": 3,
+            "shares": 2,
+            "saves": 5,
+            "followers_gained": 1,
+            "orders": 0,
+            "revenue_minor": 0,
+            "currency": "CNY",
+            "note": "One hour",
+        },
+    )
+    assert first.status_code == 201, first.text
+    second = client.post(
+        f"/v1/publications/{publication['id']}/performance-snapshots",
+        headers=auth,
+        json={
+            "captured_at": "2026-07-13T04:00:00Z",
+            "views": 350,
+            "likes": 38,
+            "comments": 9,
+            "shares": 8,
+            "saves": 17,
+            "followers_gained": 4,
+            "orders": 2,
+            "revenue_minor": 3980,
+            "currency": "CNY",
+            "note": "Three hours",
+        },
+    )
+    assert second.status_code == 201, second.text
+
+    snapshots = client.get(
+        f"/v1/publications/{publication['id']}/performance-snapshots",
+        headers=auth,
+    ).json()
+    assert [item["views"] for item in snapshots] == [350, 100]
+    assert snapshots[1]["note"] == "One hour"
+    assert client.get("/v1/publications", headers=auth).json()[0]["id"] == publication["id"]
+
+    invalid_metric = client.post(
+        f"/v1/publications/{publication['id']}/performance-snapshots",
+        headers=auth,
+        json={"captured_at": "2026-07-13T05:00:00Z", "views": -1},
+    )
+    assert invalid_metric.status_code == 422
+
+    events = client.get("/v1/audit-events", headers=auth).json()
+    assert any(event["action"] == "publication.created" for event in events)
+    assert sum(event["action"] == "performance_snapshot.created" for event in events) == 2
+
+    second_tenant = bootstrap(client, "operations-second", "operations@example.com")
+    second_auth = {"Authorization": f"Bearer {second_tenant['access_token']}"}
+    assert client.get("/v1/publications", headers=second_auth).json() == []
+    assert (
+        client.get(
+            f"/v1/publications/{publication['id']}/performance-snapshots",
+            headers=second_auth,
+        ).status_code
+        == 404
+    )

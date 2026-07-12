@@ -18,6 +18,7 @@ history, and auditability.
 - Structured AI content briefs and script generation
 - Immutable content versions and human approval workflow
 - Explicit draft → pending review → approved/rejected content governance
+- Approved-content publication records and append-only performance snapshots
 - Provider-neutral AI gateway with a deterministic local development provider
 - Docker-based local environment, automated tests, and CI
 
@@ -117,6 +118,9 @@ For backups, upgrades, and recovery, see
 - Source documents must be approved before production generation can cite them.
 - Generation uses the latest approved revision in each knowledge chain. A rejected
   revision does not displace the preceding approved revision.
+- A publication can reference only an approved content version. Operational
+  metrics are stored as timestamped raw snapshots so later observations do not
+  overwrite earlier evidence.
 - The repository contains synthetic examples only; supplied business materials
   are not committed without explicit authorization.
 

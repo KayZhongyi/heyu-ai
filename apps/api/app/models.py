@@ -195,6 +195,41 @@ class ContentVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class Publication(Base):
+    __tablename__ = "publications"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("content_projects.id"), index=True)
+    content_version_id: Mapped[str] = mapped_column(ForeignKey("content_versions.id"), index=True)
+    platform: Mapped[str] = mapped_column(String(80))
+    external_url: Mapped[str] = mapped_column(String(2048), default="")
+    external_content_id: Mapped[str] = mapped_column(String(255), default="")
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class PerformanceSnapshot(Base):
+    __tablename__ = "performance_snapshots"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    publication_id: Mapped[str] = mapped_column(ForeignKey("publications.id"), index=True)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    views: Mapped[int | None] = mapped_column()
+    likes: Mapped[int | None] = mapped_column()
+    comments: Mapped[int | None] = mapped_column()
+    shares: Mapped[int | None] = mapped_column()
+    saves: Mapped[int | None] = mapped_column()
+    followers_gained: Mapped[int | None] = mapped_column()
+    orders: Mapped[int | None] = mapped_column()
+    revenue_minor: Mapped[int | None] = mapped_column()
+    currency: Mapped[str] = mapped_column(String(3), default="CNY")
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

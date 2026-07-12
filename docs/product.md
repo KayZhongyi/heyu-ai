@@ -24,6 +24,8 @@ products communicate clearly, accurately, and consistently.
 7. Explicitly submit a draft version for review.
 8. Approve or reject only a version currently pending review.
 9. Inspect the audit trail and generation provenance.
+10. Register an approved version as published and append timestamped performance
+    snapshots as real platform data becomes available.
 
 ## Content types in the first release
 
@@ -71,3 +73,7 @@ same approved-source citations and prohibited-claim warnings.
 - Content review follows an explicit state machine: `draft` →
   `pending_review` → `approved` or `rejected`. Drafts cannot be reviewed
   directly, and completed reviews cannot be silently overwritten.
+- The first operations loop stores publication platform, time, external
+  reference, and raw performance snapshots such as views, likes, comments,
+  shares, saves, follower gains, orders, and revenue. It deliberately does not
+  invent a cross-platform score or claim predictive performance.

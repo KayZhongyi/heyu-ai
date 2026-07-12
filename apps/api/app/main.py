@@ -40,8 +40,12 @@ from app.schemas import (
     MemberCreate,
     MemberRead,
     MemberRoleUpdate,
+    PerformanceSnapshotCreate,
+    PerformanceSnapshotRead,
     ProductCreate,
     ProductRead,
+    PublicationCreate,
+    PublicationRead,
     TokenResponse,
 )
 from app.security import (
@@ -57,14 +61,18 @@ from app.services import (
     create_content_project,
     create_content_version,
     create_knowledge_source,
+    create_performance_snapshot,
     create_product,
+    create_publication,
     generate_content,
     list_brands,
     list_content_projects,
     list_content_versions,
     list_generation_runs,
     list_knowledge_sources,
+    list_performance_snapshots,
     list_products,
+    list_publications,
     review_content_version,
     review_knowledge_source,
     revise_knowledge_source,
@@ -432,6 +440,52 @@ def get_content_projects(
     db: Session = Depends(get_db), actor: Actor = Depends(current_actor)
 ) -> list[ContentProjectRead]:
     return list_content_projects(db, actor)
+
+
+@app.post("/v1/publications", response_model=PublicationRead, status_code=201)
+def add_publication(
+    data: PublicationCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> PublicationRead:
+    return create_publication(db, actor, data)
+
+
+@app.get("/v1/publications", response_model=list[PublicationRead])
+def get_publications(
+    db: Session = Depends(get_db), actor: Actor = Depends(current_actor)
+) -> list[PublicationRead]:
+    return list_publications(db, actor)
+
+
+@app.post(
+    "/v1/publications/{publication_id}/performance-snapshots",
+    response_model=PerformanceSnapshotRead,
+    status_code=201,
+)
+def add_performance_snapshot(
+    publication_id: str,
+    data: PerformanceSnapshotCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> PerformanceSnapshotRead:
+    return create_performance_snapshot(db, actor, publication_id, data)
+
+
+@app.get(
+    "/v1/publications/{publication_id}/performance-snapshots",
+    response_model=list[PerformanceSnapshotRead],
+)
+def get_performance_snapshots(
+    publication_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> list[PerformanceSnapshotRead]:
+    return list_performance_snapshots(db, actor, publication_id)
 
 
 @app.post(

@@ -82,7 +82,21 @@ commit SHA, deployment profile, reviewer, and pass/fail evidence.
 - [ ] Confirm the full version and review history remains available.
 - [ ] Confirm audit events identify actor, organization, action, and target.
 
-## 7. Recovery and release evidence
+## 7. Publication and operations loop
+
+- [ ] Confirm a draft or pending content version cannot be recorded as
+      published.
+- [ ] Approve a content version and register its platform, publication time,
+      optional external URL/content ID, and note.
+- [ ] Add at least two timestamped performance snapshots and confirm the newer
+      observation does not overwrite the older one.
+- [ ] Confirm negative raw metrics are rejected.
+- [ ] Confirm another organization cannot see the publication or its snapshots.
+- [ ] Confirm publication and snapshot creation appear in the audit trail.
+- [ ] Confirm the interface does not present an unvalidated viral score,
+      prediction, or cross-platform comparison.
+
+## 8. Recovery and release evidence
 
 - [ ] Back up the database using `docs/operations.md`.
 - [ ] Restore it into an isolated environment.

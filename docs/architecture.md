@@ -20,7 +20,7 @@ rewriting domain services.
 flowchart LR
   Web["Web workspace"] --> API["FastAPI API"]
   API --> Auth["Identity and RBAC"]
-  API --> Domain["Brands, products, knowledge, content"]
+  API --> Domain["Brands, products, knowledge, content, operations"]
   Domain --> DB["PostgreSQL"]
   Domain --> Gateway["AI gateway"]
   Gateway --> Mock["Deterministic local provider"]

@@ -14,7 +14,9 @@ from app.models import (
     GenerationRun,
     GenerationStatus,
     KnowledgeSource,
+    PerformanceSnapshot,
     Product,
+    Publication,
     ReviewStatus,
     new_id,
 )
@@ -27,7 +29,9 @@ from app.schemas import (
     KnowledgeReview,
     KnowledgeSourceCreate,
     KnowledgeSourceRevisionCreate,
+    PerformanceSnapshotCreate,
     ProductCreate,
+    PublicationCreate,
 )
 
 
@@ -313,6 +317,125 @@ def list_content_projects(db: Session, actor: Actor) -> list[ContentProject]:
             select(ContentProject)
             .where(ContentProject.organization_id == actor.organization_id)
             .order_by(ContentProject.created_at.desc())
+        )
+    )
+
+
+def create_publication(db: Session, actor: Actor, data: PublicationCreate) -> Publication:
+    project = db.scalar(
+        select(ContentProject).where(
+            ContentProject.id == data.project_id,
+            ContentProject.organization_id == actor.organization_id,
+        )
+    )
+    if project is None:
+        raise HTTPException(status_code=404, detail="Content project not found")
+    version = db.scalar(
+        select(ContentVersion).where(
+            ContentVersion.id == data.content_version_id,
+            ContentVersion.project_id == project.id,
+            ContentVersion.organization_id == actor.organization_id,
+        )
+    )
+    if version is None:
+        raise HTTPException(status_code=404, detail="Content version not found")
+    if version.status != ReviewStatus.approved:
+        raise HTTPException(
+            status_code=409,
+            detail="Only approved content versions can be recorded as published",
+        )
+    publication = Publication(
+        organization_id=actor.organization_id,
+        created_by=actor.user_id,
+        **data.model_dump(),
+    )
+    db.add(publication)
+    db.flush()
+    audit(
+        db,
+        actor,
+        "publication.created",
+        "publication",
+        publication.id,
+        {
+            "project_id": project.id,
+            "content_version_id": version.id,
+            "platform": publication.platform,
+            "external_content_id": publication.external_content_id,
+        },
+    )
+    db.commit()
+    db.refresh(publication)
+    return publication
+
+
+def list_publications(db: Session, actor: Actor) -> list[Publication]:
+    return list(
+        db.scalars(
+            select(Publication)
+            .where(Publication.organization_id == actor.organization_id)
+            .order_by(Publication.published_at.desc())
+        )
+    )
+
+
+def create_performance_snapshot(
+    db: Session,
+    actor: Actor,
+    publication_id: str,
+    data: PerformanceSnapshotCreate,
+) -> PerformanceSnapshot:
+    publication = db.scalar(
+        select(Publication).where(
+            Publication.id == publication_id,
+            Publication.organization_id == actor.organization_id,
+        )
+    )
+    if publication is None:
+        raise HTTPException(status_code=404, detail="Publication not found")
+    snapshot = PerformanceSnapshot(
+        organization_id=actor.organization_id,
+        publication_id=publication.id,
+        created_by=actor.user_id,
+        **data.model_dump(),
+    )
+    db.add(snapshot)
+    db.flush()
+    audit(
+        db,
+        actor,
+        "performance_snapshot.created",
+        "performance_snapshot",
+        snapshot.id,
+        {
+            "publication_id": publication.id,
+            "captured_at": snapshot.captured_at.isoformat(),
+        },
+    )
+    db.commit()
+    db.refresh(snapshot)
+    return snapshot
+
+
+def list_performance_snapshots(
+    db: Session, actor: Actor, publication_id: str
+) -> list[PerformanceSnapshot]:
+    publication = db.scalar(
+        select(Publication.id).where(
+            Publication.id == publication_id,
+            Publication.organization_id == actor.organization_id,
+        )
+    )
+    if publication is None:
+        raise HTTPException(status_code=404, detail="Publication not found")
+    return list(
+        db.scalars(
+            select(PerformanceSnapshot)
+            .where(
+                PerformanceSnapshot.publication_id == publication_id,
+                PerformanceSnapshot.organization_id == actor.organization_id,
+            )
+            .order_by(PerformanceSnapshot.captured_at.desc())
         )
     )
 
