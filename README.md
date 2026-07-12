@@ -8,6 +8,7 @@ history, and auditability.
 ## MVP scope
 
 - Multi-tenant organizations, memberships, and role-based access control
+- Owner/Admin team management with immediate role-change enforcement
 - Brand and agricultural product records
 - Source-backed knowledge documents with review status
 - Structured AI content briefs and script generation

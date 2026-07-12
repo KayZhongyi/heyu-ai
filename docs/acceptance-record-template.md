@@ -21,6 +21,8 @@ section.
 | --- | --- | --- |
 | Fresh installation and startup | | |
 | Organization bootstrap and login | | |
+| Team member creation and role management | | |
+| Role change invalidates the member's old token | | |
 | Tenant isolation | | |
 | Brand and product records | | |
 | Knowledge pending/approve/reject | | |
@@ -37,6 +39,8 @@ section.
 ## Required screenshots
 
 - [ ] Overview after login
+- [ ] Owner/Admin team and permissions page
+- [ ] Restricted member view without team-management entry
 - [ ] Brand and product records
 - [ ] Knowledge source before and after review
 - [ ] Short-video generation result and provenance
