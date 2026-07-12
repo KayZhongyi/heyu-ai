@@ -25,7 +25,8 @@ class TokenResponse(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-    organization_id: str
+    organization_id: str | None = None
+    organization_slug: str | None = None
 
 
 class Actor(BaseModel):
@@ -163,3 +164,13 @@ class GenerationRead(BaseModel):
     prompt_version: str
     source_ids: list[str]
     latency_ms: int
+
+
+class AuditEventRead(ORMModel):
+    id: str
+    organization_id: str
+    actor_id: str
+    action: str
+    entity_type: str
+    entity_id: str
+    details: dict

@@ -38,3 +38,22 @@ def test_brand_and_product_are_scoped_to_organization(client, auth):
 def test_invalid_token_is_rejected(client):
     response = client.get("/v1/brands", headers={"Authorization": "Bearer invalid"})
     assert response.status_code == 401
+
+
+def test_audit_events_are_tenant_scoped(client, auth):
+    created = client.post(
+        "/v1/brands",
+        headers=auth,
+        json={"name": "Tenant A brand", "story": "", "voice": ""},
+    )
+    assert created.status_code == 201
+    second = bootstrap(client, "audit-second", "audit-second@example.com")
+    second_auth = {"Authorization": f"Bearer {second['access_token']}"}
+
+    first_events = client.get("/v1/audit-events", headers=auth)
+    second_events = client.get("/v1/audit-events", headers=second_auth)
+
+    assert first_events.status_code == 200
+    assert any(item["action"] == "brand.created" for item in first_events.json())
+    assert second_events.status_code == 200
+    assert all(item["action"] != "brand.created" for item in second_events.json())

@@ -9,6 +9,32 @@ def test_health(client):
     assert response.json() == {"status": "ok"}
 
 
+def test_login_accepts_organization_slug(client):
+    bootstrap = client.post(
+        "/v1/auth/bootstrap",
+        json={
+            "organization_name": "Slug Login Team",
+            "organization_slug": "slug-login-team",
+            "email": "slug-login@example.com",
+            "display_name": "Owner",
+            "password": "SecurePassword2026!",
+        },
+    )
+    assert bootstrap.status_code == 201
+
+    login = client.post(
+        "/v1/auth/login",
+        json={
+            "organization_slug": "slug-login-team",
+            "email": "slug-login@example.com",
+            "password": "SecurePassword2026!",
+        },
+    )
+
+    assert login.status_code == 200
+    assert login.json()["organization_id"] == bootstrap.json()["organization_id"]
+
+
 def test_workspace_is_served(client):
     response = client.get("/")
     assert response.status_code == 200

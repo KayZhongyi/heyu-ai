@@ -8,26 +8,35 @@
   <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body>
+  <div class="ambient" aria-hidden="true"></div>
   <div class="shell">
     <aside class="sidebar">
-      <div class="brand-mark"><span>禾</span><div><strong>禾语 AI</strong><small>Heyu Intelligence</small></div></div>
+      <div class="brand-mark">
+        <span class="brand-symbol" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none"><path d="M8 29c11-1 18-7 23-19 8 9 8 20 0 28-8 7-19 4-23-9Z"/><path d="M14 36c8-9 14-14 24-18"/><circle cx="37" cy="14" r="5"/><circle cx="40" cy="33" r="3"/></svg>
+        </span>
+        <div><strong>禾语 AI</strong><small>Heyu Intelligence</small></div>
+      </div>
       <nav>
-        <button class="nav active" data-page="overview">概览</button>
-        <button class="nav" data-page="assets">品牌与农产品</button>
-        <button class="nav" data-page="knowledge">可信知识库</button>
-        <button class="nav" data-page="studio">内容创作台</button>
-        <button class="nav" data-page="review">审核与版本</button>
+        <span class="nav-label">工作空间</span>
+        <button class="nav active" data-page="overview" data-index="01">经营概览</button>
+        <span class="nav-label">智能资产</span>
+        <button class="nav" data-page="assets" data-index="02">品牌与农产品</button>
+        <button class="nav" data-page="knowledge" data-index="03">可信知识库</button>
+        <button class="nav" data-page="studio" data-index="04">内容创作台</button>
+        <span class="nav-label">质量治理</span>
+        <button class="nav" data-page="review" data-index="05">审核与版本</button>
+        <button class="nav" data-page="audit" data-index="06">审计记录</button>
       </nav>
       <div class="sidebar-note">
-        <b>本地安全模式</b>
-        <span>资料与内容保存在此电脑</span>
+        <b><i></i>可信引擎运行中</b>
+        <span>生成内容保留知识来源、模型参数与版本记录。</span>
       </div>
     </aside>
 
     <main>
       <header>
         <div>
-          <p class="eyebrow">AGRICULTURAL CONTENT OS</p>
           <h1 id="page-title">经营概览</h1>
         </div>
         <div class="header-actions">
@@ -42,36 +51,60 @@
           <h2>让真实农产品，被准确地讲述。</h2>
           <p>先建立品牌与产品事实，再由 AI 生成有来源、可审核、可持续迭代的短视频与直播内容。</p>
         </div>
-        <form id="bootstrap-form">
+        <div class="auth-forms">
+        <div class="auth-tabs" role="tablist" aria-label="进入工作台方式">
+          <button type="button" class="active" data-auth-mode="bootstrap">首次创建</button>
+          <button type="button" data-auth-mode="login">已有账号</button>
+        </div>
+        <form id="bootstrap-form" data-auth-panel="bootstrap">
           <h3>创建本地工作空间</h3>
           <label>组织名称<input name="organization_name" value="禾语示范合作社" required></label>
           <label>组织标识<input name="organization_slug" value="heyu-demo" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required></label>
           <label>你的称呼<input name="display_name" value="项目负责人" required></label>
-          <label>登录邮箱<input type="email" name="email" value="owner@heyu.local" required></label>
+          <label>登录邮箱<input type="email" name="email" value="owner@heyu.example" required></label>
           <label>密码<input type="password" name="password" value="HeyuDemo2026!" minlength="10" required></label>
           <button class="primary" type="submit">进入禾语工作台</button>
           <p class="form-note">演示账号仅保存在本机 SQLite 数据库中。</p>
         </form>
+        <form id="login-form" data-auth-panel="login" hidden>
+          <h3>登录已有工作空间</h3>
+          <label>组织标识<input name="organization_slug" value="heyu-demo" required></label>
+          <label>登录邮箱<input type="email" name="email" value="owner@heyu.example" required></label>
+          <label>密码<input type="password" name="password" value="HeyuDemo2026!" required></label>
+          <button class="primary" type="submit">登录工作台</button>
+          <p class="form-note">组织标识是首次创建工作空间时填写的英文标识。</p>
+        </form>
+        </div>
       </section>
 
       <div id="workspace" hidden>
         <section class="page active" data-page-panel="overview">
           <div class="hero">
-            <div><span class="pill">MVP · TRACEABLE AI</span><h2>从一条可信事实，生长出一套好内容。</h2><p>禾语把品牌资料、产地信息和产品卖点整理为经过审核的知识，再生成可追溯的营销脚本。</p></div>
-            <button class="primary jump" data-target="studio">开始创作内容</button>
+            <div class="hero-copy"><span class="pill">TRACEABLE CONTENT ENGINE</span><h2>把可信的农产品知识，转化为<em>可以放心发布的内容。</em></h2><p>禾语将品牌资料、产地事实与产品卖点沉淀为经过审核的知识，并生成来源可查、过程可审、版本可追溯的营销脚本。</p></div>
+            <div class="hero-status"><span>今日工作焦点</span><strong><i></i><span id="focus-status">工作空间已就绪</span></strong><small id="focus-detail">先完善知识，再开始创作</small></div>
           </div>
           <div class="metric-grid">
+            <article class="metric-primary"><span>可信知识</span><strong id="knowledge-count">0</strong><small>已审核、可用于生成</small></article>
             <article><span>品牌资产</span><strong id="brand-count">0</strong><small>已建档品牌</small></article>
             <article><span>农产品</span><strong id="product-count">0</strong><small>结构化产品档案</small></article>
-            <article><span>可信知识</span><strong id="knowledge-count">0</strong><small>已审核来源</small></article>
             <article><span>内容项目</span><strong id="project-count">0</strong><small>脚本与直播话术</small></article>
           </div>
-          <div class="section-head"><div><p class="eyebrow">WORKFLOW</p><h2>可信内容生产链</h2></div></div>
-          <div class="flow">
-            <article><b>01</b><h3>品牌建档</h3><p>沉淀品牌故事、产品参数和禁用表述。</p></article>
-            <article><b>02</b><h3>知识审核</h3><p>只有审核通过的事实可进入 AI 上下文。</p></article>
-            <article><b>03</b><h3>AI 生成</h3><p>围绕平台、受众和目标生成结构化脚本。</p></article>
-            <article><b>04</b><h3>人工定稿</h3><p>版本不可覆盖，修改和审核过程全程留痕。</p></article>
+          <div class="overview-stage">
+            <section class="journey-panel">
+              <div class="panel-heading"><div><p class="eyebrow">VALUE JOURNEY</p><h2>可信内容生产链</h2></div><span class="quiet-meta">从事实到发布</span></div>
+              <div class="flow">
+                <article><b>01</b><h3>品牌建档</h3><p>沉淀故事、产品参数与禁止表述。</p></article>
+                <article><b>02</b><h3>知识审核</h3><p>仅通过审核的事实进入 AI 上下文。</p></article>
+                <article><b>03</b><h3>AI 生成</h3><p>围绕平台、受众和目标生成脚本。</p></article>
+                <article><b>04</b><h3>人工定稿</h3><p>修改与审核全程留痕，版本不可覆盖。</p></article>
+              </div>
+            </section>
+            <aside class="next-action" id="next-action">
+              <span>NEXT / 01</span>
+              <h2 id="next-action-title">从最关键的资料开始。</h2>
+              <p id="next-action-copy">先建立品牌和产品档案，再录入一条经过审核的事实，AI 才能生成可信内容。</p>
+              <button class="light-action jump" id="next-action-button" data-target="assets">建立第一份档案 <b>→</b></button>
+            </aside>
           </div>
         </section>
 
@@ -93,12 +126,16 @@
         <section class="page" data-page-panel="studio">
           <div class="two-col studio-grid">
             <form class="panel" id="project-form"><h2>创建内容任务</h2><label>任务名称<input name="title" placeholder="番茄采摘季首发视频" required></label><label>品牌<select name="brand_id" class="brand-select" required></select></label><label>产品<select name="product_id" class="product-select" required></select></label><label>内容类型<select name="content_type"><option value="short_video_30s">30 秒短视频</option><option value="short_video_60s">60 秒短视频</option><option value="livestream_opening">直播开场</option><option value="livestream_product_pitch">直播产品讲解</option><option value="livestream_interaction">直播互动</option><option value="social_post">社交媒体文案</option></select></label><div class="form-grid"><label>发布平台<input name="platform" value="抖音"></label><label>内容语气<input name="tone" value="真诚、有烟火气"></label></div><label>目标受众<textarea name="target_audience"></textarea></label><label>传播目标<textarea name="objective"></textarea></label><label>额外要求<textarea name="extra_requirements"></textarea></label><button class="primary">创建任务</button></form>
-            <div class="panel result-panel"><div class="panel-heading"><div><p class="eyebrow">AI STUDIO</p><h2>生成结果</h2></div><span class="pill">可信来源限定</span></div><label>选择任务<select id="project-select"></select></label><button class="primary wide" id="generate-button">生成内容脚本</button><pre id="generation-output">请先建立品牌、产品和至少一条审核通过的知识资料。</pre></div>
+            <div class="panel result-panel"><div class="panel-heading"><div><p class="eyebrow">AI STUDIO</p><h2>生成结果</h2></div><span class="pill">可信来源限定</span></div><label>选择任务<select id="project-select"></select></label><button class="primary wide" id="generate-button">生成内容脚本</button><pre id="generation-output">请先建立品牌、产品和至少一条审核通过的知识资料。</pre><div id="edit-version" hidden><label>人工修改版本<textarea id="version-editor" rows="12"></textarea></label><label>修改说明<input id="change-summary" value="人工优化脚本表达"></label><button class="primary wide" id="save-version-button" type="button">保存为新版本</button></div></div>
           </div>
         </section>
 
         <section class="page" data-page-panel="review">
-          <div class="panel"><div class="panel-heading"><div><p class="eyebrow">VERSION CONTROL</p><h2>内容版本与审核</h2></div><span class="pill">不可覆盖版本链</span></div><div id="review-list" class="stack empty">暂无待审核内容</div></div>
+          <div class="panel"><div class="panel-heading"><div><p class="eyebrow">VERSION CONTROL</p><h2>内容版本与审核</h2></div><span class="pill">不可覆盖版本链</span></div><label>选择内容项目<select id="review-project-select"></select></label><div id="review-list" class="stack empty">暂无待审核内容</div></div>
+        </section>
+
+        <section class="page" data-page-panel="audit">
+          <div class="panel"><div class="panel-heading"><div><p class="eyebrow">AUDIT TRAIL</p><h2>组织审计记录</h2></div><span class="pill">最近 100 条</span></div><p class="panel-intro">品牌、产品、知识审核、AI 生成与内容版本操作均按组织隔离记录。</p><div id="audit-list" class="stack empty">暂无审计记录</div></div>
         </section>
       </div>
       <div id="toast" role="status"></div>

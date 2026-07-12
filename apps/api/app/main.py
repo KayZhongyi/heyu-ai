@@ -10,9 +10,10 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import Base, engine, get_db
-from app.models import Membership, Organization, Role, User
+from app.models import AuditEvent, Membership, Organization, Role, User
 from app.schemas import (
     Actor,
+    AuditEventRead,
     BootstrapRequest,
     BrandCreate,
     BrandRead,
@@ -146,17 +147,28 @@ def login(data: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user = db.scalar(select(User).where(User.email == data.email))
     if user is None or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    organization_id = data.organization_id
+    if data.organization_slug:
+        organization = db.scalar(
+            select(Organization).where(Organization.slug == data.organization_slug)
+        )
+        organization_id = organization.id if organization else None
+    if organization_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Organization is required",
+        )
     membership = db.scalar(
         select(Membership).where(
             Membership.user_id == user.id,
-            Membership.organization_id == data.organization_id,
+            Membership.organization_id == organization_id,
         )
     )
     if membership is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid organization")
     return TokenResponse(
-        access_token=create_token(user.id, data.organization_id, membership.role),
-        organization_id=data.organization_id,
+        access_token=create_token(user.id, organization_id, membership.role),
+        organization_id=organization_id,
         user_id=user.id,
     )
 
@@ -164,6 +176,20 @@ def login(data: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
 @app.get("/v1/me", response_model=Actor)
 def me(actor: Actor = Depends(current_actor)) -> Actor:
     return actor
+
+
+@app.get("/v1/audit-events", response_model=list[AuditEventRead])
+def get_audit_events(
+    db: Session = Depends(get_db), actor: Actor = Depends(current_actor)
+) -> list[AuditEventRead]:
+    return list(
+        db.scalars(
+            select(AuditEvent)
+            .where(AuditEvent.organization_id == actor.organization_id)
+            .order_by(AuditEvent.created_at.desc())
+            .limit(100)
+        )
+    )
 
 
 @app.post("/v1/brands", response_model=BrandRead, status_code=201)

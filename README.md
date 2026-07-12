@@ -23,9 +23,11 @@ federated learning, blockchain/NFT features, or unsupported “viral prediction�
 ```text
 apps/
   api/        FastAPI application and background-ready AI domain
-  web/        Web workspace (added in the next milestone)
+  web/        Browser workspace served by the API
 docs/
   architecture.md
+  acceptance-test.md
+  operations.md
   product.md
   release-gates.md
 scripts/
@@ -45,8 +47,8 @@ The demo is designed to run entirely on the user's computer:
 - no mandatory paid AI API
 - SQLite and a deterministic local AI provider by default
 
-Download the GitHub ZIP, extract it, and run the local start script that will be
-included before the MVP release. Docker Compose remains available for a
+Download the GitHub ZIP, extract it, and run the included local start scripts.
+Docker Compose remains available for a
 production-like PostgreSQL environment, but it is not required for the basic
 demo.
 
@@ -58,16 +60,19 @@ prerequisite until the standalone Windows release is published.
 1. Extract the repository to a drive with at least 2 GB free space.
 2. Double-click `安装禾语AI.bat` once.
 3. Double-click `启动禾语AI.bat`.
-4. The browser opens the local API documentation automatically.
+4. The browser opens the local workspace at `http://127.0.0.1:8000/`.
+
+Developer API documentation remains available at
+`http://127.0.0.1:8000/docs`.
 
 The installer creates `.venv`, `data`, and runtime files inside the extracted
 project directory. It does not intentionally install project packages into the
 system Python environment. Set `HEYU_PYTHON` to a Python 3.12 executable when
 automatic Python discovery is not suitable.
 
-The release gate for ordinary users is stricter: GitHub Releases will also
-provide a standalone `HeyuAI-Windows-x64.zip` that bundles its runtime and does
-not require Python, Node.js, or Docker.
+The current ZIP workflow requires Python 3.12 for the one-time installation.
+A future standalone Windows package may bundle the runtime, but it is not part
+of the current verified release.
 
 ## Docker quick start
 
@@ -78,9 +83,13 @@ cp .env.example .env
 docker compose up --build
 ```
 
-API documentation is then available at `http://localhost:8000/docs`.
+The workspace is then available at `http://localhost:8000/`. Developer API
+documentation is available at `http://localhost:8000/docs`.
 
 For backend-only development, see [apps/api/README.md](apps/api/README.md).
+For backups, upgrades, and recovery, see
+[docs/operations.md](docs/operations.md). For manual release verification, see
+[docs/acceptance-test.md](docs/acceptance-test.md).
 
 ## Security posture
 
