@@ -27,6 +27,14 @@ commit SHA, deployment profile, reviewer, and pass/fail evidence.
 
 ## 4. Trusted knowledge
 
+- [ ] Import a UTF-8 TXT or Markdown file no larger than 1 MB and confirm its
+      text remains editable before saving.
+- [ ] Confirm the saved source shows filename, media type, citation label, and
+      the first characters of its SHA-256 digest.
+- [ ] Confirm the original file is not stored by the application and that PDF,
+      DOCX, and PPTX are not advertised as supported.
+- [ ] Confirm changing the submitted text produces a different digest; treat
+      the digest only as an integrity signal, not evidence that claims are true.
 - [ ] Create one source and leave it pending.
 - [ ] Confirm pending knowledge is not used by generation.
 - [ ] Approve the source.

@@ -7,6 +7,8 @@ const formData=form=>Object.fromEntries(new FormData(form));
 const lines=value=>value.split("\n").map(v=>v.trim()).filter(Boolean);
 const toast=(message,error=false)=>{const el=$("#toast");el.textContent=message;el.className=`show${error?" error":""}`;clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.className="",3000)};
 const escapeHtml=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fileBaseName=name=>name.replace(/\.(txt|md|markdown|csv)$/i,"");
+const knowledgeMediaType=file=>file.type||({txt:"text/plain",md:"text/markdown",markdown:"text/markdown",csv:"text/csv"}[file.name.split(".").pop().toLowerCase()]||"text/plain");
 const request=async(fn,success)=>{try{await fn();if(success)toast(success)}catch(error){toast(error.message,true)}};
 
 function showWorkspace(){
@@ -42,7 +44,7 @@ function render(){
   $("#project-select").innerHTML=options(state.projects,"请选择内容任务");
   const reviewSelect=$("#review-project-select");const reviewValue=reviewSelect.value;reviewSelect.innerHTML=options(state.projects,"请选择内容项目");reviewSelect.value=reviewValue;
   $("#asset-list").innerHTML=[...state.brands.map(b=>`<article><span class="pill">品牌</span><h3>${escapeHtml(b.name)}</h3><p>${escapeHtml(b.story||"尚未填写品牌故事")}</p></article>`),...state.products.map(p=>`<article><span class="pill">农产品</span><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.origin||"产地待补充")} · ${escapeHtml(p.specification||"规格待补充")}</p></article>`)].join("")||"暂无品牌与产品";
-  $("#knowledge-list").innerHTML=state.knowledge.map(k=>`<article><h3>${escapeHtml(k.title)}</h3><p>${escapeHtml(k.content.slice(0,130))}</p><span class="badge ${k.status}">${k.status}</span>${k.status!=="approved"?`<div class="row-actions"><button class="approve" data-review-source="${k.id}" data-status="approved">审核通过</button><button class="reject" data-review-source="${k.id}" data-status="rejected">驳回</button></div>`:""}</article>`).join("")||"暂无知识资料";
+  $("#knowledge-list").innerHTML=state.knowledge.map(k=>`<article><h3>${escapeHtml(k.title)}</h3><p>${escapeHtml(k.content.slice(0,130))}</p><div class="source-meta">${k.source_filename?`<span>文件 ${escapeHtml(k.source_filename)}</span>`:"<span>手工录入</span>"}<span>${escapeHtml(k.media_type||"text/plain")}</span>${k.content_sha256?`<span title="${escapeHtml(k.content_sha256)}">SHA-256 ${escapeHtml(k.content_sha256.slice(0,12))}…</span>`:""}${k.citation_label?`<span>引用 ${escapeHtml(k.citation_label)}</span>`:""}${k.reviewed_by?`<span>审核人 ${escapeHtml(k.reviewed_by.slice(0,8))}</span>`:""}</div><span class="badge ${k.status}">${k.status}</span>${k.status!=="approved"?`<div class="row-actions"><button class="approve" data-review-source="${k.id}" data-status="approved">审核通过</button><button class="reject" data-review-source="${k.id}" data-status="rejected">驳回</button></div>`:""}</article>`).join("")||"暂无知识资料";
   $("#audit-list").innerHTML=state.audit.map(item=>`<article><h3>${escapeHtml(actionLabel(item.action))}</h3><p>${escapeHtml(item.entity_type)} · ${escapeHtml(item.entity_id)}</p><div class="audit-meta"><span>操作者 ${escapeHtml(item.actor_id.slice(0,8))}</span><span>${escapeHtml(JSON.stringify(item.details))}</span></div></article>`).join("")||"暂无审计记录";
   renderMembers();
 }
@@ -70,7 +72,31 @@ $("#bootstrap-form").addEventListener("submit",event=>{event.preventDefault();re
 $("#login-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{const result=await api("/v1/auth/login",{method:"POST",body:JSON.stringify(formData(event.target))});state.token=result.access_token;localStorage.setItem("heyu_token",state.token);showWorkspace()},"已登录工作空间")});
 $("#brand-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{await api("/v1/brands",{method:"POST",body:JSON.stringify(formData(event.target))});event.target.reset();await refresh()},"品牌已保存")});
 $("#product-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{const data=formData(event.target);data.selling_points=lines(data.selling_points);data.prohibited_claims=lines(data.prohibited_claims);await api("/v1/products",{method:"POST",body:JSON.stringify(data)});event.target.reset();await refresh()},"产品已保存")});
-$("#knowledge-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{const data=formData(event.target);data.brand_id=data.brand_id||null;data.product_id=data.product_id||null;await api("/v1/knowledge",{method:"POST",body:JSON.stringify(data)});event.target.reset();await refresh()},"知识资料已保存，请进行审核")});
+$("#knowledge-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{const data=formData(event.target);data.brand_id=data.brand_id||null;data.product_id=data.product_id||null;await api("/v1/knowledge",{method:"POST",body:JSON.stringify(data)});event.target.reset();$("#knowledge-file-status").textContent="也可以直接在下方手工录入";await refresh()},"知识资料已保存，请进行审核")});
+$("#knowledge-file").addEventListener("change",async event=>{
+  const file=event.target.files[0];
+  const form=$("#knowledge-form");
+  const status=$("#knowledge-file-status");
+  if(!file){status.textContent="也可以直接在下方手工录入";return}
+  const extension=file.name.split(".").pop().toLowerCase();
+  if(!["txt","md","markdown","csv"].includes(extension)){event.target.value="";toast("仅支持 TXT、Markdown 或 CSV 文本文件",true);return}
+  if(file.size>1024*1024){event.target.value="";toast("文本文件不能超过 1 MB",true);return}
+  status.textContent="正在读取本地文件…";
+  try{
+    const content=await file.text();
+    if(!content.trim())throw new Error("文件内容为空");
+    if(!form.elements.title.value)form.elements.title.value=fileBaseName(file.name);
+    form.elements.content.value=content;
+    form.elements.source_filename.value=file.name;
+    form.elements.media_type.value=knowledgeMediaType(file);
+    if(!form.elements.citation_label.value)form.elements.citation_label.value=fileBaseName(file.name);
+    status.textContent=`已读取 ${file.name} · ${(file.size/1024).toFixed(1)} KB，可继续编辑`;
+  }catch(error){
+    event.target.value="";
+    status.textContent="文件读取失败，请重新选择";
+    toast(error.message||"无法读取该文本文件",true);
+  }
+});
 $("#project-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{await api("/v1/content-projects",{method:"POST",body:JSON.stringify(formData(event.target))});event.target.reset();await refresh()},"内容任务已创建")});
 $("#member-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{await api("/v1/members",{method:"POST",body:JSON.stringify(formData(event.target))});event.target.reset();await refresh()},"团队成员已创建")});
 $("#generate-button").addEventListener("click",()=>request(async()=>{const id=$("#project-select").value;if(!id)throw new Error("请先选择内容任务");const result=await api(`/v1/content-projects/${id}/generate`,{method:"POST"});state.currentVersion=result.version;const content=JSON.stringify(result.version.content,null,2);$("#generation-output").textContent=content;$("#version-editor").value=content;$("#edit-version").hidden=false;let provenance=$("#generation-provenance");if(!provenance){provenance=document.createElement("div");provenance.id="generation-provenance";provenance.className="provenance";$("#generation-output").before(provenance)}provenance.innerHTML=`<span>Provider: ${escapeHtml(result.provider)}</span><span>Model: ${escapeHtml(result.model)}</span><span>Prompt: ${escapeHtml(result.prompt_name)} v${escapeHtml(result.prompt_version)}</span><span>Sources: ${result.source_ids.length}</span><span>${result.latency_ms} ms</span>`;state.versions=await api(`/v1/content-projects/${id}/versions`);state.audit=await api("/v1/audit-events");await loadGenerationRuns(id);renderReviews(id)},"内容已生成并进入审核"));

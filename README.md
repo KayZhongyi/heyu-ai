@@ -11,6 +11,8 @@ history, and auditability.
 - Owner/Admin team management with immediate role-change enforcement
 - Brand and agricultural product records
 - Source-backed knowledge documents with review status
+- Browser-side UTF-8 TXT, Markdown, and CSV knowledge import with source
+  filename, media type, and SHA-256 integrity metadata
 - Structured AI content briefs and script generation
 - Immutable content versions and human approval workflow
 - Provider-neutral AI gateway with a deterministic local development provider
@@ -47,6 +49,14 @@ The demo is designed to run entirely on the user's computer:
 - no paid database
 - no mandatory paid AI API
 - SQLite and a deterministic local AI provider by default
+
+Knowledge import currently accepts UTF-8 `.txt`, `.md`, `.markdown`, and
+`.csv` files up to 1 MB. The browser reads the file locally and sends only the
+editable extracted text plus source filename and media type to the API; the
+original file is not stored. The API records a SHA-256 digest of the submitted
+text so later changes can be detected. This digest proves content identity,
+not factual truth, so human review remains required. PDF, DOCX, and PPTX
+parsing are intentionally not included yet.
 
 Download the GitHub ZIP, extract it, and run the included local start scripts.
 Docker Compose remains available for a

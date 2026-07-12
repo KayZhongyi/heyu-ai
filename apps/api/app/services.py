@@ -1,3 +1,4 @@
+import hashlib
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
@@ -133,10 +134,22 @@ def create_knowledge_source(
         organization_id=actor.organization_id,
         created_by=actor.user_id,
         **data.model_dump(),
+        content_sha256=hashlib.sha256(data.content.encode("utf-8")).hexdigest(),
     )
     db.add(source)
     db.flush()
-    audit(db, actor, "knowledge.created", "knowledge_source", source.id)
+    audit(
+        db,
+        actor,
+        "knowledge.created",
+        "knowledge_source",
+        source.id,
+        {
+            "source_filename": source.source_filename,
+            "media_type": source.media_type,
+            "content_sha256": source.content_sha256,
+        },
+    )
     db.commit()
     db.refresh(source)
     return source

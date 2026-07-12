@@ -46,6 +46,13 @@ same approved-source citations and prohibited-claim warnings.
 - MVP means minimum scope, not disposable engineering.
 - Human approval remains authoritative.
 - Generated claims must be grounded in approved sources.
+- Text knowledge can be entered manually or imported from a local UTF-8 TXT,
+  Markdown, or CSV file up to 1 MB. The original file is not persisted; the
+  submitted text, source filename, media type, and SHA-256 digest are retained.
+- A SHA-256 digest detects whether submitted source text changed. It does not
+  validate factual accuracy, replace provenance review, or grant approval.
+- PDF, DOCX, and PPTX extraction are outside the current MVP and must not be
+  presented as supported import formats.
 - Unsupported performance predictions are excluded.
 - Provider-specific AI behavior stays behind an internal gateway.
 - Generation provenance remains queryable after reload, including normalized

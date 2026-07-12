@@ -101,6 +101,8 @@ class KnowledgeSourceCreate(BaseModel):
     kind: KnowledgeKind
     content: str = Field(min_length=1)
     citation_label: str = Field(default="", max_length=255)
+    source_filename: str = Field(default="", max_length=255)
+    media_type: str = Field(default="text/plain", max_length=120)
     brand_id: str | None = None
     product_id: str | None = None
 
@@ -114,6 +116,9 @@ class KnowledgeSourceRead(ORMModel):
     kind: KnowledgeKind
     content: str
     citation_label: str
+    source_filename: str
+    media_type: str
+    content_sha256: str
     status: ReviewStatus
     created_by: str
     reviewed_by: str | None

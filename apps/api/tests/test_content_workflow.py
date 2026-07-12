@@ -1,3 +1,5 @@
+import hashlib
+
 from tests.conftest import bootstrap
 
 
@@ -32,11 +34,26 @@ def test_approved_knowledge_is_cited_and_versions_are_append_only(client, auth):
             "kind": "product_fact",
             "content": "本示例产品采用人工采收。",
             "citation_label": "产品事实卡，第1条",
+            "source_filename": "产品档案.md",
+            "media_type": "text/markdown",
             "brand_id": brand["id"],
             "product_id": product["id"],
         },
     )
     assert source.status_code == 201
+    expected_hash = hashlib.sha256("本示例产品采用人工采收。".encode()).hexdigest()
+    assert source.json()["source_filename"] == "产品档案.md"
+    assert source.json()["media_type"] == "text/markdown"
+    assert source.json()["content_sha256"] == expected_hash
+    audit_events = client.get("/v1/audit-events", headers=auth).json()
+    knowledge_audit = next(
+        event for event in audit_events if event["action"] == "knowledge.created"
+    )
+    assert knowledge_audit["details"] == {
+        "source_filename": "产品档案.md",
+        "media_type": "text/markdown",
+        "content_sha256": expected_hash,
+    }
     approved = client.post(
         f"/v1/knowledge/{source.json()['id']}/review",
         headers=auth,
