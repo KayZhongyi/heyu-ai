@@ -67,6 +67,7 @@ from app.services import (
     review_content_version,
     review_knowledge_source,
     submit_content_version,
+    submit_knowledge_source,
 )
 
 
@@ -374,6 +375,17 @@ def get_knowledge_sources(
     db: Session = Depends(get_db), actor: Actor = Depends(current_actor)
 ) -> list[KnowledgeSourceRead]:
     return list_knowledge_sources(db, actor)
+
+
+@app.post("/v1/knowledge/{source_id}/submit", response_model=KnowledgeSourceRead)
+def submit_source(
+    source_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.product_manager, Role.creator)
+    ),
+) -> KnowledgeSourceRead:
+    return submit_knowledge_source(db, actor, source_id)
 
 
 @app.post("/v1/knowledge/{source_id}/review", response_model=KnowledgeSourceRead)

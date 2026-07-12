@@ -87,6 +87,11 @@ def test_knowledge_is_scoped_and_cross_tenant_review_is_hidden(client, auth):
     second_auth = {"Authorization": f"Bearer {second['access_token']}"}
 
     assert client.get("/v1/knowledge", headers=second_auth).json() == []
+    submit = client.post(
+        f"/v1/knowledge/{source.json()['id']}/submit",
+        headers=second_auth,
+    )
+    assert submit.status_code == 404
     review = client.post(
         f"/v1/knowledge/{source.json()['id']}/review",
         headers=second_auth,

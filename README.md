@@ -11,6 +11,7 @@ history, and auditability.
 - Owner/Admin team management with immediate role-change enforcement
 - Brand and agricultural product records
 - Source-backed knowledge documents with review status
+- Explicit draft → pending review → approved/rejected knowledge governance
 - Browser-side UTF-8 TXT, Markdown, and CSV knowledge import with source
   filename, media type, and SHA-256 integrity metadata
 - Structured AI content briefs and script generation

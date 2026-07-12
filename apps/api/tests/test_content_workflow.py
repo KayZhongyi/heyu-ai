@@ -54,6 +54,12 @@ def test_approved_knowledge_is_cited_and_versions_are_append_only(client, auth):
         "media_type": "text/markdown",
         "content_sha256": expected_hash,
     }
+    submitted_source = client.post(
+        f"/v1/knowledge/{source.json()['id']}/submit",
+        headers=auth,
+    )
+    assert submitted_source.status_code == 200
+    assert submitted_source.json()["status"] == "pending_review"
     approved = client.post(
         f"/v1/knowledge/{source.json()['id']}/review",
         headers=auth,
@@ -166,6 +172,7 @@ def test_generation_structure_matches_content_type(client, auth):
             "product_id": product["id"],
         },
     ).json()
+    client.post(f"/v1/knowledge/{source['id']}/submit", headers=auth)
     client.post(
         f"/v1/knowledge/{source['id']}/review",
         headers=auth,
@@ -264,6 +271,7 @@ def test_content_version_requires_submission_before_review(client, auth):
             "product_id": product["id"],
         },
     ).json()
+    client.post(f"/v1/knowledge/{source['id']}/submit", headers=auth)
     client.post(
         f"/v1/knowledge/{source['id']}/review",
         headers=auth,
@@ -346,3 +354,48 @@ def test_content_version_submission_is_tenant_scoped(client, auth):
         ).status_code
         == 404
     )
+
+
+def test_knowledge_requires_submission_before_review(client, auth):
+    source = client.post(
+        "/v1/knowledge",
+        headers=auth,
+        json={
+            "title": "知识审核状态机",
+            "kind": "other",
+            "content": "这是一条等待审核的资料。",
+        },
+    ).json()
+
+    assert (
+        client.post(
+            f"/v1/knowledge/{source['id']}/review",
+            headers=auth,
+            json={"status": "approved"},
+        ).status_code
+        == 409
+    )
+
+    submitted = client.post(f"/v1/knowledge/{source['id']}/submit", headers=auth)
+    assert submitted.status_code == 200
+    assert submitted.json()["status"] == "pending_review"
+    assert client.post(f"/v1/knowledge/{source['id']}/submit", headers=auth).status_code == 409
+
+    rejected = client.post(
+        f"/v1/knowledge/{source['id']}/review",
+        headers=auth,
+        json={"status": "rejected"},
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "rejected"
+    assert (
+        client.post(
+            f"/v1/knowledge/{source['id']}/review",
+            headers=auth,
+            json={"status": "approved"},
+        ).status_code
+        == 409
+    )
+
+    events = client.get("/v1/audit-events", headers=auth).json()
+    assert any(event["action"] == "knowledge.submitted" for event in events)

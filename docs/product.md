@@ -17,7 +17,7 @@ products communicate clearly, accurately, and consistently.
 
 1. Create an organization and first owner.
 2. Add a brand and an agricultural product.
-3. Add source documents and mark reviewed sources as approved.
+3. Add source documents, submit them for review, and approve verified sources.
 4. Create a structured content brief.
 5. Generate a source-backed script through the AI gateway.
 6. Edit the generated content into a new immutable version.
@@ -47,6 +47,9 @@ same approved-source citations and prohibited-claim warnings.
 - MVP means minimum scope, not disposable engineering.
 - Human approval remains authoritative.
 - Generated claims must be grounded in approved sources.
+- Knowledge review follows the same explicit governance pattern as content:
+  `draft` → `pending_review` → `approved` or `rejected`. Only approved sources
+  enter AI context, and completed decisions cannot be silently overwritten.
 - Text knowledge can be entered manually or imported from a local UTF-8 TXT,
   Markdown, or CSV file up to 1 MB. The original file is not persisted; the
   submitted text, source filename, media type, and SHA-256 digest are retained.

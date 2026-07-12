@@ -36,11 +36,14 @@ commit SHA, deployment profile, reviewer, and pass/fail evidence.
 - [ ] Confirm changing the submitted text produces a different digest; treat
       the digest only as an integrity signal, not evidence that claims are true.
 - [ ] Create one source and leave it pending.
+- [ ] Confirm a draft source cannot be approved or rejected before submission.
+- [ ] Submit the source and confirm its status becomes `pending_review`.
 - [ ] Confirm pending knowledge is not used by generation.
 - [ ] Approve the source.
 - [ ] Confirm its title, content, citation label, reviewer, and status remain
       visible and traceable.
 - [ ] Reject a second source and confirm it is not eligible for generation.
+- [ ] Confirm an approved or rejected source cannot be reviewed again.
 
 ## 5. AI content workflow
 

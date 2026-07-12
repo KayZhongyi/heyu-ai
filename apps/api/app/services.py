@@ -165,6 +165,33 @@ def list_knowledge_sources(db: Session, actor: Actor) -> list[KnowledgeSource]:
     )
 
 
+def submit_knowledge_source(db: Session, actor: Actor, source_id: str) -> KnowledgeSource:
+    source = db.scalar(
+        select(KnowledgeSource).where(
+            KnowledgeSource.id == source_id,
+            KnowledgeSource.organization_id == actor.organization_id,
+        )
+    )
+    if source is None:
+        raise HTTPException(status_code=404, detail="Knowledge source not found")
+    if source.status != ReviewStatus.draft:
+        raise HTTPException(
+            status_code=409,
+            detail="Only draft knowledge sources can be submitted for review",
+        )
+    source.status = ReviewStatus.pending_review
+    audit(
+        db,
+        actor,
+        "knowledge.submitted",
+        "knowledge_source",
+        source.id,
+    )
+    db.commit()
+    db.refresh(source)
+    return source
+
+
 def review_knowledge_source(
     db: Session, actor: Actor, source_id: str, data: KnowledgeReview
 ) -> KnowledgeSource:
@@ -178,6 +205,11 @@ def review_knowledge_source(
     )
     if source is None:
         raise HTTPException(status_code=404, detail="Knowledge source not found")
+    if source.status != ReviewStatus.pending_review:
+        raise HTTPException(
+            status_code=409,
+            detail="Only pending knowledge sources can be reviewed",
+        )
     source.status = data.status
     source.reviewed_by = actor.user_id
     source.reviewed_at = datetime.now(UTC)
