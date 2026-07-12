@@ -20,7 +20,7 @@ $env:DATABASE_URL = "sqlite:///$databasePath"
 $env:PYTHONUTF8 = "1"
 
 $healthUrl = "http://127.0.0.1:$Port/health"
-$docsUrl = "http://127.0.0.1:$Port/docs"
+$workspaceUrl = "http://127.0.0.1:$Port/"
 $existing = $null
 try {
     $existing = Invoke-RestMethod -Uri $healthUrl -TimeoutSec 1
@@ -28,12 +28,12 @@ try {
     # Expected when the service is not already running.
 }
 if ($existing) {
-    Start-Process $docsUrl
-    Write-Host "Heyu AI is already running: $docsUrl"
+    Start-Process $workspaceUrl
+    Write-Host "Heyu AI is already running: $workspaceUrl"
     exit 0
 }
 
-Write-Host "Starting Heyu AI: $docsUrl"
+Write-Host "Starting Heyu AI: $workspaceUrl"
 $server = Start-Process -FilePath $python `
     -ArgumentList @("-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "$Port") `
     -WorkingDirectory $api -WindowStyle Hidden -PassThru
@@ -45,7 +45,7 @@ for ($attempt = 0; $attempt -lt 60; $attempt++) {
     }
     try {
         Invoke-RestMethod -Uri $healthUrl -TimeoutSec 1 | Out-Null
-        Start-Process $docsUrl
+        Start-Process $workspaceUrl
         Write-Host "Startup complete. Closing this window will not stop the background service."
         exit 0
     } catch {

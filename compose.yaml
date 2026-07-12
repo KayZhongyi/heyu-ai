@@ -15,10 +15,12 @@ services:
 
   api:
     build:
-      context: ./apps/api
+      context: .
+      dockerfile: apps/api/Dockerfile
     environment:
       APP_ENV: development
       APP_SECRET: ${APP_SECRET:-local-development-secret}
+      AUTO_CREATE_SCHEMA: "false"
       DATABASE_URL: postgresql+psycopg://agri:agri@db:5432/agri
       AI_PROVIDER: ${AI_PROVIDER:-mock}
       AI_MODEL: ${AI_MODEL:-deterministic-v1}
@@ -31,4 +33,3 @@ services:
 
 volumes:
   postgres_data:
-

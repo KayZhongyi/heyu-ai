@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     ai_provider: str = "mock"
     ai_model: str = "deterministic-v1"
     cors_origins: str = "http://localhost:3000"
+    auto_create_schema: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

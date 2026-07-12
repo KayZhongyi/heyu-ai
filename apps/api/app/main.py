@@ -1,8 +1,11 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -53,7 +56,13 @@ from app.services import (
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    settings = get_settings()
+    if settings.auto_create_schema:
+        Base.metadata.create_all(bind=engine)
+    elif not inspect(engine).has_table("alembic_version"):
+        raise RuntimeError(
+            "Database is not migrated. Run `alembic upgrade head` before starting the service."
+        )
     yield
 
 
@@ -65,6 +74,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def find_web_dir(module_file: Path = Path(__file__)) -> Path:
+    """Locate the web bundle in both repository and container layouts."""
+    resolved = module_file.resolve()
+    candidates = (
+        resolved.parents[2] / "web",  # repository: apps/api/app -> apps/web
+        resolved.parents[1] / "web",  # container: /app/app -> /app/web
+    )
+    for candidate in candidates:
+        if (candidate / "index.html").is_file() and (candidate / "assets").is_dir():
+            return candidate
+    return candidates[0]
+
+
+web_dir = find_web_dir()
+web_index = web_dir / "index.html"
+web_assets = web_dir / "assets"
+if web_assets.is_dir():
+    app.mount("/assets", StaticFiles(directory=web_assets), name="assets")
+
+
+@app.get("/", include_in_schema=False)
+def workspace() -> FileResponse:
+    if not web_index.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Web workspace is not installed.",
+        )
+    return FileResponse(web_index)
 
 
 @app.get("/health")
