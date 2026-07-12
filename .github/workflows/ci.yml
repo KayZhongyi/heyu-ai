@@ -53,8 +53,9 @@ jobs:
           }
           $workspacePath = Join-Path $env:RUNNER_TEMP "heyu-workspace.html"
           & curl.exe --fail --silent --show-error --output $workspacePath http://127.0.0.1:8765/
+          $curlExitCode = $LASTEXITCODE
           $workspace = Get-Content -LiteralPath $workspacePath -Raw -Encoding UTF8
-          if ($LASTEXITCODE -ne 0 -or $workspace -notmatch "<title>禾语 AI") {
+          if ($curlExitCode -ne 0 -or $workspace -notmatch "<title>禾语 AI") {
             throw "Workspace did not load from the Windows package."
           }
       - name: Upload Windows source package
