@@ -37,6 +37,7 @@ def test_production_settings_require_secure_runtime_values():
         database_url="sqlite:///./heyu.db",
         cors_origins="*",
         auto_create_schema=True,
+        abuse_limits_enabled=False,
     )
 
     with pytest.raises(RuntimeError) as error:
@@ -47,6 +48,7 @@ def test_production_settings_require_secure_runtime_values():
     assert "PostgreSQL" in message
     assert "CORS_ORIGINS" in message
     assert "AUTO_CREATE_SCHEMA" in message
+    assert "ABUSE_LIMITS_ENABLED" in message
 
 
 def test_production_settings_accept_explicit_secure_values():
@@ -61,6 +63,20 @@ def test_production_settings_accept_explicit_secure_values():
 
 def test_development_settings_keep_zero_cost_defaults():
     Settings().validate_runtime()
+
+
+def test_abuse_settings_reject_invalid_limits_and_proxy_networks():
+    settings = Settings(
+        login_limit_attempts=0,
+        trusted_proxy_cidrs="not-a-network",
+        abuse_bucket_retention_seconds=60,
+    )
+    with pytest.raises(RuntimeError) as error:
+        settings.validate_runtime()
+    message = str(error.value)
+    assert "LOGIN_LIMIT_ATTEMPTS" in message
+    assert "TRUSTED_PROXY_CIDRS" in message
+    assert "ABUSE_BUCKET_RETENTION_SECONDS" in message
 
 
 def test_openai_compatible_settings_require_explicit_connection_values():

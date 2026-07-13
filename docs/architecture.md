@@ -18,6 +18,7 @@ flowchart LR
   Web["Homepage and workspace"] --> I18n["zh-CN / zh-HK / en dictionaries"]
   Web --> API["FastAPI API"]
   API --> Auth["Identity, membership, RBAC"]
+  Auth --> Abuse["Database-backed abuse limits"]
   Auth --> Invite["Hashed, expiring, single-use invitations"]
   API --> Domain["Brands, products, knowledge, content, operations"]
   Domain --> DB["SQLite or PostgreSQL"]
@@ -136,6 +137,27 @@ never include the plaintext token or its hash. Creation, inspection, and
 acceptance responses use `Cache-Control: no-store`. Owner and Admin can list and
 revoke invitations within their organization, but Admin cannot create or revoke
 an Owner invitation.
+
+## Authentication and invitation abuse controls
+
+Bootstrap, login, invitation creation, token inspection, and invitation
+acceptance consume fixed-window buckets in the primary database. This keeps
+limits durable across application restarts and shared by multiple workers or
+instances without introducing Redis as a deployment prerequisite.
+
+Bucket subjects are HMAC-SHA-256 values derived with `APP_SECRET`; raw client
+addresses, emails, organization identifiers, user identifiers, and invitation
+tokens are never stored in the limiter table. Target-specific buckets reduce
+password and token guessing, while broader network, organization, and actor
+buckets bound distributed target rotation and invitation resource abuse.
+Responses use `429 Too Many Requests`, `Retry-After`, and
+`Cache-Control: no-store`.
+
+`X-Forwarded-For` is ignored by default. It is parsed only when the immediate
+peer belongs to `TRUSTED_PROXY_CIDRS`, and the chain is walked from the nearest
+proxy toward the first untrusted address. Production refuses to start when
+abuse controls are disabled. Expired buckets are periodically removed using
+the configurable retention interval.
 
 ## Verification architecture
 

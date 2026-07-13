@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,7 +12,8 @@ from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
+from app.abuse import enforce_limit, network_subject, normalize_identifier
+from app.config import Settings, get_settings
 from app.database import Base, engine, get_db
 from app.models import (
     AuditEvent,
@@ -139,7 +140,13 @@ app.add_middleware(
 @app.middleware("http")
 async def protect_invitation_responses(request, call_next):
     response = await call_next(request)
-    if request.url.path in {"/v1/invitations/inspect", "/v1/invitations/accept"}:
+    if request.url.path in {
+        "/v1/auth/bootstrap",
+        "/v1/auth/login",
+        "/v1/invitations",
+        "/v1/invitations/inspect",
+        "/v1/invitations/accept",
+    }:
         response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -219,8 +226,31 @@ def ready(db: Session = Depends(get_db)) -> dict[str, str]:
 
 
 @app.post("/v1/auth/bootstrap", response_model=TokenResponse, status_code=201)
-def bootstrap(data: BootstrapRequest, db: Session = Depends(get_db)) -> TokenResponse:
+def bootstrap(
+    data: BootstrapRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> TokenResponse:
     email = str(data.email).strip().lower()
+    enforce_limit(
+        db,
+        settings,
+        scope="auth.bootstrap.network",
+        subjects=[network_subject(request, settings)],
+        attempts=settings.bootstrap_limit_attempts,
+        window_seconds=settings.bootstrap_limit_window_seconds,
+    )
+    enforce_limit(
+        db,
+        settings,
+        scope="auth.bootstrap.target",
+        subjects=[
+            f"network-target:{network_subject(request, settings)}:{normalize_identifier(email)}"
+        ],
+        attempts=settings.bootstrap_limit_attempts,
+        window_seconds=settings.bootstrap_limit_window_seconds,
+    )
     if db.scalar(select(User).where(User.email == email)):
         raise HTTPException(status_code=409, detail="Email already exists")
     if db.scalar(select(Organization).where(Organization.slug == data.organization_slug)):
@@ -250,8 +280,35 @@ def bootstrap(data: BootstrapRequest, db: Session = Depends(get_db)) -> TokenRes
 
 
 @app.post("/v1/auth/login", response_model=TokenResponse)
-def login(data: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+def login(
+    data: LoginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> TokenResponse:
     email = str(data.email).strip().lower()
+    organization = normalize_identifier(data.organization_slug or data.organization_id or "")
+    enforce_limit(
+        db,
+        settings,
+        scope="auth.login.network",
+        subjects=[network_subject(request, settings)],
+        attempts=settings.login_limit_attempts * 10,
+        window_seconds=settings.login_limit_window_seconds,
+    )
+    enforce_limit(
+        db,
+        settings,
+        scope="auth.login.target",
+        subjects=[
+            (
+                f"network-target:{network_subject(request, settings)}:"
+                f"{normalize_identifier(email)}:{organization}"
+            )
+        ],
+        attempts=settings.login_limit_attempts,
+        window_seconds=settings.login_limit_window_seconds,
+    )
     user = db.scalar(select(User).where(User.email == email))
     if user is None or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
@@ -349,12 +406,29 @@ def invitation_by_token(
 @app.post("/v1/invitations", response_model=InvitationCreated, status_code=201)
 def create_invitation(
     data: InvitationCreate,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
+    settings: Settings = Depends(get_settings),
 ) -> InvitationCreated:
     response.headers["Cache-Control"] = "no-store"
     email = str(data.email).strip().lower()
+    enforce_limit(
+        db,
+        settings,
+        scope="invitation.create",
+        subjects=[
+            f"organization:{actor.organization_id}",
+            f"actor:{actor.organization_id}:{actor.user_id}",
+            (
+                f"network-target:{network_subject(request, settings)}:"
+                f"{actor.organization_id}:{normalize_identifier(email)}"
+            ),
+        ],
+        attempts=settings.invitation_create_limit_attempts,
+        window_seconds=settings.invitation_create_limit_window_seconds,
+    )
     if data.role == Role.owner and actor.role != Role.owner:
         raise HTTPException(status_code=403, detail="Only an owner can invite another owner")
     existing_user = db.scalar(select(User).where(User.email == email))
@@ -485,10 +559,33 @@ def revoke_invitation(
 @app.post("/v1/invitations/inspect", response_model=InvitationRead)
 def inspect_invitation(
     data: InvitationInspect,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> InvitationRead:
     response.headers["Cache-Control"] = "no-store"
+    enforce_limit(
+        db,
+        settings,
+        scope="invitation.inspect.network",
+        subjects=[network_subject(request, settings)],
+        attempts=settings.invitation_inspect_limit_attempts * 10,
+        window_seconds=settings.invitation_inspect_limit_window_seconds,
+    )
+    enforce_limit(
+        db,
+        settings,
+        scope="invitation.inspect.target",
+        subjects=[
+            (
+                f"network-target:{network_subject(request, settings)}:"
+                f"{normalize_identifier(data.token)}"
+            )
+        ],
+        attempts=settings.invitation_inspect_limit_attempts,
+        window_seconds=settings.invitation_inspect_limit_window_seconds,
+    )
     invitation, organization = invitation_by_token(db, data.token)
     return invitation_view(invitation, organization)
 
@@ -496,10 +593,33 @@ def inspect_invitation(
 @app.post("/v1/invitations/accept", response_model=TokenResponse)
 def accept_invitation(
     data: InvitationAccept,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> TokenResponse:
     response.headers["Cache-Control"] = "no-store"
+    enforce_limit(
+        db,
+        settings,
+        scope="invitation.accept.network",
+        subjects=[network_subject(request, settings)],
+        attempts=settings.invitation_accept_limit_attempts * 10,
+        window_seconds=settings.invitation_accept_limit_window_seconds,
+    )
+    enforce_limit(
+        db,
+        settings,
+        scope="invitation.accept.target",
+        subjects=[
+            (
+                f"network-target:{network_subject(request, settings)}:"
+                f"{normalize_identifier(data.token)}"
+            )
+        ],
+        attempts=settings.invitation_accept_limit_attempts,
+        window_seconds=settings.invitation_accept_limit_window_seconds,
+    )
     invitation, _ = invitation_by_token(db, data.token, for_update=True)
     now = datetime.now(UTC)
     expires_at = invitation.expires_at

@@ -96,7 +96,7 @@ remains conditional on the retained human acceptance record.
 All engineering-MVP gates plus:
 
 - [x] Invitation listing and explicit revocation
-- [ ] Authentication/invitation rate limiting and abuse controls
+- [x] Authentication/invitation rate limiting and abuse controls
 - [ ] Approved email delivery and account recovery
 - [ ] Production observability, alerting, incident ownership, and audit
       retention

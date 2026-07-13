@@ -22,6 +22,7 @@
       "form.project.defaultPlatform": "Douyin",
       "form.project.defaultTone": "\u771f\u8aa0\u3001\u8cbc\u5730",
       "content.generateFirst": "\u8acb\u5148\u751f\u6210\u5167\u5bb9",
+      "error.tooManyRequests": "\u64cd\u4f5c\u904e\u65bc\u983b\u5bc6\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66\u3002",
       "content.invalidJson": "\u4fee\u6539\u5167\u5bb9\u5fc5\u9808\u662f\u6709\u6548\u7684 JSON \u683c\u5f0f",
       "content.copied": "\u95b1\u8b80\u7a3f\u5df2\u8907\u88fd",
       "content.downloaded": "\u95b1\u8b80\u7a3f\u5df2\u4e0b\u8f09",

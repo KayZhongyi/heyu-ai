@@ -85,8 +85,17 @@ Git.
       revoked again.
 - [ ] Confirm `invitation.created`, `invitation.accepted`, and
       `invitation.revoked` audit events without token or email leakage.
-- [ ] Record that email delivery and internet-facing authentication/invitation
-      rate limiting are not current capabilities.
+- [ ] Repeatedly submit an incorrect login for one normalized email and
+      organization, then confirm the limit returns `429`, a positive
+      `Retry-After`, and `Cache-Control: no-store`; confirm a correct password
+      cannot bypass the active window.
+- [ ] Confirm bootstrap, invitation creation, token inspection, and acceptance
+      are also limited without storing raw IP addresses, emails, or tokens.
+- [ ] Confirm an untrusted peer cannot change its limiter identity with
+      `X-Forwarded-For`; test trusted-proxy parsing only with explicitly
+      configured proxy CIDRs.
+- [ ] Record that email delivery and account recovery are not current
+      capabilities.
 
 ## 3. Brand and product assets
 

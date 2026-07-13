@@ -22,6 +22,7 @@
       "form.project.defaultPlatform": "TikTok",
       "form.project.defaultTone": "Sincere and grounded",
       "content.generateFirst": "Generate content first",
+      "error.tooManyRequests": "Too many attempts. Please wait a moment and try again.",
       "content.invalidJson": "Edited content must be valid JSON",
       "content.copied": "Readable copy copied",
       "content.downloaded": "Readable copy downloaded",

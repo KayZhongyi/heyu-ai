@@ -22,6 +22,7 @@
       "form.project.defaultPlatform": "\u6296\u97f3",
       "form.project.defaultTone": "\u771f\u8bda\u3001\u6709\u70df\u706b\u6c14",
       "content.generateFirst": "\u8bf7\u5148\u751f\u6210\u5185\u5bb9",
+      "error.tooManyRequests": "\u64cd\u4f5c\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002",
       "content.invalidJson": "\u4fee\u6539\u5185\u5bb9\u5fc5\u987b\u662f\u6709\u6548\u7684 JSON \u683c\u5f0f",
       "content.copied": "\u9605\u8bfb\u7a3f\u5df2\u590d\u5236",
       "content.downloaded": "\u9605\u8bfb\u7a3f\u5df2\u4e0b\u8f7d",

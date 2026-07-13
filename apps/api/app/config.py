@@ -20,6 +20,19 @@ class Settings(BaseSettings):
     ai_timeout_seconds: float = 45.0
     cors_origins: str = "http://localhost:3000"
     auto_create_schema: bool = True
+    abuse_limits_enabled: bool = True
+    trusted_proxy_cidrs: str = ""
+    abuse_bucket_retention_seconds: int = 86400
+    login_limit_attempts: int = 10
+    login_limit_window_seconds: int = 300
+    bootstrap_limit_attempts: int = 5
+    bootstrap_limit_window_seconds: int = 3600
+    invitation_create_limit_attempts: int = 30
+    invitation_create_limit_window_seconds: int = 3600
+    invitation_inspect_limit_attempts: int = 30
+    invitation_inspect_limit_window_seconds: int = 300
+    invitation_accept_limit_attempts: int = 10
+    invitation_accept_limit_window_seconds: int = 300
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -47,6 +60,42 @@ class Settings(BaseSettings):
 
             if self.auto_create_schema:
                 errors.append("AUTO_CREATE_SCHEMA must be false in production")
+            if not self.abuse_limits_enabled:
+                errors.append("ABUSE_LIMITS_ENABLED must be true in production")
+
+        positive_limits = {
+            "ABUSE_BUCKET_RETENTION_SECONDS": self.abuse_bucket_retention_seconds,
+            "LOGIN_LIMIT_ATTEMPTS": self.login_limit_attempts,
+            "LOGIN_LIMIT_WINDOW_SECONDS": self.login_limit_window_seconds,
+            "BOOTSTRAP_LIMIT_ATTEMPTS": self.bootstrap_limit_attempts,
+            "BOOTSTRAP_LIMIT_WINDOW_SECONDS": self.bootstrap_limit_window_seconds,
+            "INVITATION_CREATE_LIMIT_ATTEMPTS": self.invitation_create_limit_attempts,
+            "INVITATION_CREATE_LIMIT_WINDOW_SECONDS": self.invitation_create_limit_window_seconds,
+            "INVITATION_INSPECT_LIMIT_ATTEMPTS": self.invitation_inspect_limit_attempts,
+            "INVITATION_INSPECT_LIMIT_WINDOW_SECONDS": self.invitation_inspect_limit_window_seconds,
+            "INVITATION_ACCEPT_LIMIT_ATTEMPTS": self.invitation_accept_limit_attempts,
+            "INVITATION_ACCEPT_LIMIT_WINDOW_SECONDS": self.invitation_accept_limit_window_seconds,
+        }
+        for name, value in positive_limits.items():
+            if value <= 0:
+                errors.append(f"{name} must be greater than zero")
+
+        maximum_window = max(
+            self.login_limit_window_seconds,
+            self.bootstrap_limit_window_seconds,
+            self.invitation_create_limit_window_seconds,
+            self.invitation_inspect_limit_window_seconds,
+            self.invitation_accept_limit_window_seconds,
+        )
+        if self.abuse_bucket_retention_seconds < maximum_window:
+            errors.append(
+                "ABUSE_BUCKET_RETENTION_SECONDS must be at least the longest abuse limit window"
+            )
+
+        try:
+            _ = self.trusted_proxy_networks
+        except ValueError:
+            errors.append("TRUSTED_PROXY_CIDRS must contain valid IP networks")
 
         provider = self.ai_provider.strip().lower()
         if provider not in {"mock", "openai-compatible"}:
@@ -64,6 +113,16 @@ class Settings(BaseSettings):
 
         if errors:
             raise RuntimeError("Unsafe production configuration: " + "; ".join(errors))
+
+    @property
+    def trusted_proxy_networks(self):
+        from ipaddress import ip_network
+
+        return tuple(
+            ip_network(item.strip(), strict=False)
+            for item in self.trusted_proxy_cidrs.split(",")
+            if item.strip()
+        )
 
 
 @lru_cache

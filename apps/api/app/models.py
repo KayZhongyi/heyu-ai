@@ -103,6 +103,20 @@ class OrganizationInvitation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class AbuseLimitBucket(Base):
+    __tablename__ = "abuse_limit_buckets"
+    __table_args__ = (
+        UniqueConstraint("scope", "subject_hash", "window_started_at"),
+        Index("ix_abuse_limit_buckets_updated_at", "updated_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    scope: Mapped[str] = mapped_column(String(80))
+    subject_hash: Mapped[str] = mapped_column(String(64))
+    window_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    request_count: Mapped[int] = mapped_column(default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class Brand(Base):
     __tablename__ = "brands"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

@@ -80,9 +80,10 @@ Pending → Revoked
 Pending → Expired
 ```
 
-The local MVP exposes the link for manual sharing. Email delivery and
-public-network authentication/invitation rate limiting are not current
-capabilities.
+The local MVP exposes the link for manual sharing. Email delivery and account
+recovery are not current capabilities. Authentication and invitation entry
+points use persistent, privacy-preserving abuse limits with standard retry
+responses; these controls do not by themselves authorize public deployment.
 
 ## Product principles
 

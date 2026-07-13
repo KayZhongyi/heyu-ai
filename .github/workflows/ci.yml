@@ -256,6 +256,40 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"organization_slug":"docker-farm","email":"owner@docker.example","password":"correct-horse-battery"}' \
             http://127.0.0.1:8000/v1/auth/login | jq -r .access_token)
+          # The successful login above consumes one request in the fixed window.
+          for attempt in $(seq 1 9); do
+            login_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              -H 'Content-Type: application/json' \
+              -d '{"organization_slug":"docker-farm","email":"owner@docker.example","password":"wrong-password"}' \
+              http://127.0.0.1:8000/v1/auth/login)
+            test "$login_status" = "401"
+          done
+          limiter_headers="$RUNNER_TEMP/heyu-rate-limit-headers"
+          limited_status=$(curl --silent --dump-header "$limiter_headers" \
+            --output /dev/null --write-out '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d '{"organization_slug":"docker-farm","email":"owner@docker.example","password":"correct-horse-battery"}' \
+            http://127.0.0.1:8000/v1/auth/login)
+          test "$limited_status" = "429"
+          grep -qi '^retry-after: [1-9][0-9]*' "$limiter_headers"
+          grep -qi '^cache-control: no-store' "$limiter_headers"
+          limiter_storage=$(docker compose exec -T db psql -U agri -d agri -Atc \
+            "select count(*) from abuse_limit_buckets where length(subject_hash) = 64")
+          test "$limiter_storage" -gt 0
+          raw_subjects=$(docker compose exec -T db psql -U agri -d agri -Atc \
+            "select count(*) from abuse_limit_buckets where subject_hash like '%owner@docker.example%' or subject_hash like '%127.0.0.1%'")
+          test "$raw_subjects" = "0"
+
+          docker compose restart api
+          timeout 60 bash -c 'until curl --fail --silent http://127.0.0.1:8000/health >/dev/null; do sleep 2; done'
+          persisted_limit_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d '{"organization_slug":"docker-farm","email":"owner@docker.example","password":"correct-horse-battery"}' \
+            http://127.0.0.1:8000/v1/auth/login)
+          test "$persisted_limit_status" = "429"
+          docker compose exec -T db psql -U agri -d agri -c \
+            "delete from abuse_limit_buckets" >/dev/null
+
           brands=$(curl --fail --silent --show-error \
             -H "Authorization: Bearer $login_token" \
             http://127.0.0.1:8000/v1/brands)

@@ -37,8 +37,10 @@ becomes unusable immediately, and a replacement can then be created for the
 same normalized email. Admin cannot create or revoke an Owner invitation.
 Accepted, already revoked, and expired invitations cannot be revoked again.
 
-There is no invitation email or internet-facing authentication/invitation rate
-limiting. Do not expose the local demo directly to the internet.
+There is no invitation email delivery or account-recovery workflow. The API
+does apply database-backed limits to bootstrap, login, invitation creation,
+token inspection, and acceptance, but this control alone is not approval to
+expose the local demo directly to the internet.
 
 ### SQLite backup and restore
 
@@ -115,9 +117,21 @@ Set `APP_ENV=production` only with:
 - a unique `APP_SECRET` of at least 32 characters
 - PostgreSQL `DATABASE_URL`
 - `AUTO_CREATE_SCHEMA=false`
+- `ABUSE_LIMITS_ENABLED=true`
 - one or more explicit HTTPS `CORS_ORIGINS`
 
 The application refuses production startup when these are absent.
+
+Authentication and invitation limits are configured through the
+`*_LIMIT_ATTEMPTS` and `*_LIMIT_WINDOW_SECONDS` values in `.env.example`.
+Buckets are stored in PostgreSQL for production candidates and contain only
+HMAC-protected subjects. Keep `APP_SECRET` stable across instances so all
+workers derive the same subjects.
+
+Do not trust caller-supplied forwarding headers by default. Set
+`TRUSTED_PROXY_CIDRS` only to the exact address ranges of load balancers or
+reverse proxies you operate. Direct clients and unlisted proxies are identified
+from the TCP peer address; arbitrary `X-Forwarded-For` values are ignored.
 
 ## Secrets and providers
 

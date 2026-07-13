@@ -26,7 +26,7 @@ const invalidateSession=()=>{
   $$('[data-auth-panel]').forEach(panel=>panel.hidden=panel.dataset.authPanel!=="login");
   toast(t("auth.sessionExpired"),true);
 };
-const api=async(path,options={})=>{const headers={"Content-Type":"application/json",...(options.headers||{})};if(state.token)headers.Authorization=`Bearer ${state.token}`;const response=await fetch(path,{...options,headers});if(!response.ok){let message=t("error.requestFailed",{status:response.status});try{const body=await response.json();message=body.detail||message}catch{}if(response.status===401&&state.token){invalidateSession();message=t("auth.sessionExpired")}throw new Error(message)}return response.status===204?null:response.json()};
+const api=async(path,options={})=>{const headers={"Content-Type":"application/json",...(options.headers||{})};if(state.token)headers.Authorization=`Bearer ${state.token}`;const response=await fetch(path,{...options,headers});if(!response.ok){let message=response.status===429?t("error.tooManyRequests"):t("error.requestFailed",{status:response.status});try{const body=await response.json();if(response.status!==429)message=body.detail||message}catch{}if(response.status===401&&state.token){invalidateSession();message=t("auth.sessionExpired")}throw new Error(message)}return response.status===204?null:response.json()};
 const formData=form=>Object.fromEntries(new FormData(form));
 const lines=value=>value.split("\n").map(v=>v.trim()).filter(Boolean);
 const toast=(message,error=false)=>{const el=$("#toast");el.textContent=message;el.className=`show${error?" error":""}`;clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.className="",3000)};
