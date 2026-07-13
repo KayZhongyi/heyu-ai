@@ -54,6 +54,18 @@ Each generation stores:
 - latency and status
 - creator and organization
 
+Before the provider call, the application selects a bounded context from the
+latest approved revision in each eligible knowledge chain. The first policy is
+deterministic and provider-neutral: product scope is preferred, Chinese
+character n-grams and Latin terms provide lightweight relevance ordering, and
+hard source/character limits prevent unbounded prompts. The normalized input
+records the policy, selected source IDs, full-source SHA-256 values,
+excerpt SHA-256 values, included character counts, and truncation flags.
+
+This is intentionally not presented as semantic vector search. PostgreSQL
+full-text search or embeddings can replace the ranking policy later without
+changing generation provenance or provider interfaces.
+
 Content versions reference the generation that produced them but remain
 editable through append-only successor versions.
 

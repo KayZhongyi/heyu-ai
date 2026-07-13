@@ -2,10 +2,19 @@ import time
 from dataclasses import dataclass
 from typing import Protocol
 
-from app.models import Brand, ContentProject, ContentType, KnowledgeSource, Product
+from app.models import Brand, ContentProject, ContentType, Product
 
 PROMPT_NAME = "agricultural-content-script"
-PROMPT_VERSION = "1.1.0"
+PROMPT_VERSION = "1.2.0"
+
+
+@dataclass(frozen=True)
+class ContextSource:
+    id: str
+    title: str
+    citation_label: str
+    content: str
+    content_sha256: str
 
 
 @dataclass
@@ -23,7 +32,7 @@ class AIProvider(Protocol):
         project: ContentProject,
         brand: Brand,
         product: Product,
-        sources: list[KnowledgeSource],
+        sources: list[ContextSource],
     ) -> GenerationResult: ...
 
 
@@ -41,7 +50,7 @@ class DeterministicProvider:
     def _common_context(
         brand: Brand,
         product: Product,
-        sources: list[KnowledgeSource],
+        sources: list[ContextSource],
     ) -> tuple[str, str, list[dict], list[str]]:
         facts = [source.content.strip() for source in sources if source.content.strip()]
         fact_text = "；".join(facts[:3]) or "请先补充并审核产品资料"
@@ -201,7 +210,7 @@ class DeterministicProvider:
         project: ContentProject,
         brand: Brand,
         product: Product,
-        sources: list[KnowledgeSource],
+        sources: list[ContextSource],
     ) -> GenerationResult:
         started = time.perf_counter()
         fact_text, selling_points, citations, risk_notes = self._common_context(

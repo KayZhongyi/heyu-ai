@@ -1,4 +1,5 @@
 import hashlib
+import re
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
@@ -6,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.ai import PROMPT_NAME, PROMPT_VERSION, get_ai_provider
+from app.ai import PROMPT_NAME, PROMPT_VERSION, ContextSource, get_ai_provider
 from app.models import (
     AuditEvent,
     Brand,
@@ -731,7 +732,9 @@ def generate_content(
     latest_approved_by_group: dict[str, KnowledgeSource] = {}
     for source in approved_sources:
         latest_approved_by_group.setdefault(source.source_group_id, source)
-    sources = list(latest_approved_by_group.values())
+    sources, context_manifest = select_generation_context(
+        list(latest_approved_by_group.values()), project, brand, product
+    )
     provider = get_ai_provider()
     result = provider.generate_script(project, brand, product, sources)
     normalized_input = {
@@ -743,6 +746,8 @@ def generate_content(
         "extra_requirements": project.extra_requirements,
         "brand_id": brand.id,
         "product_id": product.id,
+        "context_policy": "lexical-v1",
+        "context_sources": context_manifest,
     }
     run = GenerationRun(
         organization_id=actor.organization_id,
@@ -791,6 +796,76 @@ def generate_content(
     db.refresh(run)
     db.refresh(version)
     return run, version
+
+
+def select_generation_context(
+    candidates: list[KnowledgeSource],
+    project: ContentProject,
+    brand: Brand,
+    product: Product,
+    *,
+    max_sources: int = 4,
+    max_total_chars: int = 12000,
+    max_source_chars: int = 6000,
+) -> tuple[list[ContextSource], list[dict]]:
+    """Select a bounded, deterministic context and retain excerpt provenance."""
+    query = " ".join(
+        (
+            project.title,
+            project.platform,
+            project.target_audience,
+            project.objective,
+            project.extra_requirements,
+            brand.name,
+            product.name,
+            product.origin,
+            " ".join(product.selling_points),
+        )
+    ).lower()
+    terms = {term for term in re.findall(r"[a-z0-9]+", query) if len(term) > 1}
+    for sequence in re.findall(r"[\u4e00-\u9fff]+", query):
+        for size in range(2, min(4, len(sequence)) + 1):
+            terms.update(
+                sequence[index : index + size] for index in range(len(sequence) - size + 1)
+            )
+
+    def score(source: KnowledgeSource) -> tuple[int, int, int, str]:
+        searchable = f"{source.title} {source.citation_label} {source.content}".lower()
+        lexical_hits = sum(searchable.count(term) for term in terms)
+        scope = 2 if source.product_id == product.id else 1
+        return scope, lexical_hits, source.revision_number, source.id
+
+    selected: list[ContextSource] = []
+    manifest: list[dict] = []
+    remaining = max_total_chars
+    for source in sorted(candidates, key=score, reverse=True):
+        if len(selected) >= max_sources or remaining <= 0:
+            break
+        excerpt = source.content.strip()[: min(max_source_chars, remaining)]
+        if not excerpt:
+            continue
+        selected.append(
+            ContextSource(
+                id=source.id,
+                title=source.title,
+                citation_label=source.citation_label,
+                content=excerpt,
+                content_sha256=source.content_sha256,
+            )
+        )
+        manifest.append(
+            {
+                "source_id": source.id,
+                "source_sha256": source.content_sha256,
+                "excerpt_sha256": hashlib.sha256(excerpt.encode("utf-8")).hexdigest(),
+                "included_chars": len(excerpt),
+                "source_chars": len(source.content),
+                "truncated": len(excerpt) < len(source.content.strip()),
+                "scope": "product" if source.product_id == product.id else "brand",
+            }
+        )
+        remaining -= len(excerpt)
+    return selected, manifest
 
 
 def list_generation_runs(db: Session, actor: Actor, project_id: str) -> list[GenerationRun]:

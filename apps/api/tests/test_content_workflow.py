@@ -101,7 +101,7 @@ def test_approved_knowledge_is_cited_and_versions_are_append_only(client, auth):
     assert generated.status_code == 201, generated.text
     result = generated.json()
     assert result["provider"] == "mock"
-    assert result["prompt_version"] == "1.1.0"
+    assert result["prompt_version"] == "1.2.0"
     assert result["source_ids"] == [source.json()["id"]]
     assert unapproved["id"] not in result["source_ids"]
     assert result["version"]["content"]["citations"][0]["source_id"] == source.json()["id"]
@@ -113,6 +113,10 @@ def test_approved_knowledge_is_cited_and_versions_are_append_only(client, auth):
     persisted_run = generation_runs.json()[0]
     assert persisted_run["id"] == result["run_id"]
     assert persisted_run["normalized_input"]["content_type"] == "short_video_30s"
+    assert persisted_run["normalized_input"]["context_policy"] == "lexical-v1"
+    assert (
+        persisted_run["normalized_input"]["context_sources"][0]["source_id"] == source.json()["id"]
+    )
     assert persisted_run["output"] == result["version"]["content"]
     assert persisted_run["sources"] == [
         {
@@ -157,6 +161,67 @@ def test_approved_knowledge_is_cited_and_versions_are_append_only(client, auth):
     ).json()
     assert [item["version_number"] for item in versions] == [2, 1]
     assert versions[1]["status"] == "draft"
+
+
+def test_generation_context_is_bounded_and_excerpt_provenance_is_persisted(client, auth):
+    brand, product = create_brand_and_product(client, auth)
+
+    def approve_source(title, content, *, product_id=None):
+        source = client.post(
+            "/v1/knowledge",
+            headers=auth,
+            json={
+                "title": title,
+                "kind": "product_fact",
+                "content": content,
+                "brand_id": brand["id"],
+                "product_id": product_id,
+            },
+        ).json()
+        client.post(f"/v1/knowledge/{source['id']}/submit", headers=auth)
+        client.post(
+            f"/v1/knowledge/{source['id']}/review",
+            headers=auth,
+            json={"status": "approved"},
+        )
+        return source
+
+    relevant = approve_source(
+        "采收批次重点资料", "采收批次 " + ("甲" * 6995), product_id=product["id"]
+    )
+    second = approve_source("产品储存资料", "储存方法 " + ("乙" * 6995), product_id=product["id"])
+    approve_source("品牌通用资料", "品牌沿革 " + ("丙" * 6995))
+
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "title": "采收批次介绍",
+            "content_type": "short_video_30s",
+            "objective": "说明采收批次",
+        },
+    ).json()
+    response = client.post(
+        f"/v1/content-projects/{project['id']}/generate",
+        headers=auth,
+    )
+    assert response.status_code == 201, response.text
+    generated = response.json()
+
+    assert generated["source_ids"] == [relevant["id"], second["id"]]
+    run = client.get(
+        f"/v1/content-projects/{project['id']}/generation-runs",
+        headers=auth,
+    ).json()[0]
+    manifest = run["normalized_input"]["context_sources"]
+    assert sum(item["included_chars"] for item in manifest) == 12000
+    assert all(item["included_chars"] <= 6000 for item in manifest)
+    assert all(item["truncated"] for item in manifest)
+    assert manifest[0]["source_sha256"] == relevant["content_sha256"]
+    assert manifest[0]["excerpt_sha256"] != manifest[0]["source_sha256"]
+    assert run["sources"][0]["id"] == relevant["id"]
 
 
 def test_generation_structure_matches_content_type(client, auth):

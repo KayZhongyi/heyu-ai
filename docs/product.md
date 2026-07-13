@@ -69,6 +69,10 @@ same approved-source citations and prohibited-claim warnings.
 - Generation provenance remains queryable after reload, including normalized
   input, full output, provider/model, prompt version, latency, and resolved
   source titles and citation labels.
+- Generation context is bounded before it reaches an AI provider. The current
+  deterministic lexical policy prioritizes product-scoped and query-relevant
+  approved sources, limits source count and characters, and persists source and
+  excerpt hashes so the exact context selection can be audited.
 - Tenant isolation is tested as a security invariant.
 - Content review follows an explicit state machine: `draft` →
   `pending_review` → `approved` or `rejected`. Drafts cannot be reviewed

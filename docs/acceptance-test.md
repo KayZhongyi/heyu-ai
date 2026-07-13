@@ -62,6 +62,12 @@ commit SHA, deployment profile, reviewer, and pass/fail evidence.
 - [ ] Confirm the output is structured and cites only approved source IDs.
 - [ ] Inspect the generation record and confirm provider, model, prompt
       version, normalized brief, status, latency, and source IDs are present.
+- [ ] Confirm normalized input records `context_policy` and a context manifest
+      with source/excerpt hashes, included character counts, scope, and
+      truncation state.
+- [ ] With more than four eligible knowledge chains or more than 12,000
+      characters, confirm generation uses a bounded subset while retaining the
+      latest approved revision rule.
 - [ ] Reload the workspace, select the project again, and confirm its
       generation history still resolves source titles and citation labels.
 - [ ] Repeat with at least one livestream content type.

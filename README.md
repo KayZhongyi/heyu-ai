@@ -16,6 +16,7 @@ history, and auditability.
 - Browser-side UTF-8 TXT, Markdown, and CSV knowledge import with source
   filename, media type, and SHA-256 integrity metadata
 - Structured AI content briefs and script generation
+- Bounded, deterministic knowledge-context selection with excerpt provenance
 - Immutable content versions and human approval workflow
 - Explicit draft → pending review → approved/rejected content governance
 - Approved-content publication records and append-only performance snapshots
@@ -126,6 +127,9 @@ For backups, upgrades, and recovery, see
 - Source documents must be approved before production generation can cite them.
 - Generation uses the latest approved revision in each knowledge chain. A rejected
   revision does not displace the preceding approved revision.
+- AI context is capped and deterministically selected rather than sending an
+  organization's entire knowledge base. Each generation records source and
+  excerpt hashes, included character counts, and truncation state.
 - A publication can reference only an approved content version. Operational
   metrics are stored as timestamped raw snapshots so later observations do not
   overwrite earlier evidence.
