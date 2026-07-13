@@ -10,11 +10,31 @@
 ![License](https://img.shields.io/badge/License-Apache--2.0-5B7083)
 ![Status](https://img.shields.io/badge/Status-Engineering%20MVP-EA6A5A)
 
-[快速启动](#3-分钟本地启动windows) · [当前能力](#当前能力) · [团队协作](#团队协作) · [产品边界](#必须守住的产品边界) · [贡献指南](CONTRIBUTING.md)
+[快速开始](#快速开始) · [当前能力](#当前能力) · [参与开发](#参与开发) · [产品边界](#必须守住的产品边界) · [贡献指南](CONTRIBUTING.md)
 
 禾语 AI 是一个可本地运行、可持续扩展的农产品内容与运营平台。它把品牌档案、农产品事实和审核通过的知识资料组织成可信上下文，生成短视频脚本、直播话术及其他营销内容，并保留完整的来源、版本、审核与运营记录。
 
 仓库目前处于**私有协作与发布前审查阶段**。代码按未来开源标准建设，但在负责人明确批准前，不得公开仓库、业务资料或部署地址。
+
+![禾语 AI 平台首页预览](docs/assets/platform-preview.png)
+
+## 新成员从这里开始
+
+> 第一次加入？先完成下面四步。普通本地演示不需要 Docker、Ollama、Node.js、域名或付费模型 API。
+
+1. 接受 GitHub 私有仓库邀请，将仓库 Clone 到本地；
+2. 阅读 [产品范围](docs/product.md) 和 [贡献指南](CONTRIBUTING.md)；
+3. 按[快速开始](#快速开始)运行平台，确认首页、工作台与 API 文档可以访问；
+4. 在 GitHub Issue 中领取任务，从最新 `main` 创建个人分支，通过 Pull Request 提交。
+
+```powershell
+git clone https://github.com/KayZhongyi/heyu-ai.git
+cd heyu-ai
+.\scripts\setup-windows.ps1
+.\scripts\start-windows.ps1
+```
+
+**协作约定：** 不直接向 `main` 推送；不提交密钥、数据库或真实业务资料；不确定产品规则或任务边界时，先在 Issue / PR 中确认。
 
 ## 当前能力
 
@@ -39,26 +59,9 @@
 - API 文档：`http://127.0.0.1:8000/docs`
 - 健康检查：`http://127.0.0.1:8000/health`
 
-## 3 分钟本地启动（Windows）
+## 快速开始
 
-普通演示**不需要 Docker、Ollama、Node.js、域名或付费模型 API**。
-
-### 前置条件
-
-- Windows 10 / 11
-- Python 3.12
-- 建议至少预留 2 GB 磁盘空间
-
-### 启动步骤
-
-1. Clone 或下载仓库到本地磁盘。
-2. 首次运行双击 `安装禾语AI.bat`。
-3. 安装完成后双击 `启动禾语AI.bat`。
-4. 浏览器打开 `http://127.0.0.1:8000/`。
-
-虚拟环境、SQLite 数据库及运行文件默认都保存在项目目录中，不写入大型全局运行环境。需要指定 Python 时，可设置环境变量 `HEYU_PYTHON`。
-
-## 开发者启动
+以下是 Windows 本地开发流程；普通演示仅需 Python 3.12，建议至少预留 2 GB 磁盘空间。
 
 ```powershell
 git clone https://github.com/KayZhongyi/heyu-ai.git
@@ -67,6 +70,8 @@ cd heyu-ai
 .\scripts\setup-windows.ps1
 .\scripts\start-windows.ps1
 ```
+
+不使用命令行时，也可以首次双击 `安装禾语AI.bat`，之后双击 `启动禾语AI.bat`。虚拟环境、SQLite 数据库及运行文件默认保存在项目目录中；需要指定 Python 时，可设置环境变量 `HEYU_PYTHON`。
 
 可选 Docker / PostgreSQL：
 
@@ -96,32 +101,18 @@ scripts/
   test-content-renderer.js     内容渲染测试
 ```
 
-## 团队协作
+## 参与开发
 
-加入项目后请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [docs/product.md](docs/product.md)。
+开始编码前，请先在 GitHub Issue 或团队沟通渠道中确认任务的**负责人、范围与验收条件**，避免多人重复修改同一模块。
 
-### 新成员第一天
+| 方向 | 适合参与的工作 |
+| --- | --- |
+| 产品与内容 | 真实业务流程、验收用例、简中 / 香港繁中 / 英文营销文案 |
+| Web | 工作台交互、响应式布局、可访问性、Playwright E2E |
+| API / AI | FastAPI、数据模型、RBAC、知识检索、生成链路、模型 Provider |
+| 工程质量 | Pytest、CI、Docker / PostgreSQL、文档与仓库审计 |
 
-1. 接受 GitHub 私有仓库邀请并 Clone 项目；
-2. 按[本地启动步骤](#3-分钟本地启动windows)运行平台，确认首页、工作台和 API 文档可以访问；
-3. 阅读 [docs/product.md](docs/product.md) 了解产品范围，阅读 [docs/architecture.md](docs/architecture.md) 了解系统边界；
-4. 在 Issue 或团队沟通渠道中确认任务负责人，避免多人重复修改同一模块；
-5. 从最新 `main` 创建个人分支，通过 Pull Request 提交，不直接向 `main` 推送。
-
-可以从以下方向参与：
-
-- **产品与内容**：梳理真实业务流程、验收标准和三语营销文案；
-- **前端体验**：工作台交互、响应式布局、无障碍与浏览器测试；
-- **后端与 AI**：权限、知识库、生成链路、审核流和模型 Provider；
-- **质量与工程**：测试、CI、Docker / PostgreSQL、文档和发布审计。
-
-推荐流程：
-
-1. 从最新 `main` 创建短生命周期分支；
-2. 一次提交只处理一个明确问题；
-3. 不绕过服务端权限、审核或租户隔离；
-4. 提交前运行相关测试；
-5. 通过 Pull Request 合并，不直接覆盖他人改动。
+推荐使用短生命周期分支，一次 PR 只解决一个明确问题：
 
 ```powershell
 git switch main
@@ -134,7 +125,7 @@ node scripts/test-i18n.js
 node scripts/test-content-renderer.js
 ```
 
-涉及浏览器行为时再运行：
+完整的分支、测试、完成定义与数据安全要求见 [CONTRIBUTING.md](CONTRIBUTING.md)。涉及浏览器行为时再运行：
 
 ```powershell
 pnpm install --frozen-lockfile

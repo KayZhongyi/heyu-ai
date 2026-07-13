@@ -2,6 +2,22 @@
 
 感谢参与禾语 AI。这个项目不是一次性比赛页面，而是按可长期维护的商业级平台建设。请优先保证业务正确、权限可靠、资料可追溯，再考虑视觉扩展。
 
+## 第一次贡献
+
+1. 在 GitHub Issue 或团队沟通渠道中确认任务负责人、范围与验收条件；
+2. 从最新 `main` 创建个人分支，不直接向 `main` 推送；
+3. 在本地完成改动和相关测试；
+4. 提交 Pull Request，清楚说明改动、验证结果、风险与未完成项；
+5. 等待 CI 和维护者审核，不自行合并存在未解决意见的 PR。
+
+```powershell
+git switch main
+git pull --ff-only
+git switch -c feat/short-description
+```
+
+如果你还没有明确任务，先从带有 `status: ready` 标签的 Issue 中选择与你能力方向匹配的一项，并在开始前留言认领。
+
 ## 开始之前
 
 1. 阅读 `README.md`、`docs/product.md` 和 `docs/architecture.md`。
@@ -31,12 +47,6 @@
 - 一次 PR 解决一个清晰问题，避免顺手进行大范围重构。
 - 不回退或覆盖其他成员的并行改动。
 - Commit 建议采用：`feat: ...`、`fix: ...`、`test: ...`、`docs: ...`。
-
-```powershell
-git switch main
-git pull --ff-only
-git switch -c feat/short-description
-```
 
 提交 PR 前先同步主分支并处理冲突；不要使用强制推送改写其他成员的分支。
 
