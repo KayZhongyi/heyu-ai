@@ -34,7 +34,7 @@ body:
       label: 验收条件
       description: 使用可以观察或测试的条件描述完成标准。
       placeholder: |
-        - [ ] 
+        - [ ] 第一项验收条件
         - [ ]
     validations:
       required: true
