@@ -1,5 +1,6 @@
 import hashlib
 import re
+import time
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
@@ -7,7 +8,14 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.ai import PROMPT_NAME, PROMPT_VERSION, AIProviderError, ContextSource, get_ai_provider
+from app.ai import (
+    PROMPT_NAME,
+    PROMPT_VERSION,
+    AIProviderError,
+    ContextSource,
+    get_ai_provider,
+    validate_generation_output,
+)
 from app.models import (
     AuditEvent,
     Brand,
@@ -910,10 +918,7 @@ def generate_content(
         list(latest_approved_by_group.values()), project, brand, product
     )
     provider = get_ai_provider()
-    try:
-        result = provider.generate_script(project, brand, product, sources)
-    except AIProviderError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    source_ids = [source.id for source in sources]
     normalized_input = {
         "content_type": project.content_type.value,
         "platform": project.platform,
@@ -926,6 +931,52 @@ def generate_content(
         "context_policy": "lexical-v1",
         "context_sources": context_manifest,
     }
+    started = time.perf_counter()
+    try:
+        result = provider.generate_script(project, brand, product, sources)
+        validated_content = validate_generation_output(
+            result.content,
+            project.content_type,
+            set(source_ids),
+        )
+    except AIProviderError as exc:
+        latency_ms = max(1, int((time.perf_counter() - started) * 1000))
+        failed_run = GenerationRun(
+            organization_id=actor.organization_id,
+            project_id=project.id,
+            provider=provider.name,
+            model=provider.model,
+            prompt_name=PROMPT_NAME,
+            prompt_version=PROMPT_VERSION,
+            source_ids=source_ids,
+            normalized_input=normalized_input,
+            output={
+                "error": {
+                    "code": exc.code,
+                    "message": str(exc),
+                }
+            },
+            status=GenerationStatus.failed,
+            latency_ms=latency_ms,
+            created_by=actor.user_id,
+        )
+        db.add(failed_run)
+        db.flush()
+        audit(
+            db,
+            actor,
+            "generation.failed",
+            "generation_run",
+            failed_run.id,
+            {
+                "project_id": project.id,
+                "provider": provider.name,
+                "model": provider.model,
+                "error_code": exc.code,
+            },
+        )
+        db.commit()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     run = GenerationRun(
         organization_id=actor.organization_id,
         project_id=project.id,
@@ -933,9 +984,9 @@ def generate_content(
         model=provider.model,
         prompt_name=PROMPT_NAME,
         prompt_version=PROMPT_VERSION,
-        source_ids=[source.id for source in sources],
+        source_ids=source_ids,
         normalized_input=normalized_input,
-        output=result.content,
+        output=validated_content,
         status=GenerationStatus.succeeded,
         latency_ms=result.latency_ms,
         created_by=actor.user_id,
@@ -952,7 +1003,7 @@ def generate_content(
         project_id=project.id,
         generation_run_id=run.id,
         version_number=(max_version or 0) + 1,
-        content=result.content,
+        content=validated_content,
         change_summary="AI generated draft",
         created_by=actor.user_id,
     )

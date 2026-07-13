@@ -54,6 +54,9 @@ approval to expose the service publicly.
 - [x] Current schema has an Alembic migration chain.
 - [x] No committed secret, private source material, database, or E2E output.
 - [x] Deterministic and OpenAI-compatible provider boundaries are explicit.
+- [x] Provider failures are persisted safely and never create content versions.
+- [x] Provider output is schema-checked and citations are restricted to the
+      exact selected context.
 - [x] Limits avoid claims of semantic RAG, automatic video understanding,
       automatic publishing, or automatic analytics.
 - [x] Browser E2E covers locale preservation, invitations, and layout.

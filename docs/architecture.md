@@ -64,6 +64,19 @@ requires both records to be `approved`. A material edit resets the affected
 asset to `draft`, clears its prior reviewer metadata, and blocks subsequent
 generation until another explicit review.
 
+Provider success is not trusted at the HTTP boundary. The domain service
+validates the returned object against the requested content type, requires
+explicit `citations` and `risk_notes` arrays, and rejects every citation whose
+`source_id` was not selected into that run's bounded context. Prompt
+instructions are a generation aid, not a substitute for server-side
+validation.
+
+Provider timeouts, transport/HTTP failures, malformed responses, schema
+failures, and unavailable citations are committed as
+`GenerationRun(status=failed)` with a stable safe error code. Failed runs never
+create a `ContentVersion`; raw provider responses, authorization headers, and
+API keys are not persisted.
+
 This is deliberately not called semantic RAG. PostgreSQL search or embeddings
 can replace the policy later without changing provenance or provider
 interfaces.

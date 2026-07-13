@@ -1,5 +1,7 @@
 import hashlib
 
+from app.ai import AIProviderError, GenerationResult
+from app.models import ContentType
 from tests.conftest import bootstrap
 
 
@@ -110,6 +112,144 @@ def test_generation_requires_approved_assets_and_edits_reset_approval(client, au
     assert "brand.approved" in actions
     assert "product.submitted" in actions
     assert "product.approved" in actions
+
+
+def test_provider_failure_is_persisted_without_creating_a_content_version(
+    client, auth, monkeypatch
+):
+    brand, product = create_brand_and_product(client, auth)
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "title": "Provider failure audit",
+            "content_type": "social_post",
+        },
+    ).json()
+
+    class FailingProvider:
+        name = "external-test"
+        model = "failure-model"
+
+        def generate_script(self, project, brand, product, sources):
+            raise AIProviderError(
+                "The configured AI provider timed out",
+                code="provider_timeout",
+            )
+
+    monkeypatch.setattr("app.services.get_ai_provider", lambda: FailingProvider())
+    response = client.post(
+        f"/v1/content-projects/{project['id']}/generate",
+        headers=auth,
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "The configured AI provider timed out"
+    assert (
+        client.get(
+            f"/v1/content-projects/{project['id']}/versions",
+            headers=auth,
+        ).json()
+        == []
+    )
+    runs = client.get(
+        f"/v1/content-projects/{project['id']}/generation-runs",
+        headers=auth,
+    ).json()
+    assert len(runs) == 1
+    assert runs[0]["status"] == "failed"
+    assert runs[0]["provider"] == "external-test"
+    assert runs[0]["model"] == "failure-model"
+    assert runs[0]["output"] == {
+        "error": {
+            "code": "provider_timeout",
+            "message": "The configured AI provider timed out",
+        }
+    }
+    assert "api_key" not in str(runs[0]).lower()
+    failure_event = next(
+        event
+        for event in client.get("/v1/audit-events", headers=auth).json()
+        if event["action"] == "generation.failed"
+    )
+    assert failure_event["entity_id"] == runs[0]["id"]
+    assert failure_event["details"]["error_code"] == "provider_timeout"
+
+
+def test_invalid_provider_output_is_failed_and_never_becomes_content(client, auth, monkeypatch):
+    brand, product = create_brand_and_product(client, auth)
+    source = client.post(
+        "/v1/knowledge",
+        headers=auth,
+        json={
+            "title": "Allowed source",
+            "kind": "product_fact",
+            "content": "An approved product fact.",
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+        },
+    ).json()
+    client.post(f"/v1/knowledge/{source['id']}/submit", headers=auth)
+    client.post(
+        f"/v1/knowledge/{source['id']}/review",
+        headers=auth,
+        json={"status": "approved"},
+    )
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "title": "Unknown citation",
+            "content_type": "social_post",
+        },
+    ).json()
+
+    class InvalidProvider:
+        name = "external-test"
+        model = "invalid-model"
+
+        def generate_script(self, project, brand, product, sources):
+            assert project.content_type == ContentType.social_post
+            return GenerationResult(
+                content={
+                    "format": "social_post",
+                    "headline": "Headline",
+                    "body": "Body",
+                    "cta": "CTA",
+                    "hashtags": [],
+                    "citations": [{"source_id": "invented-source", "label": "Invented evidence"}],
+                    "risk_notes": [],
+                },
+                latency_ms=4,
+            )
+
+    monkeypatch.setattr("app.services.get_ai_provider", lambda: InvalidProvider())
+    response = client.post(
+        f"/v1/content-projects/{project['id']}/generate",
+        headers=auth,
+    )
+
+    assert response.status_code == 502
+    assert "unavailable knowledge source" in response.json()["detail"]
+    assert (
+        client.get(
+            f"/v1/content-projects/{project['id']}/versions",
+            headers=auth,
+        ).json()
+        == []
+    )
+    run = client.get(
+        f"/v1/content-projects/{project['id']}/generation-runs",
+        headers=auth,
+    ).json()[0]
+    assert run["status"] == "failed"
+    assert run["source_ids"] if "source_ids" in run else run["sources"]
+    assert run["output"]["error"]["code"] == "provider_unknown_citation"
+    assert "invented-source" not in str(run["output"])
 
 
 def test_editing_a_brief_only_changes_future_generations(client, auth):

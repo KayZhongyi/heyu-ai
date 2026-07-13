@@ -87,6 +87,10 @@ revocation, and public-network rate limiting are not current capabilities.
 - Provider behavior stays behind one internal boundary.
 - Every generation preserves normalized input, output, provider/model, prompt
   version, source/context evidence, status, and latency.
+- External-provider failures remain visible as durable generation records
+  rather than disappearing as untraceable HTTP errors.
+- Only output matching the requested content type and citing sources selected
+  for that exact run can become a content version.
 - Context selection is bounded before any provider call.
 - Tenant isolation is a tested security invariant.
 - Metrics remain raw timestamped observations; no invented cross-platform

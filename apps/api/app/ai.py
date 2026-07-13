@@ -1,9 +1,10 @@
 import json
 import time
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 import httpx
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.config import Settings, get_settings
 from app.models import Brand, ContentProject, ContentType, Product
@@ -244,6 +245,147 @@ class DeterministicProvider:
 class AIProviderError(RuntimeError):
     """A safe, credential-free error raised when an external provider fails."""
 
+    def __init__(self, message: str, *, code: str = "provider_error") -> None:
+        super().__init__(message)
+        self.code = code
+
+
+class _StrictOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    citations: list["_Citation"]
+    risk_notes: list[str]
+
+
+class _Citation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: str = Field(min_length=1)
+    label: str
+
+
+class _Shot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    seconds: str = Field(min_length=1)
+    visual: str = Field(min_length=1)
+    voiceover: str = Field(min_length=1)
+
+
+class _ShortVideoOutput(_StrictOutput):
+    format: Literal["short_video_script"]
+    duration_seconds: int
+    title_options: list[str] = Field(min_length=1)
+    hook: str = Field(min_length=1)
+    script: str = Field(min_length=1)
+    shots: list[_Shot] = Field(min_length=1)
+    cta: str = Field(min_length=1)
+
+
+class _RunOfShowItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stage: str = Field(min_length=1)
+    script: str = Field(min_length=1)
+
+
+class _LivestreamOutput(_StrictOutput):
+    format: Literal[
+        "livestream_opening",
+        "livestream_product_pitch",
+        "livestream_interaction",
+    ]
+    run_of_show: list[_RunOfShowItem] = Field(min_length=1)
+    host_notes: list[str] = Field(min_length=1)
+
+
+class _CommentReplyOutput(_StrictOutput):
+    format: Literal["comment_reply"]
+    reply_options: list[str] = Field(min_length=1)
+
+
+class _SocialPostOutput(_StrictOutput):
+    format: Literal["social_post"]
+    headline: str = Field(min_length=1)
+    body: str = Field(min_length=1)
+    cta: str = Field(min_length=1)
+    hashtags: list[str]
+
+
+class _TitleAndCoverOutput(_StrictOutput):
+    format: Literal["title_and_cover"]
+    title_options: list[str] = Field(min_length=1)
+    cover_copy_options: list[str] = Field(min_length=1)
+
+
+_OUTPUT_MODELS: dict[ContentType, type[_StrictOutput]] = {
+    ContentType.short_video_30s: _ShortVideoOutput,
+    ContentType.short_video_60s: _ShortVideoOutput,
+    ContentType.livestream_opening: _LivestreamOutput,
+    ContentType.livestream_product_pitch: _LivestreamOutput,
+    ContentType.livestream_interaction: _LivestreamOutput,
+    ContentType.comment_reply: _CommentReplyOutput,
+    ContentType.social_post: _SocialPostOutput,
+    ContentType.title_and_cover: _TitleAndCoverOutput,
+}
+
+_EXPECTED_FORMATS = {
+    ContentType.short_video_30s: "short_video_script",
+    ContentType.short_video_60s: "short_video_script",
+    ContentType.livestream_opening: "livestream_opening",
+    ContentType.livestream_product_pitch: "livestream_product_pitch",
+    ContentType.livestream_interaction: "livestream_interaction",
+    ContentType.comment_reply: "comment_reply",
+    ContentType.social_post: "social_post",
+    ContentType.title_and_cover: "title_and_cover",
+}
+
+
+def validate_generation_output(
+    content: object,
+    content_type: ContentType,
+    allowed_source_ids: set[str],
+) -> dict:
+    """Validate provider output before it can become a durable content version."""
+
+    if not isinstance(content, dict):
+        raise AIProviderError(
+            "The configured AI provider returned a non-object response",
+            code="provider_invalid_output",
+        )
+    if content.get("format") != _EXPECTED_FORMATS[content_type]:
+        raise AIProviderError(
+            "The configured AI provider returned the wrong content format",
+            code="provider_invalid_output",
+        )
+    try:
+        validated = _OUTPUT_MODELS[content_type].model_validate(content)
+    except ValidationError:
+        raise AIProviderError(
+            "The configured AI provider returned content that failed validation",
+            code="provider_invalid_output",
+        ) from None
+
+    normalized = validated.model_dump(mode="json")
+    if content_type == ContentType.short_video_30s and normalized["duration_seconds"] != 30:
+        raise AIProviderError(
+            "The configured AI provider returned the wrong video duration",
+            code="provider_invalid_output",
+        )
+    if content_type == ContentType.short_video_60s and normalized["duration_seconds"] != 60:
+        raise AIProviderError(
+            "The configured AI provider returned the wrong video duration",
+            code="provider_invalid_output",
+        )
+
+    cited_source_ids = {citation["source_id"] for citation in normalized["citations"]}
+    if not cited_source_ids.issubset(allowed_source_ids):
+        raise AIProviderError(
+            "The configured AI provider cited an unavailable knowledge source",
+            code="provider_unknown_citation",
+        )
+    return normalized
+
 
 class OpenAICompatibleProvider:
     """Adapter for servers implementing the OpenAI chat-completions contract."""
@@ -348,14 +490,31 @@ class OpenAICompatibleProvider:
                 data = response.json()
             raw_content = data["choices"][0]["message"]["content"]
             content = json.loads(raw_content)
-        except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
+        except httpx.TimeoutException:
             raise AIProviderError(
-                "The configured AI provider did not return valid structured content"
+                "The configured AI provider timed out",
+                code="provider_timeout",
+            ) from None
+        except httpx.HTTPStatusError:
+            raise AIProviderError(
+                "The configured AI provider request failed",
+                code="provider_http_error",
+            ) from None
+        except httpx.HTTPError:
+            raise AIProviderError(
+                "The configured AI provider could not be reached",
+                code="provider_connection_error",
+            ) from None
+        except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
+            raise AIProviderError(
+                "The configured AI provider did not return valid structured content",
+                code="provider_invalid_response",
             ) from None
         if not isinstance(content, dict):
-            raise AIProviderError("The configured AI provider returned a non-object response")
-        content.setdefault("citations", [])
-        content.setdefault("risk_notes", [])
+            raise AIProviderError(
+                "The configured AI provider returned a non-object response",
+                code="provider_invalid_response",
+            )
         return GenerationResult(
             content=content,
             latency_ms=max(1, int((time.perf_counter() - started) * 1000)),
