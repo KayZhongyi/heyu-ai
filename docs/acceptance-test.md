@@ -120,6 +120,11 @@ Git.
 
 ## 5. AI content workflow
 
+- [ ] Create a brand and product and confirm both start as `draft`.
+- [ ] Confirm generation is rejected while either asset is not approved.
+- [ ] Submit and approve both assets through the workspace.
+- [ ] Edit the approved product and confirm it returns to `draft`, its reviewer
+      metadata is cleared, and generation is blocked again.
 - [ ] Create a 30-second short-video project for the product.
 - [ ] Edit its platform, audience, objective, or tone and confirm the revised brief
       is used only for future generation runs.

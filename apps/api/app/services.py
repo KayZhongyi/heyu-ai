@@ -26,6 +26,7 @@ from app.models import (
 )
 from app.schemas import (
     Actor,
+    AssetReview,
     BrandCreate,
     BrandUpdate,
     ContentProjectCreate,
@@ -100,6 +101,8 @@ def update_brand(db: Session, actor: Actor, brand_id: str, data: BrandUpdate) ->
     }
     for field, value in changes.items():
         setattr(brand, field, value)
+    if changes:
+        _reset_asset_review(brand)
     audit(db, actor, "brand.updated", "brand", brand.id, {"fields": sorted(changes)})
     db.commit()
     db.refresh(brand)
@@ -144,6 +147,8 @@ def update_product(db: Session, actor: Actor, product_id: str, data: ProductUpda
     }
     for field, value in changes.items():
         setattr(product, field, value)
+    if changes:
+        _reset_asset_review(product)
     audit(
         db,
         actor,
@@ -155,6 +160,78 @@ def update_product(db: Session, actor: Actor, product_id: str, data: ProductUpda
     db.commit()
     db.refresh(product)
     return product
+
+
+def _reset_asset_review(asset: Brand | Product) -> None:
+    asset.status = ReviewStatus.draft
+    asset.reviewed_by = None
+    asset.review_note = ""
+    asset.reviewed_at = None
+
+
+def _submit_asset(
+    db: Session,
+    actor: Actor,
+    asset: Brand | Product,
+    entity_type: str,
+) -> Brand | Product:
+    if asset.status != ReviewStatus.draft:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Only draft {entity_type}s can be submitted for review",
+        )
+    asset.status = ReviewStatus.pending_review
+    audit(db, actor, f"{entity_type}.submitted", entity_type, asset.id)
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
+def _review_asset(
+    db: Session,
+    actor: Actor,
+    asset: Brand | Product,
+    entity_type: str,
+    data: AssetReview,
+) -> Brand | Product:
+    if data.status not in {ReviewStatus.approved, ReviewStatus.rejected}:
+        raise HTTPException(status_code=422, detail="Review must approve or reject")
+    if asset.status != ReviewStatus.pending_review:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Only pending {entity_type}s can be reviewed",
+        )
+    asset.status = data.status
+    asset.reviewed_by = actor.user_id
+    asset.review_note = data.note
+    asset.reviewed_at = datetime.now(UTC)
+    audit(
+        db,
+        actor,
+        f"{entity_type}.{data.status.value}",
+        entity_type,
+        asset.id,
+        {"note": data.note},
+    )
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
+def submit_brand(db: Session, actor: Actor, brand_id: str) -> Brand:
+    return _submit_asset(db, actor, _tenant_brand(db, actor, brand_id), "brand")
+
+
+def review_brand(db: Session, actor: Actor, brand_id: str, data: AssetReview) -> Brand:
+    return _review_asset(db, actor, _tenant_brand(db, actor, brand_id), "brand", data)
+
+
+def submit_product(db: Session, actor: Actor, product_id: str) -> Product:
+    return _submit_asset(db, actor, _tenant_product(db, actor, product_id), "product")
+
+
+def review_product(db: Session, actor: Actor, product_id: str, data: AssetReview) -> Product:
+    return _review_asset(db, actor, _tenant_product(db, actor, product_id), "product", data)
 
 
 def _tenant_brand(db: Session, actor: Actor, brand_id: str) -> Brand:
@@ -799,6 +876,19 @@ def generate_content(
         raise HTTPException(status_code=404, detail="Content project not found")
     brand = _tenant_brand(db, actor, project.brand_id)
     product = _tenant_product(db, actor, project.product_id)
+    unapproved_assets = [
+        name
+        for name, asset in (("brand", brand), ("product", product))
+        if asset.status != ReviewStatus.approved
+    ]
+    if unapproved_assets:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Generation requires approved brand and product assets; pending: "
+                + ", ".join(unapproved_assets)
+            ),
+        )
     approved_sources = list(
         db.scalars(
             select(KnowledgeSource)

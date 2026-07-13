@@ -59,6 +59,11 @@ Hard source and character limits prevent unbounded prompts. The context
 manifest stores source and excerpt hashes, included character counts, scope,
 and truncation state.
 
+The generation service also reloads the tenant-scoped brand and product and
+requires both records to be `approved`. A material edit resets the affected
+asset to `draft`, clears its prior reviewer metadata, and blocks subsequent
+generation until another explicit review.
+
 This is deliberately not called semantic RAG. PostgreSQL search or embeddings
 can replace the policy later without changing provenance or provider
 interfaces.

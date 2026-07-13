@@ -2,6 +2,14 @@
   root.HeyuLocales = root.HeyuLocales || {};
   root.HeyuLocales.en = {
     messages: {
+      "asset.approve": "Approve",
+      "asset.reject": "Request changes",
+      "asset.rejectPrompt": "Explain what must be corrected:",
+      "asset.reviewNote": "Review note: {note}",
+      "asset.reviewPrompt": "Optional asset review note:",
+      "asset.submit": "Submit for review",
+      "toast.asset.reviewUpdated": "Brand or product review status updated",
+      "toast.asset.submitted": "Brand or product submitted for review",
       "form.brand.new": "New brand",
       "form.brand.edit": "Edit brand",
       "form.brand.saveChanges": "Save brand changes",

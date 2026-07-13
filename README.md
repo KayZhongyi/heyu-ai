@@ -23,6 +23,8 @@ already public or generally available.
   chains
 - Bounded `lexical-v1` context selection using only the latest approved
   knowledge revision
+- Explicit brand and product review. Generation is blocked until both assets
+  are approved, and editing either asset invalidates its prior approval.
 - Eight structured output types, including short-video, livestream, comments,
   social copy, titles, and cover copy
 - Provider-neutral generation gateway with a zero-cost deterministic provider

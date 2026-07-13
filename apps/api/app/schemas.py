@@ -96,6 +96,10 @@ class BrandRead(ORMModel):
     name: str
     story: str
     voice: str
+    status: ReviewStatus
+    reviewed_by: str | None
+    review_note: str
+    reviewed_at: datetime | None
 
 
 class ProductCreate(BaseModel):
@@ -126,6 +130,15 @@ class ProductRead(ORMModel):
     storage_method: str
     selling_points: list[str]
     prohibited_claims: list[str]
+    status: ReviewStatus
+    reviewed_by: str | None
+    review_note: str
+    reviewed_at: datetime | None
+
+
+class AssetReview(BaseModel):
+    status: ReviewStatus
+    note: str = Field(default="", max_length=2000)
 
 
 class KnowledgeSourceCreate(BaseModel):

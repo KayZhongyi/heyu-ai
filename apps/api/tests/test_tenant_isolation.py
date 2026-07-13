@@ -248,6 +248,16 @@ def test_content_projects_and_version_mutations_are_tenant_scoped(client, auth):
         headers=auth,
         json={"brand_id": brand["id"], "name": "Content product"},
     ).json()
+    for entity, item in (("brands", brand), ("products", product)):
+        assert client.post(f"/v1/{entity}/{item['id']}/submit", headers=auth).status_code == 200
+        assert (
+            client.post(
+                f"/v1/{entity}/{item['id']}/review",
+                headers=auth,
+                json={"status": "approved", "note": "Tenant workflow fixture"},
+            ).status_code
+            == 200
+        )
     project = client.post(
         "/v1/content-projects",
         headers=auth,

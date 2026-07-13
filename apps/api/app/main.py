@@ -25,6 +25,7 @@ from app.models import (
 )
 from app.schemas import (
     Actor,
+    AssetReview,
     AuditEventRead,
     BootstrapRequest,
     BrandCreate,
@@ -97,11 +98,15 @@ from app.services import (
     list_products,
     list_publications,
     list_video_diagnoses,
+    review_brand,
     review_content_version,
     review_knowledge_source,
+    review_product,
     revise_knowledge_source,
+    submit_brand,
     submit_content_version,
     submit_knowledge_source,
+    submit_product,
     update_brand,
     update_content_project,
     update_product,
@@ -579,6 +584,25 @@ def edit_brand(
     return update_brand(db, actor, brand_id, data)
 
 
+@app.post("/v1/brands/{brand_id}/submit", response_model=BrandRead)
+def submit_brand_for_review(
+    brand_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.product_manager)),
+) -> BrandRead:
+    return submit_brand(db, actor, brand_id)
+
+
+@app.post("/v1/brands/{brand_id}/review", response_model=BrandRead)
+def review_brand_asset(
+    brand_id: str,
+    data: AssetReview,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.reviewer)),
+) -> BrandRead:
+    return review_brand(db, actor, brand_id, data)
+
+
 @app.post("/v1/products", response_model=ProductRead, status_code=201)
 def add_product(
     data: ProductCreate,
@@ -603,6 +627,25 @@ def edit_product(
     actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.product_manager)),
 ) -> ProductRead:
     return update_product(db, actor, product_id, data)
+
+
+@app.post("/v1/products/{product_id}/submit", response_model=ProductRead)
+def submit_product_for_review(
+    product_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.product_manager)),
+) -> ProductRead:
+    return submit_product(db, actor, product_id)
+
+
+@app.post("/v1/products/{product_id}/review", response_model=ProductRead)
+def review_product_asset(
+    product_id: str,
+    data: AssetReview,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.reviewer)),
+) -> ProductRead:
+    return review_product(db, actor, product_id, data)
 
 
 @app.post("/v1/knowledge", response_model=KnowledgeSourceRead, status_code=201)

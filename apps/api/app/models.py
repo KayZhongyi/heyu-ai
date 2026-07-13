@@ -105,6 +105,10 @@ class Brand(Base):
     name: Mapped[str] = mapped_column(String(160))
     story: Mapped[str] = mapped_column(Text, default="")
     voice: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[ReviewStatus] = mapped_column(Enum(ReviewStatus), default=ReviewStatus.draft)
+    reviewed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    review_note: Mapped[str] = mapped_column(Text, default="")
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
@@ -121,6 +125,10 @@ class Product(Base):
     storage_method: Mapped[str] = mapped_column(Text, default="")
     selling_points: Mapped[list] = mapped_column(JSON, default=list)
     prohibited_claims: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[ReviewStatus] = mapped_column(Enum(ReviewStatus), default=ReviewStatus.draft)
+    reviewed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    review_note: Mapped[str] = mapped_column(Text, default="")
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     brand: Mapped[Brand] = relationship()
 

@@ -2,6 +2,14 @@
   root.HeyuLocales = root.HeyuLocales || {};
   root.HeyuLocales["zh-HK"] = {
     messages: {
+      "asset.approve": "審核通過",
+      "asset.reject": "退回修改",
+      "asset.rejectPrompt": "請填寫退回原因：",
+      "asset.reviewNote": "審核意見：{note}",
+      "asset.reviewPrompt": "可填寫資產審核意見（選填）：",
+      "asset.submit": "提交審核",
+      "toast.asset.reviewUpdated": "品牌或產品審核狀態已更新",
+      "toast.asset.submitted": "品牌或產品資料已提交審核",
       "form.brand.new": "\u65b0\u5efa\u54c1\u724c",
       "form.brand.edit": "\u7de8\u8f2f\u54c1\u724c",
       "form.brand.saveChanges": "\u5132\u5b58\u54c1\u724c\u4fee\u6539",

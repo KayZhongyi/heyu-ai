@@ -82,6 +82,111 @@ async function main() {
     await page.locator("#brand-save-button").click();
     await page.locator("#asset-list h3", { hasText: businessName }).waitFor();
 
+    await selectLocale(page, "en");
+    const ownerToken = await page.evaluate(() => localStorage.getItem("heyu_token"));
+    assert.ok(ownerToken, "owner token missing after bootstrap");
+    const brandsResponse = await context.request.get(`${baseUrl}/v1/brands`, {
+      headers: { Authorization: `Bearer ${ownerToken}` },
+    });
+    assert.equal(brandsResponse.status(), 200);
+    const brand = (await brandsResponse.json()).find((item) => item.name === businessName);
+    assert.ok(brand, "created brand not returned by API");
+
+    const productName = `Harvest tomato ${unique}`;
+    await page.locator('#product-form [name="brand_id"]').selectOption(brand.id);
+    await page.locator('#product-form [name="name"]').fill(productName);
+    await page.locator('#product-form [name="origin"]').fill("Verified demonstration field");
+    await page.locator('#product-form [name="specification"]').fill("500 g");
+    await page.locator("#product-save-button").click();
+    await page.locator("#asset-list h3", { hasText: productName }).waitFor();
+
+    const productsResponse = await context.request.get(`${baseUrl}/v1/products`, {
+      headers: { Authorization: `Bearer ${ownerToken}` },
+    });
+    assert.equal(productsResponse.status(), 200);
+    const product = (await productsResponse.json()).find((item) => item.name === productName);
+    assert.ok(product, "created product not returned by API");
+
+    const sourceResponse = await context.request.post(`${baseUrl}/v1/knowledge`, {
+      headers: { Authorization: `Bearer ${ownerToken}` },
+      data: {
+        title: "Browser E2E verified fact",
+        kind: "product_fact",
+        content: "The demonstration product is harvested by hand.",
+        citation_label: "Browser E2E fact 1",
+        brand_id: brand.id,
+        product_id: product.id,
+      },
+    });
+    assert.equal(sourceResponse.status(), 201);
+    const source = await sourceResponse.json();
+    assert.equal(
+      (
+        await context.request.post(`${baseUrl}/v1/knowledge/${source.id}/submit`, {
+          headers: { Authorization: `Bearer ${ownerToken}` },
+        })
+      ).status(),
+      200,
+    );
+    assert.equal(
+      (
+        await context.request.post(`${baseUrl}/v1/knowledge/${source.id}/review`, {
+          headers: { Authorization: `Bearer ${ownerToken}` },
+          data: { status: "approved", note: "Browser E2E reviewed" },
+        })
+      ).status(),
+      200,
+    );
+    const projectResponse = await context.request.post(`${baseUrl}/v1/content-projects`, {
+      headers: { Authorization: `Bearer ${ownerToken}` },
+      data: {
+        brand_id: brand.id,
+        product_id: product.id,
+        title: `Review-gated project ${unique}`,
+        content_type: "social_post",
+      },
+    });
+    assert.equal(projectResponse.status(), 201);
+    const project = await projectResponse.json();
+
+    await page.reload({ waitUntil: "networkidle" });
+    await page.locator("#workspace").waitFor({ state: "visible" });
+    await page.locator('[data-page="studio"]').click();
+    await page.locator("#project-select").selectOption(project.id);
+    await page.locator("#generate-button").click();
+    await page.locator("#toast.error").waitFor({ state: "visible" });
+    assert.match(await page.locator("#toast").textContent(), /approved brand and product assets/i);
+
+    await page.locator('[data-page="assets"]').click();
+    for (const name of [businessName, productName]) {
+      const card = page.locator("#asset-list article", { has: page.getByRole("heading", { name }) });
+      await card.locator("[data-submit-asset]").click();
+      await card.locator('[data-review-asset][data-status="approved"]').waitFor();
+      page.once("dialog", (dialog) => dialog.accept("Browser E2E fact review"));
+      await card.locator('[data-review-asset][data-status="approved"]').click();
+      await card.locator(".badge.approved").waitFor();
+    }
+
+    await page.locator('[data-page="studio"]').click();
+    await page.locator("#project-select").selectOption(project.id);
+    await page.locator("#generate-button").click();
+    await page.locator("#content-toolbar").waitFor({ state: "visible" });
+
+    await page.locator('[data-page="assets"]').click();
+    const productCard = page.locator("#asset-list article", {
+      has: page.getByRole("heading", { name: productName }),
+    });
+    await productCard.locator("[data-edit-product]").click();
+    await page.locator('#product-form [name="origin"]').fill("Changed after approval");
+    await page.locator("#product-save-button").click();
+    await productCard.locator(".badge.draft").waitFor();
+
+    await page.locator('[data-page="studio"]').click();
+    await page.locator("#project-select").selectOption(project.id);
+    await page.locator("#generate-button").click();
+    await page.locator("#toast.error").waitFor({ state: "visible" });
+    assert.match(await page.locator("#toast").textContent(), /pending: product/i);
+
     for (const [locale, filename] of [
       ["zh-CN", "workspace-zh-CN.png"],
       ["zh-HK", "workspace-zh-HK.png"],
@@ -93,8 +198,6 @@ async function main() {
       await screenshot(page, filename);
     }
 
-    const ownerToken = await page.evaluate(() => localStorage.getItem("heyu_token"));
-    assert.ok(ownerToken, "owner token missing after bootstrap");
     const invitationResponse = await context.request.post(`${baseUrl}/v1/invitations`, {
       headers: { Authorization: `Bearer ${ownerToken}` },
       data: { email: invitedEmail, role: "creator", expires_in_hours: 24 },

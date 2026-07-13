@@ -21,7 +21,95 @@ def create_brand_and_product(client, auth):
             "prohibited_claims": ["治疗疾病"],
         },
     ).json()
+    for entity, item in (("brands", brand), ("products", product)):
+        submitted = client.post(f"/v1/{entity}/{item['id']}/submit", headers=auth)
+        assert submitted.status_code == 200, submitted.text
+        approved = client.post(
+            f"/v1/{entity}/{item['id']}/review",
+            headers=auth,
+            json={"status": "approved", "note": "Verified for test generation"},
+        )
+        assert approved.status_code == 200, approved.text
+        item.update(approved.json())
     return brand, product
+
+
+def test_generation_requires_approved_assets_and_edits_reset_approval(client, auth):
+    brand = client.post(
+        "/v1/brands",
+        headers=auth,
+        json={"name": "Review-gated brand", "story": "Checked story", "voice": "Clear"},
+    ).json()
+    product = client.post(
+        "/v1/products",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "name": "Review-gated product",
+            "origin": "Recorded field",
+        },
+    ).json()
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "title": "Asset review gate",
+            "content_type": "social_post",
+        },
+    ).json()
+
+    blocked = client.post(
+        f"/v1/content-projects/{project['id']}/generate",
+        headers=auth,
+    )
+    assert blocked.status_code == 409
+    assert "brand, product" in blocked.json()["detail"]
+
+    for entity, item in (("brands", brand), ("products", product)):
+        assert client.post(f"/v1/{entity}/{item['id']}/submit", headers=auth).status_code == 200
+        reviewed = client.post(
+            f"/v1/{entity}/{item['id']}/review",
+            headers=auth,
+            json={"status": "approved", "note": "Fact checked"},
+        )
+        assert reviewed.status_code == 200
+        assert reviewed.json()["reviewed_by"]
+        assert reviewed.json()["reviewed_at"]
+
+    generated = client.post(
+        f"/v1/content-projects/{project['id']}/generate",
+        headers=auth,
+    )
+    assert generated.status_code == 201, generated.text
+
+    edited = client.put(
+        f"/v1/products/{product['id']}",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "name": "Review-gated product",
+            "origin": "Changed without review",
+        },
+    )
+    assert edited.status_code == 200
+    assert edited.json()["status"] == "draft"
+    assert edited.json()["reviewed_by"] is None
+    assert edited.json()["reviewed_at"] is None
+
+    blocked_after_edit = client.post(
+        f"/v1/content-projects/{project['id']}/generate",
+        headers=auth,
+    )
+    assert blocked_after_edit.status_code == 409
+    assert "product" in blocked_after_edit.json()["detail"]
+
+    actions = [event["action"] for event in client.get("/v1/audit-events", headers=auth).json()]
+    assert "brand.submitted" in actions
+    assert "brand.approved" in actions
+    assert "product.submitted" in actions
+    assert "product.approved" in actions
 
 
 def test_editing_a_brief_only_changes_future_generations(client, auth):

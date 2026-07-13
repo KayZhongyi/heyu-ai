@@ -227,8 +227,27 @@ class AcceptanceRun:
             },
             expected=201,
         )
+        for entity, item in (("brands", brand), ("products", product)):
+            submitted = self.client.request("POST", f"/v1/{entity}/{item['id']}/submit")
+            self.require(
+                submitted["status"] == "pending_review",
+                f"{entity} asset was not submitted",
+            )
+            approved = self.client.request(
+                "POST",
+                f"/v1/{entity}/{item['id']}/review",
+                {"status": "approved", "note": "Acceptance facts checked."},
+            )
+            self.require(
+                approved["status"] == "approved",
+                f"{entity} asset was not approved",
+            )
         self.ids.update(brand_id=brand["id"], product_id=product["id"])
-        return {"brand_id": brand["id"], "product_id": product["id"]}
+        return {
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "review_status": "approved",
+        }
 
     def _knowledge(self) -> dict[str, Any]:
         source = self.client.request(

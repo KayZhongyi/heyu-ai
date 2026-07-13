@@ -23,7 +23,8 @@ products be described accurately, consistently, and with traceable evidence.
 5. Create and later correct a structured content brief.
 6. Generate source-backed content through the provider gateway.
 7. Edit the result into append-only versions.
-8. Submit a draft and explicitly approve or reject it.
+8. Submit brand, product, knowledge, and content drafts for explicit approval
+   or rejection.
 9. Register an approved version as externally published.
 10. Append observed performance snapshots.
 11. Record an evidence-led human diagnosis.
@@ -72,6 +73,10 @@ revocation, and public-network rate limiting are not current capabilities.
 
 - MVP means minimum scope, not disposable engineering.
 - Human approval remains authoritative.
+- Brand and product facts follow
+  `draft → pending_review → approved/rejected`.
+- Editing a brand or product clears its reviewer metadata and blocks new
+  generation until it is approved again.
 - Only approved knowledge can support generated claims.
 - Knowledge follows `draft → pending_review → approved/rejected`.
 - Reviewed knowledge is corrected through a new linear revision, never an

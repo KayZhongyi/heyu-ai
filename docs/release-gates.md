@@ -35,7 +35,8 @@ Local and remote evidence for the baseline:
 
 - [x] Tenant-scoped workflow exists beyond the landing-page UI.
 - [x] Zero-cost generation works without Ollama or Docker.
-- [x] Knowledge and content require explicit review.
+- [x] Brand, product, knowledge, and content facts require explicit review;
+      editing an approved brand or product invalidates that approval.
 - [x] Generation and versions retain provenance and history.
 - [x] Publication, raw metrics, human diagnosis, improvement brief, and
       successor draft form a demonstrable loop.
