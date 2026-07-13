@@ -15,7 +15,7 @@ from app.models import (
     VideoDiagnosis,
 )
 from tests.conftest import invite_and_accept
-from tests.test_content_workflow import create_brand_and_product
+from tests.test_content_workflow import create_approved_source, create_brand_and_product
 
 
 def _count(db, model) -> int:
@@ -26,6 +26,7 @@ def test_creator_downgrade_revokes_old_token_and_viewer_writes_have_no_side_effe
     client, auth, db
 ):
     brand, product = create_brand_and_product(client, auth)
+    create_approved_source(client, auth, brand, product)
     project = client.post(
         "/v1/content-projects",
         headers=auth,

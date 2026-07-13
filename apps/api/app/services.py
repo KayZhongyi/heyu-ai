@@ -19,7 +19,12 @@ from app.ai import (
 from app.models import (
     AuditEvent,
     Brand,
+    CampaignPackage,
+    CampaignPackageItem,
+    CampaignStatus,
+    CampaignSupplySnapshot,
     ContentProject,
+    ContentType,
     ContentVersion,
     GenerationRun,
     GenerationStatus,
@@ -31,12 +36,22 @@ from app.models import (
     ReviewStatus,
     VideoDiagnosis,
     new_id,
+    utc_now,
 )
 from app.schemas import (
     Actor,
     AssetReview,
     BrandCreate,
     BrandUpdate,
+    CampaignItemCreate,
+    CampaignItemLink,
+    CampaignItemUpdate,
+    CampaignPackageCreate,
+    CampaignPackageItemRead,
+    CampaignPackageRead,
+    CampaignPackageUpdate,
+    CampaignProgress,
+    CampaignSupplySnapshotCreate,
     ContentProjectCreate,
     ContentProjectUpdate,
     ContentReview,
@@ -456,6 +471,735 @@ def create_content_project(db: Session, actor: Actor, data: ContentProjectCreate
     return project
 
 
+def _tenant_campaign(db: Session, actor: Actor, campaign_id: str) -> CampaignPackage:
+    campaign = db.scalar(
+        select(CampaignPackage).where(
+            CampaignPackage.id == campaign_id,
+            CampaignPackage.organization_id == actor.organization_id,
+        )
+    )
+    if campaign is None:
+        raise HTTPException(status_code=404, detail="Campaign package not found")
+    return campaign
+
+
+def _campaign_for_update(db: Session, actor: Actor, campaign_id: str) -> CampaignPackage:
+    statement = select(CampaignPackage).where(
+        CampaignPackage.id == campaign_id,
+        CampaignPackage.organization_id == actor.organization_id,
+    )
+    if db.get_bind().dialect.name == "postgresql":
+        statement = statement.with_for_update()
+    campaign = db.scalar(statement)
+    if campaign is None:
+        raise HTTPException(status_code=404, detail="Campaign package not found")
+    return campaign
+
+
+def _ensure_campaign_editable(campaign: CampaignPackage) -> None:
+    if campaign.status in {CampaignStatus.completed, CampaignStatus.archived}:
+        raise HTTPException(
+            status_code=409,
+            detail="Completed or archived campaign packages cannot be edited",
+        )
+
+
+def _current_campaign_supply(
+    db: Session,
+    campaign_id: str,
+    organization_id: str,
+    *,
+    now: datetime | None = None,
+) -> CampaignSupplySnapshot | None:
+    candidates = list(
+        db.scalars(
+            select(CampaignSupplySnapshot)
+            .where(
+                CampaignSupplySnapshot.campaign_package_id == campaign_id,
+                CampaignSupplySnapshot.organization_id == organization_id,
+                CampaignSupplySnapshot.status == ReviewStatus.approved,
+            )
+            .order_by(CampaignSupplySnapshot.revision_number.desc())
+        )
+    )
+    if not candidates:
+        return None
+
+    def comparable(value: datetime) -> datetime:
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+    moment = comparable(now or utc_now())
+    latest = candidates[0]
+    if (
+        latest.available_quantity <= 0
+        or comparable(latest.active_from) > moment
+        or comparable(latest.active_until) < moment
+        or comparable(latest.price_valid_until) < moment
+    ):
+        return None
+    return latest
+
+
+def _campaign_for_project(
+    db: Session, project_id: str, organization_id: str
+) -> CampaignPackage | None:
+    return db.scalar(
+        select(CampaignPackage)
+        .join(
+            CampaignPackageItem,
+            CampaignPackageItem.campaign_package_id == CampaignPackage.id,
+        )
+        .where(
+            CampaignPackageItem.content_project_id == project_id,
+            CampaignPackageItem.organization_id == organization_id,
+            CampaignPackage.organization_id == organization_id,
+        )
+        .order_by(CampaignPackage.updated_at.desc())
+    )
+
+
+def _campaign_item_view(
+    db: Session,
+    item: CampaignPackageItem,
+    current_supply: CampaignSupplySnapshot | None = None,
+) -> CampaignPackageItemRead:
+    project = db.scalar(
+        select(ContentProject).where(
+            ContentProject.id == item.content_project_id,
+            ContentProject.organization_id == item.organization_id,
+        )
+    )
+    if project is None:
+        raise HTTPException(status_code=409, detail="Campaign content project is unavailable")
+    versions = list(
+        db.scalars(
+            select(ContentVersion)
+            .where(
+                ContentVersion.project_id == item.content_project_id,
+                ContentVersion.organization_id == item.organization_id,
+            )
+            .order_by(ContentVersion.version_number.desc())
+        )
+    )
+    latest = versions[0] if versions else None
+    approved_versions = [version for version in versions if version.status == ReviewStatus.approved]
+    approved = approved_versions[0] if approved_versions else None
+    publications = list(
+        db.scalars(
+            select(Publication)
+            .where(
+                Publication.project_id == item.content_project_id,
+                Publication.organization_id == item.organization_id,
+            )
+            .order_by(Publication.created_at.desc())
+        )
+    )
+    publication = publications[0] if publications else None
+    approved_current = bool(
+        approved and current_supply and approved.supply_snapshot_id == current_supply.id
+    )
+    publication_current = bool(
+        publication
+        and current_supply
+        and (
+            db.scalar(
+                select(ContentVersion.supply_snapshot_id).where(
+                    ContentVersion.id == publication.content_version_id,
+                    ContentVersion.organization_id == item.organization_id,
+                )
+            )
+            == current_supply.id
+        )
+    )
+    return CampaignPackageItemRead(
+        **{
+            column.name: getattr(item, column.name)
+            for column in CampaignPackageItem.__table__.columns
+        },
+        project=project,
+        latest_version_id=latest.id if latest else None,
+        latest_version_status=latest.status if latest else None,
+        approved_version_id=approved.id if approved_current else None,
+        approved_version_count=len(approved_versions),
+        publication_id=publication.id if publication_current else None,
+        publication_count=len(publications),
+        supply_current=bool(
+            current_supply and latest and latest.supply_snapshot_id == current_supply.id
+        ),
+    )
+
+
+def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRead:
+    current_supply = _current_campaign_supply(db, campaign.id, campaign.organization_id)
+    item_models = list(
+        db.scalars(
+            select(CampaignPackageItem)
+            .where(
+                CampaignPackageItem.campaign_package_id == campaign.id,
+                CampaignPackageItem.organization_id == campaign.organization_id,
+            )
+            .order_by(CampaignPackageItem.position, CampaignPackageItem.created_at)
+        )
+    )
+    items = [_campaign_item_view(db, item, current_supply) for item in item_models]
+    required_items = [item for item in items if item.required]
+    progress = CampaignProgress(
+        total=len(items),
+        required=len(required_items),
+        generated=sum(item.latest_version_id is not None for item in items),
+        approved=sum(item.approved_version_id is not None for item in items),
+        published=sum(item.publication_id is not None for item in items),
+        required_approved=sum(item.approved_version_id is not None for item in required_items),
+        required_complete=bool(required_items)
+        and all(item.approved_version_id is not None for item in required_items),
+        supply_ready=current_supply is not None,
+    )
+    return CampaignPackageRead(
+        **{
+            column.name: getattr(campaign, column.name)
+            for column in CampaignPackage.__table__.columns
+        },
+        current_supply_snapshot=current_supply,
+        items=items,
+        progress=progress,
+    )
+
+
+def create_campaign_package(
+    db: Session, actor: Actor, data: CampaignPackageCreate
+) -> CampaignPackageRead:
+    brand = _tenant_brand(db, actor, data.brand_id)
+    product = _tenant_product(db, actor, data.product_id)
+    if product.brand_id != brand.id:
+        raise HTTPException(status_code=422, detail="Product does not belong to brand")
+    payload = data.model_dump(exclude={"create_default_items"})
+    campaign = CampaignPackage(
+        organization_id=actor.organization_id,
+        created_by=actor.user_id,
+        **payload,
+    )
+    db.add(campaign)
+    db.flush()
+    if data.create_default_items:
+        default_items = (
+            ("hero_short_video", ContentType.short_video_30s, 10, True),
+            ("title_cover", ContentType.title_and_cover, 20, True),
+            ("platform_caption", ContentType.social_post, 30, True),
+            ("livestream_opening", ContentType.livestream_opening, 40, True),
+            (
+                "livestream_product_pitch",
+                ContentType.livestream_product_pitch,
+                50,
+                True,
+            ),
+            ("livestream_interaction", ContentType.livestream_interaction, 60, False),
+            ("comment_reply_bank", ContentType.comment_reply, 70, False),
+        )
+        for slot_key, content_type, position, required in default_items:
+            project = ContentProject(
+                organization_id=actor.organization_id,
+                brand_id=campaign.brand_id,
+                product_id=campaign.product_id,
+                title=f"{campaign.title} · {slot_key}",
+                content_type=content_type,
+                platform=campaign.platform,
+                target_audience=campaign.target_audience,
+                objective=campaign.objective,
+                tone=campaign.tone,
+                extra_requirements=campaign.extra_requirements,
+                created_by=actor.user_id,
+            )
+            db.add(project)
+            db.flush()
+            item = CampaignPackageItem(
+                organization_id=actor.organization_id,
+                campaign_package_id=campaign.id,
+                content_project_id=project.id,
+                slot_key=slot_key,
+                position=position,
+                required=required,
+                created_by=actor.user_id,
+            )
+            db.add(item)
+            db.flush()
+            audit(db, actor, "content_project.created", "content_project", project.id)
+            audit(
+                db,
+                actor,
+                "campaign_package_item.created",
+                "campaign_package_item",
+                item.id,
+                {
+                    "campaign_package_id": campaign.id,
+                    "content_project_id": project.id,
+                    "slot_key": slot_key,
+                },
+            )
+    audit(db, actor, "campaign_package.created", "campaign_package", campaign.id)
+    db.commit()
+    db.refresh(campaign)
+    return _campaign_view(db, campaign)
+
+
+def list_campaign_packages(db: Session, actor: Actor) -> list[CampaignPackageRead]:
+    campaigns = db.scalars(
+        select(CampaignPackage)
+        .where(CampaignPackage.organization_id == actor.organization_id)
+        .order_by(CampaignPackage.updated_at.desc())
+    )
+    return [_campaign_view(db, campaign) for campaign in campaigns]
+
+
+def get_campaign_package(db: Session, actor: Actor, campaign_id: str) -> CampaignPackageRead:
+    return _campaign_view(db, _tenant_campaign(db, actor, campaign_id))
+
+
+def update_campaign_package(
+    db: Session,
+    actor: Actor,
+    campaign_id: str,
+    data: CampaignPackageUpdate,
+) -> CampaignPackageRead:
+    campaign = _tenant_campaign(db, actor, campaign_id)
+    _ensure_campaign_editable(campaign)
+    changes = {
+        field: value
+        for field, value in data.model_dump().items()
+        if getattr(campaign, field) != value
+    }
+    for field, value in changes.items():
+        setattr(campaign, field, value)
+    audit(
+        db,
+        actor,
+        "campaign_package.updated",
+        "campaign_package",
+        campaign.id,
+        {"fields": sorted(changes)},
+    )
+    db.commit()
+    db.refresh(campaign)
+    return _campaign_view(db, campaign)
+
+
+def create_campaign_supply_snapshot(
+    db: Session,
+    actor: Actor,
+    campaign_id: str,
+    data: CampaignSupplySnapshotCreate,
+) -> CampaignSupplySnapshot:
+    campaign = _campaign_for_update(db, actor, campaign_id)
+    _ensure_campaign_editable(campaign)
+    if data.active_from >= data.active_until:
+        raise HTTPException(status_code=422, detail="Supply active_until must be after active_from")
+    if data.price_valid_until < data.active_from:
+        raise HTTPException(
+            status_code=422,
+            detail="Supply price must remain valid when the campaign supply becomes active",
+        )
+    if data.inventory_confirmed_at > utc_now():
+        raise HTTPException(
+            status_code=422,
+            detail="Inventory confirmation time cannot be in the future",
+        )
+    source_ids = list(dict.fromkeys(data.evidence_source_ids))
+    approved_source_ids = set(
+        db.scalars(
+            select(KnowledgeSource.id).where(
+                KnowledgeSource.id.in_(source_ids),
+                KnowledgeSource.organization_id == actor.organization_id,
+                KnowledgeSource.status == ReviewStatus.approved,
+                (KnowledgeSource.product_id == campaign.product_id)
+                | (KnowledgeSource.brand_id == campaign.brand_id),
+            )
+        )
+    )
+    if approved_source_ids != set(source_ids):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Supply evidence must use approved knowledge sources linked to "
+                "the campaign brand or product"
+            ),
+        )
+    max_revision = db.scalar(
+        select(func.max(CampaignSupplySnapshot.revision_number)).where(
+            CampaignSupplySnapshot.campaign_package_id == campaign.id,
+            CampaignSupplySnapshot.organization_id == actor.organization_id,
+        )
+    )
+    snapshot = CampaignSupplySnapshot(
+        organization_id=actor.organization_id,
+        campaign_package_id=campaign.id,
+        revision_number=(max_revision or 0) + 1,
+        evidence_source_ids=source_ids,
+        confirmed_by=actor.user_id,
+        confirmed_at=utc_now(),
+        **data.model_dump(exclude={"evidence_source_ids"}),
+    )
+    db.add(snapshot)
+    flush_or_conflict(
+        db,
+        "A supply snapshot was created concurrently; refresh the campaign and try again",
+    )
+    campaign.updated_at = utc_now()
+    audit(
+        db,
+        actor,
+        "campaign_supply_snapshot.created",
+        "campaign_supply_snapshot",
+        snapshot.id,
+        {
+            "campaign_package_id": campaign.id,
+            "revision_number": snapshot.revision_number,
+            "available_quantity": snapshot.available_quantity,
+            "quantity_unit": snapshot.quantity_unit,
+        },
+    )
+    db.commit()
+    db.refresh(snapshot)
+    return snapshot
+
+
+def list_campaign_supply_snapshots(
+    db: Session, actor: Actor, campaign_id: str
+) -> list[CampaignSupplySnapshot]:
+    _tenant_campaign(db, actor, campaign_id)
+    return list(
+        db.scalars(
+            select(CampaignSupplySnapshot)
+            .where(
+                CampaignSupplySnapshot.campaign_package_id == campaign_id,
+                CampaignSupplySnapshot.organization_id == actor.organization_id,
+            )
+            .order_by(CampaignSupplySnapshot.revision_number.desc())
+        )
+    )
+
+
+def submit_campaign_supply_snapshot(
+    db: Session, actor: Actor, campaign_id: str, snapshot_id: str
+) -> CampaignSupplySnapshot:
+    _tenant_campaign(db, actor, campaign_id)
+    snapshot = db.scalar(
+        select(CampaignSupplySnapshot).where(
+            CampaignSupplySnapshot.id == snapshot_id,
+            CampaignSupplySnapshot.campaign_package_id == campaign_id,
+            CampaignSupplySnapshot.organization_id == actor.organization_id,
+        )
+    )
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Supply snapshot not found")
+    if snapshot.status != ReviewStatus.draft:
+        raise HTTPException(
+            status_code=409,
+            detail="Only draft supply snapshots can be submitted for review",
+        )
+    snapshot.status = ReviewStatus.pending_review
+    audit(
+        db,
+        actor,
+        "campaign_supply_snapshot.submitted",
+        "campaign_supply_snapshot",
+        snapshot.id,
+        {"campaign_package_id": campaign_id},
+    )
+    db.commit()
+    db.refresh(snapshot)
+    return snapshot
+
+
+def review_campaign_supply_snapshot(
+    db: Session,
+    actor: Actor,
+    campaign_id: str,
+    snapshot_id: str,
+    data: ContentReview,
+) -> CampaignSupplySnapshot:
+    if data.status not in {ReviewStatus.approved, ReviewStatus.rejected}:
+        raise HTTPException(status_code=422, detail="Review must approve or reject")
+    if data.status == ReviewStatus.rejected and not data.note.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="A review note is required when rejecting a supply snapshot",
+        )
+    _campaign_for_update(db, actor, campaign_id)
+    snapshot = db.scalar(
+        select(CampaignSupplySnapshot).where(
+            CampaignSupplySnapshot.id == snapshot_id,
+            CampaignSupplySnapshot.campaign_package_id == campaign_id,
+            CampaignSupplySnapshot.organization_id == actor.organization_id,
+        )
+    )
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Supply snapshot not found")
+    if snapshot.status != ReviewStatus.pending_review:
+        raise HTTPException(
+            status_code=409,
+            detail="Only pending supply snapshots can be reviewed",
+        )
+    snapshot.status = data.status
+    snapshot.reviewed_by = actor.user_id
+    snapshot.review_note = data.note
+    snapshot.reviewed_at = utc_now()
+    audit(
+        db,
+        actor,
+        f"campaign_supply_snapshot.{data.status.value}",
+        "campaign_supply_snapshot",
+        snapshot.id,
+        {
+            "campaign_package_id": campaign_id,
+            "revision_number": snapshot.revision_number,
+            "note": data.note,
+        },
+    )
+    db.commit()
+    db.refresh(snapshot)
+    return snapshot
+
+
+def update_campaign_status(
+    db: Session,
+    actor: Actor,
+    campaign_id: str,
+    new_status: CampaignStatus,
+) -> CampaignPackageRead:
+    campaign = _campaign_for_update(db, actor, campaign_id)
+    if campaign.status == CampaignStatus.archived:
+        raise HTTPException(status_code=409, detail="Archived campaign packages are immutable")
+    if new_status == campaign.status:
+        return _campaign_view(db, campaign)
+    allowed_transitions = {
+        CampaignStatus.draft: {CampaignStatus.active, CampaignStatus.archived},
+        CampaignStatus.active: {CampaignStatus.completed, CampaignStatus.archived},
+        CampaignStatus.completed: {CampaignStatus.archived},
+        CampaignStatus.archived: set(),
+    }
+    if new_status not in allowed_transitions[campaign.status]:
+        raise HTTPException(status_code=409, detail="Campaign status transition is not allowed")
+    if new_status == CampaignStatus.active:
+        view = _campaign_view(db, campaign)
+        if view.progress.total == 0:
+            raise HTTPException(
+                status_code=409,
+                detail="Campaign packages need at least one item before activation",
+            )
+        if view.progress.required == 0:
+            raise HTTPException(
+                status_code=409,
+                detail="Campaign packages need at least one required item before activation",
+            )
+        if not view.progress.supply_ready:
+            raise HTTPException(
+                status_code=409,
+                detail="Campaign activation requires a current approved supply snapshot",
+            )
+    if new_status == CampaignStatus.completed:
+        view = _campaign_view(db, campaign)
+        if not view.progress.required_complete:
+            raise HTTPException(
+                status_code=409,
+                detail="All required campaign items need an approved version",
+            )
+    previous = campaign.status
+    campaign.status = new_status
+    audit(
+        db,
+        actor,
+        "campaign_package.status_changed",
+        "campaign_package",
+        campaign.id,
+        {"from": previous.value, "to": new_status.value},
+    )
+    db.commit()
+    db.refresh(campaign)
+    return _campaign_view(db, campaign)
+
+
+def create_campaign_item(
+    db: Session,
+    actor: Actor,
+    campaign_id: str,
+    data: CampaignItemCreate,
+) -> CampaignPackageRead:
+    campaign = _campaign_for_update(db, actor, campaign_id)
+    _ensure_campaign_editable(campaign)
+    title = data.title.strip() or f"{campaign.title} · {data.slot_key}"
+    project = ContentProject(
+        organization_id=actor.organization_id,
+        brand_id=campaign.brand_id,
+        product_id=campaign.product_id,
+        title=title,
+        content_type=data.content_type,
+        platform=data.platform if data.platform is not None else campaign.platform,
+        target_audience=(
+            data.target_audience if data.target_audience is not None else campaign.target_audience
+        ),
+        objective=data.objective if data.objective is not None else campaign.objective,
+        tone=data.tone if data.tone is not None else campaign.tone,
+        extra_requirements=(
+            data.extra_requirements
+            if data.extra_requirements is not None
+            else campaign.extra_requirements
+        ),
+        created_by=actor.user_id,
+    )
+    db.add(project)
+    db.flush()
+    item = CampaignPackageItem(
+        organization_id=actor.organization_id,
+        campaign_package_id=campaign.id,
+        content_project_id=project.id,
+        slot_key=data.slot_key,
+        position=data.position,
+        required=data.required,
+        created_by=actor.user_id,
+    )
+    db.add(item)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail="Campaign slot or content project already exists"
+        ) from exc
+    campaign.updated_at = utc_now()
+    audit(db, actor, "content_project.created", "content_project", project.id)
+    audit(
+        db,
+        actor,
+        "campaign_package_item.created",
+        "campaign_package_item",
+        item.id,
+        {
+            "campaign_package_id": campaign.id,
+            "content_project_id": project.id,
+            "slot_key": item.slot_key,
+        },
+    )
+    db.commit()
+    return _campaign_view(db, campaign)
+
+
+def link_campaign_item(
+    db: Session,
+    actor: Actor,
+    campaign_id: str,
+    data: CampaignItemLink,
+) -> CampaignPackageRead:
+    campaign = _campaign_for_update(db, actor, campaign_id)
+    _ensure_campaign_editable(campaign)
+    project = _tenant_project(db, actor, data.content_project_id)
+    if project.brand_id != campaign.brand_id or project.product_id != campaign.product_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Content project does not match the campaign brand and product",
+        )
+    item = CampaignPackageItem(
+        organization_id=actor.organization_id,
+        campaign_package_id=campaign.id,
+        created_by=actor.user_id,
+        **data.model_dump(),
+    )
+    db.add(item)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail="Campaign slot or content project already exists"
+        ) from exc
+    audit(
+        db,
+        actor,
+        "campaign_package_item.linked",
+        "campaign_package_item",
+        item.id,
+        {
+            "campaign_package_id": campaign.id,
+            "content_project_id": project.id,
+            "slot_key": item.slot_key,
+        },
+    )
+    campaign.updated_at = utc_now()
+    db.commit()
+    return _campaign_view(db, campaign)
+
+
+def update_campaign_item(
+    db: Session,
+    actor: Actor,
+    campaign_id: str,
+    item_id: str,
+    data: CampaignItemUpdate,
+) -> CampaignPackageRead:
+    campaign = _campaign_for_update(db, actor, campaign_id)
+    _ensure_campaign_editable(campaign)
+    item = db.scalar(
+        select(CampaignPackageItem).where(
+            CampaignPackageItem.id == item_id,
+            CampaignPackageItem.campaign_package_id == campaign.id,
+            CampaignPackageItem.organization_id == actor.organization_id,
+        )
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="Campaign item not found")
+    item.position = data.position
+    item.required = data.required
+    campaign.updated_at = utc_now()
+    audit(
+        db,
+        actor,
+        "campaign_package_item.updated",
+        "campaign_package_item",
+        item.id,
+        {
+            "campaign_package_id": campaign.id,
+            "content_project_id": item.content_project_id,
+            "slot_key": item.slot_key,
+            "position": item.position,
+            "required": item.required,
+        },
+    )
+    db.commit()
+    return _campaign_view(db, campaign)
+
+
+def unlink_campaign_item(
+    db: Session, actor: Actor, campaign_id: str, item_id: str
+) -> CampaignPackageRead:
+    campaign = _campaign_for_update(db, actor, campaign_id)
+    _ensure_campaign_editable(campaign)
+    item = db.scalar(
+        select(CampaignPackageItem).where(
+            CampaignPackageItem.id == item_id,
+            CampaignPackageItem.campaign_package_id == campaign.id,
+            CampaignPackageItem.organization_id == actor.organization_id,
+        )
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="Campaign item not found")
+    project_id = item.content_project_id
+    slot_key = item.slot_key
+    db.delete(item)
+    campaign.updated_at = utc_now()
+    audit(
+        db,
+        actor,
+        "campaign_package_item.unlinked",
+        "campaign_package_item",
+        item.id,
+        {
+            "campaign_package_id": campaign.id,
+            "content_project_id": project_id,
+            "slot_key": slot_key,
+        },
+    )
+    db.commit()
+    return _campaign_view(db, campaign)
+
+
 def list_content_projects(db: Session, actor: Actor) -> list[ContentProject]:
     return list(
         db.scalars(
@@ -532,6 +1276,22 @@ def create_publication(db: Session, actor: Actor, data: PublicationCreate) -> Pu
             status_code=409,
             detail="Only approved content versions can be recorded as published",
         )
+    campaign = _campaign_for_project(db, project.id, actor.organization_id)
+    if campaign is not None:
+        supply = _current_campaign_supply(db, campaign.id, actor.organization_id)
+        if supply is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Campaign publication requires a current approved supply snapshot",
+            )
+        if version.supply_snapshot_id != supply.id:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Content was approved against an older supply snapshot; "
+                    "regenerate and review it before publication"
+                ),
+            )
     publication = Publication(
         organization_id=actor.organization_id,
         created_by=actor.user_id,
@@ -842,6 +1602,12 @@ def create_draft_from_improvement_brief(
     version = ContentVersion(
         organization_id=actor.organization_id,
         project_id=publication.project_id,
+        supply_snapshot_id=db.scalar(
+            select(ContentVersion.supply_snapshot_id).where(
+                ContentVersion.id == brief.source_content_version_id,
+                ContentVersion.organization_id == actor.organization_id,
+            )
+        ),
         parent_version_id=brief.source_content_version_id,
         improvement_brief_id=brief.id,
         version_number=(max_version or 0) + 1,
@@ -884,6 +1650,17 @@ def generate_content(
         raise HTTPException(status_code=404, detail="Content project not found")
     brand = _tenant_brand(db, actor, project.brand_id)
     product = _tenant_product(db, actor, project.product_id)
+    campaign = _campaign_for_project(db, project.id, actor.organization_id)
+    supply = (
+        _current_campaign_supply(db, campaign.id, actor.organization_id)
+        if campaign is not None
+        else None
+    )
+    if campaign is not None and supply is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Campaign generation requires a current approved supply snapshot",
+        )
     unapproved_assets = [
         name
         for name, asset in (("brand", brand), ("product", product))
@@ -917,6 +1694,14 @@ def generate_content(
     sources, context_manifest = select_generation_context(
         list(latest_approved_by_group.values()), project, brand, product
     )
+    if not sources:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Generation requires at least one approved knowledge source "
+                "linked to this brand or product"
+            ),
+        )
     provider = get_ai_provider()
     source_ids = [source.id for source in sources]
     normalized_input = {
@@ -930,10 +1715,13 @@ def generate_content(
         "product_id": product.id,
         "context_policy": "lexical-v1",
         "context_sources": context_manifest,
+        "campaign_package_id": campaign.id if campaign else None,
+        "supply_snapshot_id": supply.id if supply else None,
+        "supply_revision_number": supply.revision_number if supply else None,
     }
     started = time.perf_counter()
     try:
-        result = provider.generate_script(project, brand, product, sources)
+        result = provider.generate_script(project, brand, product, sources, supply)
         validated_content = validate_generation_output(
             result.content,
             project.content_type,
@@ -944,6 +1732,7 @@ def generate_content(
         failed_run = GenerationRun(
             organization_id=actor.organization_id,
             project_id=project.id,
+            supply_snapshot_id=supply.id if supply else None,
             provider=provider.name,
             model=provider.model,
             prompt_name=PROMPT_NAME,
@@ -980,6 +1769,7 @@ def generate_content(
     run = GenerationRun(
         organization_id=actor.organization_id,
         project_id=project.id,
+        supply_snapshot_id=supply.id if supply else None,
         provider=provider.name,
         model=provider.model,
         prompt_name=PROMPT_NAME,
@@ -1001,6 +1791,7 @@ def generate_content(
     version = ContentVersion(
         organization_id=actor.organization_id,
         project_id=project.id,
+        supply_snapshot_id=supply.id if supply else None,
         generation_run_id=run.id,
         version_number=(max_version or 0) + 1,
         content=validated_content,
@@ -1159,6 +1950,7 @@ def create_content_version(
     version = ContentVersion(
         organization_id=actor.organization_id,
         project_id=project_id,
+        supply_snapshot_id=parent.supply_snapshot_id,
         parent_version_id=parent.id,
         version_number=(max_version or 0) + 1,
         content=data.content,
@@ -1196,6 +1988,17 @@ def submit_content_version(
             status_code=409,
             detail="Only draft content versions can be submitted for review",
         )
+    campaign = _campaign_for_project(db, project_id, actor.organization_id)
+    if campaign is not None:
+        supply = _current_campaign_supply(db, campaign.id, actor.organization_id)
+        if supply is None or version.supply_snapshot_id != supply.id:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Content review requires the current approved supply snapshot; "
+                    "regenerate the content first"
+                ),
+            )
     version.status = ReviewStatus.pending_review
     audit(
         db,
@@ -1237,6 +2040,17 @@ def review_content_version(
             status_code=409,
             detail="Only pending content versions can be reviewed",
         )
+    campaign = _campaign_for_project(db, project_id, actor.organization_id)
+    if campaign is not None:
+        supply = _current_campaign_supply(db, campaign.id, actor.organization_id)
+        if supply is None or version.supply_snapshot_id != supply.id:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Content was generated from an expired or replaced supply snapshot; "
+                    "regenerate it before review"
+                ),
+            )
     version.status = data.status
     version.reviewed_by = actor.user_id
     version.review_note = data.note

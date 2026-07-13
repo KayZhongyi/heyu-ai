@@ -32,6 +32,15 @@ from app.schemas import (
     BrandCreate,
     BrandRead,
     BrandUpdate,
+    CampaignItemCreate,
+    CampaignItemLink,
+    CampaignItemUpdate,
+    CampaignPackageCreate,
+    CampaignPackageRead,
+    CampaignPackageUpdate,
+    CampaignStatusUpdate,
+    CampaignSupplySnapshotCreate,
+    CampaignSupplySnapshotRead,
     ContentProjectCreate,
     ContentProjectRead,
     ContentProjectUpdate,
@@ -78,6 +87,9 @@ from app.security import (
 from app.services import (
     audit,
     create_brand,
+    create_campaign_item,
+    create_campaign_package,
+    create_campaign_supply_snapshot,
     create_content_project,
     create_content_version,
     create_draft_from_improvement_brief,
@@ -88,8 +100,12 @@ from app.services import (
     create_publication,
     create_video_diagnosis,
     generate_content,
+    get_campaign_package,
     get_publication_detail,
+    link_campaign_item,
     list_brands,
+    list_campaign_packages,
+    list_campaign_supply_snapshots,
     list_content_projects,
     list_content_versions,
     list_generation_runs,
@@ -100,15 +116,21 @@ from app.services import (
     list_publications,
     list_video_diagnoses,
     review_brand,
+    review_campaign_supply_snapshot,
     review_content_version,
     review_knowledge_source,
     review_product,
     revise_knowledge_source,
     submit_brand,
+    submit_campaign_supply_snapshot,
     submit_content_version,
     submit_knowledge_source,
     submit_product,
+    unlink_campaign_item,
     update_brand,
+    update_campaign_item,
+    update_campaign_package,
+    update_campaign_status,
     update_content_project,
     update_product,
 )
@@ -899,6 +921,175 @@ def add_content_project(
     return create_content_project(db, actor, data)
 
 
+@app.post("/v1/campaign-packages", response_model=CampaignPackageRead, status_code=201)
+def post_campaign_package(
+    data: CampaignPackageCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> CampaignPackageRead:
+    return create_campaign_package(db, actor, data)
+
+
+@app.get("/v1/campaign-packages", response_model=list[CampaignPackageRead])
+def get_campaign_packages(
+    db: Session = Depends(get_db), actor: Actor = Depends(current_actor)
+) -> list[CampaignPackageRead]:
+    return list_campaign_packages(db, actor)
+
+
+@app.get("/v1/campaign-packages/{campaign_id}", response_model=CampaignPackageRead)
+def get_campaign_package_route(
+    campaign_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> CampaignPackageRead:
+    return get_campaign_package(db, actor, campaign_id)
+
+
+@app.put("/v1/campaign-packages/{campaign_id}", response_model=CampaignPackageRead)
+def put_campaign_package(
+    campaign_id: str,
+    data: CampaignPackageUpdate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> CampaignPackageRead:
+    return update_campaign_package(db, actor, campaign_id, data)
+
+
+@app.patch("/v1/campaign-packages/{campaign_id}/status", response_model=CampaignPackageRead)
+def patch_campaign_package_status(
+    campaign_id: str,
+    data: CampaignStatusUpdate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.product_manager)),
+) -> CampaignPackageRead:
+    return update_campaign_status(db, actor, campaign_id, data.status)
+
+
+@app.post(
+    "/v1/campaign-packages/{campaign_id}/supply-snapshots",
+    response_model=CampaignSupplySnapshotRead,
+    status_code=201,
+)
+def post_campaign_supply_snapshot(
+    campaign_id: str,
+    data: CampaignSupplySnapshotCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> CampaignSupplySnapshotRead:
+    return create_campaign_supply_snapshot(db, actor, campaign_id, data)
+
+
+@app.get(
+    "/v1/campaign-packages/{campaign_id}/supply-snapshots",
+    response_model=list[CampaignSupplySnapshotRead],
+)
+def get_campaign_supply_snapshots(
+    campaign_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> list[CampaignSupplySnapshotRead]:
+    return list_campaign_supply_snapshots(db, actor, campaign_id)
+
+
+@app.post(
+    "/v1/campaign-packages/{campaign_id}/supply-snapshots/{snapshot_id}/submit",
+    response_model=CampaignSupplySnapshotRead,
+)
+def post_campaign_supply_snapshot_submit(
+    campaign_id: str,
+    snapshot_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> CampaignSupplySnapshotRead:
+    return submit_campaign_supply_snapshot(db, actor, campaign_id, snapshot_id)
+
+
+@app.post(
+    "/v1/campaign-packages/{campaign_id}/supply-snapshots/{snapshot_id}/review",
+    response_model=CampaignSupplySnapshotRead,
+)
+def post_campaign_supply_snapshot_review(
+    campaign_id: str,
+    snapshot_id: str,
+    data: ContentReview,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.reviewer)),
+) -> CampaignSupplySnapshotRead:
+    return review_campaign_supply_snapshot(db, actor, campaign_id, snapshot_id, data)
+
+
+@app.post(
+    "/v1/campaign-packages/{campaign_id}/items",
+    response_model=CampaignPackageRead,
+    status_code=201,
+)
+def post_campaign_package_item(
+    campaign_id: str,
+    data: CampaignItemCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> CampaignPackageRead:
+    return create_campaign_item(db, actor, campaign_id, data)
+
+
+@app.post(
+    "/v1/campaign-packages/{campaign_id}/items/link",
+    response_model=CampaignPackageRead,
+    status_code=201,
+)
+def post_campaign_package_item_link(
+    campaign_id: str,
+    data: CampaignItemLink,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> CampaignPackageRead:
+    return link_campaign_item(db, actor, campaign_id, data)
+
+
+@app.patch(
+    "/v1/campaign-packages/{campaign_id}/items/{item_id}",
+    response_model=CampaignPackageRead,
+)
+def patch_campaign_package_item(
+    campaign_id: str,
+    item_id: str,
+    data: CampaignItemUpdate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> CampaignPackageRead:
+    return update_campaign_item(db, actor, campaign_id, item_id, data)
+
+
+@app.delete(
+    "/v1/campaign-packages/{campaign_id}/items/{item_id}",
+    response_model=CampaignPackageRead,
+)
+def delete_campaign_package_item(
+    campaign_id: str,
+    item_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> CampaignPackageRead:
+    return unlink_campaign_item(db, actor, campaign_id, item_id)
+
+
 @app.get("/v1/content-projects", response_model=list[ContentProjectRead])
 def get_content_projects(
     db: Session = Depends(get_db), actor: Actor = Depends(current_actor)
@@ -1111,6 +1302,7 @@ def get_generation_runs(
             normalized_input=run.normalized_input,
             output=run.output,
             status=run.status,
+            supply_snapshot_id=run.supply_snapshot_id,
             latency_ms=run.latency_ms,
             created_by=run.created_by,
             created_at=run.created_at,

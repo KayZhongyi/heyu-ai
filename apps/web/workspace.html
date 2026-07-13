@@ -24,12 +24,13 @@
         <span class="nav-label">智能资产</span>
         <button class="nav" data-page="assets" data-index="02">品牌与农产品</button>
         <button class="nav" data-page="knowledge" data-index="03">可信知识库</button>
-        <button class="nav" data-page="studio" data-index="04">内容创作台</button>
-        <button class="nav" data-page="operations" data-index="05">发布与运营</button>
+        <button class="nav" data-page="campaigns" data-index="04" data-i18n="campaign.page">营销活动包</button>
+        <button class="nav" data-page="studio" data-index="05">内容创作台</button>
+        <button class="nav" data-page="operations" data-index="06">发布与运营</button>
         <span class="nav-label">质量治理</span>
-        <button class="nav" data-page="review" data-index="06">审核与版本</button>
-        <button class="nav" data-page="audit" data-index="07">审计记录</button>
-        <button class="nav member-nav" data-page="members" data-index="08" hidden>团队与权限</button>
+        <button class="nav" data-page="review" data-index="07">审核与版本</button>
+        <button class="nav" data-page="audit" data-index="08">审计记录</button>
+        <button class="nav member-nav" data-page="members" data-index="09" hidden>团队与权限</button>
       </nav>
       <div class="sidebar-note">
         <b><i></i>可信引擎运行中</b>
@@ -169,6 +170,91 @@
             </form>
 <div class="panel"><div class="panel-heading"><div><p class="eyebrow">SOURCE REVIEW</p><h2>资料审核</h2></div><span class="pill">Owner 可审核</span></div><div id="knowledge-list" class="stack empty" data-business-data>暂无知识资料</div></div>
           </div>
+        </section>
+
+        <section class="page" data-page-panel="campaigns">
+          <div class="campaign-intro">
+            <div>
+              <p class="eyebrow">CAMPAIGN PACKAGE</p>
+              <h2 data-i18n="campaign.heading">一次填写，组织一套能拍、能讲、能审核的营销材料</h2>
+              <p data-i18n="campaign.intro">围绕同一款真实农产品，把短视频、直播、图文和评论回复组织在同一个活动中。</p>
+            </div>
+            <div class="campaign-guardrail">
+              <strong data-i18n="campaign.guardrailTitle">正式生成前</strong>
+              <span data-i18n="campaign.guardrailCopy">请先完成品牌、产品和可信知识审核；价格、库存与发货承诺仍需经营者当日确认。</span>
+            </div>
+          </div>
+          <div class="two-col campaign-grid">
+            <form class="panel" id="campaign-form" data-write-scope="content">
+              <h2 data-i18n="campaign.create">创建营销活动包</h2>
+              <label><span data-i18n="campaign.field.title">活动名称</span><input name="title" data-i18n-placeholder="campaign.placeholder.title" required></label>
+              <label><span data-i18n="campaign.field.brand">品牌</span><select name="brand_id" class="brand-select" required></select></label>
+              <label><span data-i18n="campaign.field.product">农产品</span><select name="product_id" class="product-select" required></select></label>
+              <div class="form-grid">
+                <label><span data-i18n="campaign.field.platform">主要平台</span><input name="platform" value="抖音" required></label>
+                <label><span data-i18n="campaign.field.tone">表达语气</span><input name="tone" value="真诚、清楚、有烟火气"></label>
+              </div>
+              <label><span data-i18n="campaign.field.audience">目标受众</span><textarea name="target_audience" required></textarea></label>
+              <label><span data-i18n="campaign.field.objective">本次目标</span><textarea name="objective" required></textarea></label>
+              <label><span data-i18n="campaign.field.requirements">事实边界与额外要求</span><textarea name="extra_requirements"></textarea></label>
+              <button class="primary wide" type="submit" data-i18n="campaign.createDefault">创建并加入默认内容</button>
+            </form>
+            <div class="panel">
+              <div class="panel-heading">
+                <div><p class="eyebrow">WORK IN PROGRESS</p><h2 data-i18n="campaign.current">当前营销活动</h2></div>
+                <span class="pill" id="campaign-count">0</span>
+              </div>
+              <div id="campaign-list" class="stack empty" data-business-data></div>
+            </div>
+          </div>
+          <section class="panel supply-workbench">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">CURRENT SUPPLY SNAPSHOT</p>
+                <h2 data-i18n="supply.heading">当期供给快照</h2>
+                <p class="form-note" data-i18n="supply.intro">把本期可售规格、价格、库存与履约承诺固定为可审核版本。新快照获批后，旧内容必须重新生成和审核。</p>
+              </div>
+              <span class="pill" id="supply-revision-count">0</span>
+            </div>
+            <label><span data-i18n="supply.campaign">选择营销活动</span><select id="supply-campaign-select"></select></label>
+            <div class="supply-layout">
+              <form id="supply-form" class="supply-form" data-write-scope="content">
+                <div class="form-grid">
+                  <label><span data-i18n="supply.specification">本期规格</span><input name="specification" required data-i18n-placeholder="supply.placeholder.specification"></label>
+                  <label><span data-i18n="supply.harvestStatus">采收状态</span><input name="harvest_status" required data-i18n-placeholder="supply.placeholder.harvestStatus"></label>
+                  <label><span data-i18n="supply.price">销售金额</span><input name="price_amount" type="number" min="0" step="0.01" required></label>
+                  <label><span data-i18n="supply.currency">币种</span><select name="currency"><option value="CNY">CNY</option><option value="HKD">HKD</option><option value="USD">USD</option></select></label>
+                  <label><span data-i18n="supply.priceValidUntil">价格有效至</span><input name="price_valid_until" type="datetime-local" required></label>
+                  <label><span data-i18n="supply.inventoryConfirmedAt">库存确认时间</span><input name="inventory_confirmed_at" type="datetime-local" required></label>
+                  <label><span data-i18n="supply.quantity">可售库存</span><input name="available_quantity" type="number" min="0" step="1" required></label>
+                  <label><span data-i18n="supply.quantityUnit">库存单位</span><input name="quantity_unit" required data-i18n-placeholder="supply.placeholder.quantityUnit"></label>
+                  <label><span data-i18n="supply.harvestDate">采收日期（可选）</span><input name="harvest_date" type="date"></label>
+                  <label><span data-i18n="supply.shipWithinHours">承诺发货小时</span><input name="ship_within_hours" type="number" min="1" max="720" required></label>
+                  <label><span data-i18n="supply.activeFrom">生效时间</span><input name="active_from" type="datetime-local" required></label>
+                  <label><span data-i18n="supply.activeUntil">失效时间</span><input name="active_until" type="datetime-local" required></label>
+                </div>
+                <label><span data-i18n="supply.orderLimit">限购说明（可选）</span><input name="order_limit" data-i18n-placeholder="supply.placeholder.orderLimit"></label>
+                <label><span data-i18n="supply.shippingRegions">配送区域（每行一个）</span><textarea name="shipping_regions" required></textarea></label>
+                <label><span data-i18n="supply.freightPolicy">运费规则</span><textarea name="freight_policy" required></textarea></label>
+                <label><span data-i18n="supply.storageFreshness">储存与保鲜</span><textarea name="storage_and_freshness" required></textarea></label>
+                <label><span data-i18n="supply.shortagePolicy">缺货处理</span><textarea name="shortage_policy" required></textarea></label>
+                <fieldset class="supply-evidence">
+                  <legend data-i18n="supply.evidence">已审核知识证据</legend>
+                  <p class="form-note" data-i18n="supply.evidenceHelp">至少选择一条与本活动品牌或产品关联、且已审核通过的资料。</p>
+                  <div id="supply-evidence-list" class="check-list"></div>
+                </fieldset>
+                <label><span data-i18n="supply.note">内部备注（可选）</span><textarea name="note"></textarea></label>
+                <p class="form-note" data-i18n="supply.moneyHelp">页面按普通金额输入，提交时会转换为最小货币单位。</p>
+                <button class="primary wide" type="submit" data-i18n="supply.create">创建供给快照草稿</button>
+              </form>
+              <div>
+                <div class="section-head supply-history-head">
+                  <div><p class="eyebrow">REVISION HISTORY</p><h3 data-i18n="supply.history">供给版本与审核</h3></div>
+                </div>
+                <div id="supply-history" class="stack empty" data-business-data></div>
+              </div>
+            </div>
+          </section>
         </section>
 
         <section class="page" data-page-panel="studio">

@@ -1,8 +1,8 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Date, DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -55,6 +55,13 @@ class ContentType(StrEnum):
 class GenerationStatus(StrEnum):
     succeeded = "succeeded"
     failed = "failed"
+
+
+class CampaignStatus(StrEnum):
+    draft = "draft"
+    active = "active"
+    completed = "completed"
+    archived = "archived"
 
 
 class User(Base):
@@ -197,11 +204,95 @@ class ContentProject(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class CampaignPackage(Base):
+    __tablename__ = "campaign_packages"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    brand_id: Mapped[str] = mapped_column(ForeignKey("brands.id"), index=True)
+    product_id: Mapped[str] = mapped_column(ForeignKey("products.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    platform: Mapped[str] = mapped_column(String(80), default="general")
+    target_audience: Mapped[str] = mapped_column(Text, default="")
+    objective: Mapped[str] = mapped_column(Text, default="")
+    tone: Mapped[str] = mapped_column(String(120), default="")
+    extra_requirements: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[CampaignStatus] = mapped_column(
+        Enum(CampaignStatus), default=CampaignStatus.draft
+    )
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class CampaignPackageItem(Base):
+    __tablename__ = "campaign_package_items"
+    __table_args__ = (
+        UniqueConstraint("campaign_package_id", "slot_key"),
+        UniqueConstraint("campaign_package_id", "content_project_id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    campaign_package_id: Mapped[str] = mapped_column(ForeignKey("campaign_packages.id"), index=True)
+    content_project_id: Mapped[str] = mapped_column(ForeignKey("content_projects.id"), index=True)
+    slot_key: Mapped[str] = mapped_column(String(80))
+    position: Mapped[int] = mapped_column(default=0)
+    required: Mapped[bool] = mapped_column(default=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class CampaignSupplySnapshot(Base):
+    __tablename__ = "campaign_supply_snapshots"
+    __table_args__ = (
+        UniqueConstraint("campaign_package_id", "revision_number"),
+        Index(
+            "ix_campaign_supply_snapshots_campaign_status",
+            "campaign_package_id",
+            "status",
+        ),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    campaign_package_id: Mapped[str] = mapped_column(ForeignKey("campaign_packages.id"), index=True)
+    revision_number: Mapped[int] = mapped_column()
+    specification: Mapped[str] = mapped_column(String(255))
+    price_minor: Mapped[int] = mapped_column()
+    currency: Mapped[str] = mapped_column(String(3), default="CNY")
+    price_valid_until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    available_quantity: Mapped[int] = mapped_column()
+    quantity_unit: Mapped[str] = mapped_column(String(40))
+    order_limit: Mapped[str] = mapped_column(String(255), default="")
+    inventory_confirmed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    harvest_status: Mapped[str] = mapped_column(String(80))
+    harvest_date: Mapped[date | None] = mapped_column(Date)
+    shipping_regions: Mapped[list] = mapped_column(JSON, default=list)
+    ship_within_hours: Mapped[int] = mapped_column()
+    freight_policy: Mapped[str] = mapped_column(Text)
+    storage_and_freshness: Mapped[str] = mapped_column(Text)
+    shortage_policy: Mapped[str] = mapped_column(Text)
+    active_from: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    active_until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    evidence_source_ids: Mapped[list] = mapped_column(JSON, default=list)
+    note: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[ReviewStatus] = mapped_column(Enum(ReviewStatus), default=ReviewStatus.draft)
+    confirmed_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    confirmed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    reviewed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    review_note: Mapped[str] = mapped_column(Text, default="")
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class GenerationRun(Base):
     __tablename__ = "generation_runs"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("content_projects.id"), index=True)
+    supply_snapshot_id: Mapped[str | None] = mapped_column(
+        ForeignKey("campaign_supply_snapshots.id"), index=True
+    )
     provider: Mapped[str] = mapped_column(String(80))
     model: Mapped[str] = mapped_column(String(120))
     prompt_name: Mapped[str] = mapped_column(String(120))
@@ -221,6 +312,9 @@ class ContentVersion(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("content_projects.id"), index=True)
+    supply_snapshot_id: Mapped[str | None] = mapped_column(
+        ForeignKey("campaign_supply_snapshots.id"), index=True
+    )
     generation_run_id: Mapped[str | None] = mapped_column(
         ForeignKey("generation_runs.id"), index=True
     )

@@ -36,6 +36,30 @@ def create_brand_and_product(client, auth):
     return brand, product
 
 
+def create_approved_source(client, auth, brand, product):
+    source = client.post(
+        "/v1/knowledge",
+        headers=auth,
+        json={
+            "title": "Approved product fact",
+            "kind": "product_fact",
+            "content": "Verified product origin and specification.",
+            "citation_label": "Test product record",
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+        },
+    ).json()
+    submitted = client.post(f"/v1/knowledge/{source['id']}/submit", headers=auth)
+    assert submitted.status_code == 200, submitted.text
+    approved = client.post(
+        f"/v1/knowledge/{source['id']}/review",
+        headers=auth,
+        json={"status": "approved"},
+    )
+    assert approved.status_code == 200, approved.text
+    return approved.json()
+
+
 def test_generation_requires_approved_assets_and_edits_reset_approval(client, auth):
     brand = client.post(
         "/v1/brands",
@@ -80,6 +104,7 @@ def test_generation_requires_approved_assets_and_edits_reset_approval(client, au
         assert reviewed.json()["reviewed_by"]
         assert reviewed.json()["reviewed_at"]
 
+    create_approved_source(client, auth, brand, product)
     generated = client.post(
         f"/v1/content-projects/{project['id']}/generate",
         headers=auth,
@@ -118,6 +143,7 @@ def test_provider_failure_is_persisted_without_creating_a_content_version(
     client, auth, monkeypatch
 ):
     brand, product = create_brand_and_product(client, auth)
+    create_approved_source(client, auth, brand, product)
     project = client.post(
         "/v1/content-projects",
         headers=auth,
@@ -133,7 +159,7 @@ def test_provider_failure_is_persisted_without_creating_a_content_version(
         name = "external-test"
         model = "failure-model"
 
-        def generate_script(self, project, brand, product, sources):
+        def generate_script(self, project, brand, product, sources, supply=None):
             raise AIProviderError(
                 "The configured AI provider timed out",
                 code="provider_timeout",
@@ -212,7 +238,7 @@ def test_invalid_provider_output_is_failed_and_never_becomes_content(client, aut
         name = "external-test"
         model = "invalid-model"
 
-        def generate_script(self, project, brand, product, sources):
+        def generate_script(self, project, brand, product, sources, supply=None):
             assert project.content_type == ContentType.social_post
             return GenerationResult(
                 content={
@@ -287,7 +313,7 @@ def test_missing_citation_is_failed_when_reviewed_sources_were_selected(client, 
         name = "external-test"
         model = "missing-citation-model"
 
-        def generate_script(self, project, brand, product, sources):
+        def generate_script(self, project, brand, product, sources, supply=None):
             assert [item.id for item in sources] == [source["id"]]
             return GenerationResult(
                 content={
@@ -363,7 +389,7 @@ def test_successful_generation_replaces_provider_labels_and_deduplicates(client,
         name = "external-test"
         model = "mislabeling-model"
 
-        def generate_script(self, project, brand, product, sources):
+        def generate_script(self, project, brand, product, sources, supply=None):
             return GenerationResult(
                 content={
                     "format": "social_post",
@@ -791,6 +817,35 @@ def test_cross_tenant_cannot_use_knowledge_or_content_project(client, auth):
     )
 
 
+def test_generation_requires_an_approved_linked_knowledge_source(client, auth):
+    brand, product = create_brand_and_product(client, auth)
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "title": "Knowledge-gated campaign",
+            "content_type": "social_post",
+        },
+    ).json()
+
+    response = client.post(
+        f"/v1/content-projects/{project['id']}/generate",
+        headers=auth,
+    )
+
+    assert response.status_code == 409
+    assert "approved knowledge source" in response.json()["detail"]
+    assert (
+        client.get(
+            f"/v1/content-projects/{project['id']}/versions",
+            headers=auth,
+        ).json()
+        == []
+    )
+
+
 def test_content_version_requires_submission_before_review(client, auth):
     brand, product = create_brand_and_product(client, auth)
     source = client.post(
@@ -1062,6 +1117,7 @@ def test_knowledge_revisions_are_immutable_linear_and_generation_uses_latest_app
 
 def test_publication_and_performance_snapshots_form_append_only_operations_history(client, auth):
     brand, product = create_brand_and_product(client, auth)
+    create_approved_source(client, auth, brand, product)
     project = client.post(
         "/v1/content-projects",
         headers=auth,
@@ -1180,6 +1236,7 @@ def test_publication_and_performance_snapshots_form_append_only_operations_histo
 
 def test_video_diagnoses_are_structured_append_only_and_tenant_scoped(client, auth):
     brand, product = create_brand_and_product(client, auth)
+    create_approved_source(client, auth, brand, product)
     project = client.post(
         "/v1/content-projects",
         headers=auth,

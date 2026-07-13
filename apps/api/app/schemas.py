@@ -1,8 +1,15 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models import ContentType, GenerationStatus, KnowledgeKind, ReviewStatus, Role
+from app.models import (
+    CampaignStatus,
+    ContentType,
+    GenerationStatus,
+    KnowledgeKind,
+    ReviewStatus,
+    Role,
+)
 
 
 class ORMModel(BaseModel):
@@ -215,6 +222,168 @@ class ContentProjectRead(ORMModel):
     created_by: str
 
 
+class CampaignPackageCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    brand_id: str
+    product_id: str
+    title: str = Field(min_length=1, max_length=255)
+    platform: str = Field(default="general", max_length=80)
+    target_audience: str = ""
+    objective: str = ""
+    tone: str = Field(default="", max_length=120)
+    extra_requirements: str = ""
+    create_default_items: bool = False
+
+
+class CampaignPackageUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=255)
+    platform: str = Field(default="general", max_length=80)
+    target_audience: str = ""
+    objective: str = ""
+    tone: str = Field(default="", max_length=120)
+    extra_requirements: str = ""
+
+
+class CampaignStatusUpdate(BaseModel):
+    status: CampaignStatus
+
+
+class CampaignItemCreate(BaseModel):
+    slot_key: str = Field(min_length=1, max_length=80)
+    content_type: ContentType
+    title: str = Field(default="", max_length=255)
+    position: int = Field(default=0, ge=0, le=1000)
+    required: bool = True
+    platform: str | None = Field(default=None, max_length=80)
+    target_audience: str | None = None
+    objective: str | None = None
+    tone: str | None = Field(default=None, max_length=120)
+    extra_requirements: str | None = None
+
+
+class CampaignItemLink(BaseModel):
+    content_project_id: str
+    slot_key: str = Field(min_length=1, max_length=80)
+    position: int = Field(default=0, ge=0, le=1000)
+    required: bool = True
+
+
+class CampaignItemUpdate(BaseModel):
+    position: int = Field(ge=0, le=1000)
+    required: bool
+
+
+class CampaignSupplySnapshotCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    specification: str = Field(min_length=1, max_length=255)
+    price_minor: int = Field(ge=0)
+    currency: str = Field(default="CNY", pattern=r"^[A-Z]{3}$")
+    price_valid_until: datetime
+    available_quantity: int = Field(ge=0)
+    quantity_unit: str = Field(min_length=1, max_length=40)
+    order_limit: str = Field(default="", max_length=255)
+    inventory_confirmed_at: datetime
+    harvest_status: str = Field(min_length=1, max_length=80)
+    harvest_date: date | None = None
+    shipping_regions: list[str] = Field(min_length=1, max_length=100)
+    ship_within_hours: int = Field(ge=1, le=720)
+    freight_policy: str = Field(min_length=1)
+    storage_and_freshness: str = Field(min_length=1)
+    shortage_policy: str = Field(min_length=1)
+    active_from: datetime
+    active_until: datetime
+    evidence_source_ids: list[str] = Field(min_length=1, max_length=50)
+    note: str = ""
+
+
+class CampaignSupplySnapshotRead(ORMModel):
+    id: str
+    organization_id: str
+    campaign_package_id: str
+    revision_number: int
+    specification: str
+    price_minor: int
+    currency: str
+    price_valid_until: datetime
+    available_quantity: int
+    quantity_unit: str
+    order_limit: str
+    inventory_confirmed_at: datetime
+    harvest_status: str
+    harvest_date: date | None
+    shipping_regions: list[str]
+    ship_within_hours: int
+    freight_policy: str
+    storage_and_freshness: str
+    shortage_policy: str
+    active_from: datetime
+    active_until: datetime
+    evidence_source_ids: list[str]
+    note: str
+    status: ReviewStatus
+    confirmed_by: str
+    confirmed_at: datetime
+    reviewed_by: str | None
+    review_note: str
+    reviewed_at: datetime | None
+    created_at: datetime
+
+
+class CampaignPackageItemRead(ORMModel):
+    id: str
+    organization_id: str
+    campaign_package_id: str
+    content_project_id: str
+    slot_key: str
+    position: int
+    required: bool
+    created_by: str
+    created_at: datetime
+    project: ContentProjectRead
+    latest_version_id: str | None
+    latest_version_status: ReviewStatus | None
+    approved_version_id: str | None
+    approved_version_count: int
+    publication_id: str | None
+    publication_count: int
+    supply_current: bool
+
+
+class CampaignProgress(BaseModel):
+    total: int
+    required: int
+    generated: int
+    approved: int
+    published: int
+    required_approved: int
+    required_complete: bool
+    supply_ready: bool
+
+
+class CampaignPackageRead(ORMModel):
+    id: str
+    organization_id: str
+    brand_id: str
+    product_id: str
+    title: str
+    platform: str
+    target_audience: str
+    objective: str
+    tone: str
+    extra_requirements: str
+    status: CampaignStatus
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+    current_supply_snapshot: CampaignSupplySnapshotRead | None
+    items: list[CampaignPackageItemRead]
+    progress: CampaignProgress
+
+
 class ContentVersionCreate(BaseModel):
     parent_version_id: str
     content: dict
@@ -225,6 +394,7 @@ class ContentVersionRead(ORMModel):
     id: str
     organization_id: str
     project_id: str
+    supply_snapshot_id: str | None
     generation_run_id: str | None
     parent_version_id: str | None
     improvement_brief_id: str | None
@@ -387,6 +557,7 @@ class GenerationSourceRead(BaseModel):
 class GenerationRunRead(ORMModel):
     id: str
     project_id: str
+    supply_snapshot_id: str | None
     provider: str
     model: str
     prompt_name: str

@@ -7,7 +7,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.config import Settings, get_settings
-from app.models import Brand, ContentProject, ContentType, Product
+from app.models import Brand, CampaignSupplySnapshot, ContentProject, ContentType, Product
 
 PROMPT_NAME = "agricultural-content-script"
 PROMPT_VERSION = "1.2.0"
@@ -38,6 +38,7 @@ class AIProvider(Protocol):
         brand: Brand,
         product: Product,
         sources: list[ContextSource],
+        supply: CampaignSupplySnapshot | None = None,
     ) -> GenerationResult: ...
 
 
@@ -74,6 +75,7 @@ class DeterministicProvider:
         product: Product,
         fact_text: str,
         selling_points: str,
+        supply: CampaignSupplySnapshot | None,
     ) -> dict:
         is_sixty_seconds = project.content_type == ContentType.short_video_60s
         end_second = 60 if is_sixty_seconds else 30
@@ -88,6 +90,12 @@ class DeterministicProvider:
             body += f"这条内容希望帮助大家{project.objective}。"
         if product.price_display:
             body += f"当前展示信息为{product.price_display}。"
+        if supply:
+            body += (
+                f"本次活动规格为{supply.specification}，"
+                f"可售数量为{supply.available_quantity}{supply.quantity_unit}，"
+                f"下单后预计{supply.ship_within_hours}小时内发货。"
+            )
         cta = "想了解更多真实生产信息，欢迎在评论区留言。"
         return {
             "format": "short_video_script",
@@ -122,6 +130,7 @@ class DeterministicProvider:
         product: Product,
         fact_text: str,
         selling_points: str,
+        supply: CampaignSupplySnapshot | None,
     ) -> dict:
         greeting = f"欢迎来到{brand.name}直播间，今天带大家认识{product.name}。"
         fact_statement = f"根据已审核资料：{fact_text}。"
@@ -147,14 +156,24 @@ class DeterministicProvider:
             ]
             format_name = "livestream_interaction"
         else:
+            purchase_script = (
+                f"本次活动规格为{supply.specification}，"
+                f"可售数量为{supply.available_quantity}{supply.quantity_unit}，"
+                f"下单后预计{supply.ship_within_hours}小时内发货，"
+                f"运费规则为{supply.freight_policy}。"
+                if supply
+                else (
+                    f"规格为{product.specification or '以实际商品页为准'}，"
+                    f"储存建议是{product.storage_method or '请按商品说明储存'}。"
+                )
+            )
             segments = [
                 {"stage": "产品亮相", "script": greeting},
                 {"stage": "核心卖点", "script": f"它值得关注的特点是{selling_points}。"},
                 {"stage": "事实依据", "script": fact_statement},
                 {
                     "stage": "购买提示",
-                    "script": f"规格为{product.specification or '以实际商品页为准'}，"
-                    f"储存建议是{product.storage_method or '请按商品说明储存'}。",
+                    "script": purchase_script,
                 },
                 {"stage": "互动收口", "script": "还有哪项产品信息想核实？请留言，我们按资料回答。"},
             ]
@@ -175,6 +194,7 @@ class DeterministicProvider:
         product: Product,
         fact_text: str,
         selling_points: str,
+        supply: CampaignSupplySnapshot | None,
     ) -> dict:
         if project.content_type == ContentType.comment_reply:
             return {
@@ -199,12 +219,19 @@ class DeterministicProvider:
                     f"{selling_points}",
                 ],
             }
+        supply_copy = (
+            f"本次活动规格为{supply.specification}，"
+            f"可售{supply.available_quantity}{supply.quantity_unit}，"
+            f"下单后预计{supply.ship_within_hours}小时内发货。"
+            if supply
+            else ""
+        )
         return {
             "format": "social_post",
             "headline": f"今天认真介绍一份来自{product.origin or '真实产地'}的{product.name}",
             "body": (
                 f"{brand.name}希望把产品信息讲清楚：它的主要特点是{selling_points}。"
-                f"根据已审核资料，{fact_text}。"
+                f"根据已审核资料，{fact_text}。{supply_copy}"
             ),
             "cta": "你还想了解哪项产品信息？欢迎留言，我们会继续补充可核实的答案。",
             "hashtags": [f"#{product.name}", "#农产品", "#产地故事"],
@@ -216,6 +243,7 @@ class DeterministicProvider:
         brand: Brand,
         product: Product,
         sources: list[ContextSource],
+        supply: CampaignSupplySnapshot | None = None,
     ) -> GenerationResult:
         started = time.perf_counter()
         fact_text, selling_points, citations, risk_notes = self._common_context(
@@ -225,15 +253,19 @@ class DeterministicProvider:
             ContentType.short_video_30s,
             ContentType.short_video_60s,
         }:
-            content = self._video_content(project, brand, product, fact_text, selling_points)
+            content = self._video_content(
+                project, brand, product, fact_text, selling_points, supply
+            )
         elif project.content_type in {
             ContentType.livestream_opening,
             ContentType.livestream_product_pitch,
             ContentType.livestream_interaction,
         }:
-            content = self._livestream_content(project, brand, product, fact_text, selling_points)
+            content = self._livestream_content(
+                project, brand, product, fact_text, selling_points, supply
+            )
         else:
-            content = self._text_content(project, brand, product, fact_text, selling_points)
+            content = self._text_content(project, brand, product, fact_text, selling_points, supply)
         content["risk_notes"] = risk_notes
         content["citations"] = citations
         return GenerationResult(
@@ -432,6 +464,7 @@ class OpenAICompatibleProvider:
         brand: Brand,
         product: Product,
         sources: list[ContextSource],
+        supply: CampaignSupplySnapshot | None = None,
     ) -> dict:
         verified_sources = [
             {
@@ -459,6 +492,33 @@ class OpenAICompatibleProvider:
                 "prohibited_claims": product.prohibited_claims,
             },
             "verified_sources": verified_sources,
+            "verified_supply": (
+                {
+                    "snapshot_id": supply.id,
+                    "revision_number": supply.revision_number,
+                    "specification": supply.specification,
+                    "price_minor": supply.price_minor,
+                    "currency": supply.currency,
+                    "price_valid_until": supply.price_valid_until.isoformat(),
+                    "available_quantity": supply.available_quantity,
+                    "quantity_unit": supply.quantity_unit,
+                    "order_limit": supply.order_limit,
+                    "inventory_confirmed_at": supply.inventory_confirmed_at.isoformat(),
+                    "harvest_status": supply.harvest_status,
+                    "harvest_date": supply.harvest_date.isoformat()
+                    if supply.harvest_date
+                    else None,
+                    "shipping_regions": supply.shipping_regions,
+                    "ship_within_hours": supply.ship_within_hours,
+                    "freight_policy": supply.freight_policy,
+                    "storage_and_freshness": supply.storage_and_freshness,
+                    "shortage_policy": supply.shortage_policy,
+                    "active_from": supply.active_from.isoformat(),
+                    "active_until": supply.active_until.isoformat(),
+                }
+                if supply
+                else None
+            ),
         }
         return {
             "model": "",
@@ -470,7 +530,10 @@ class OpenAICompatibleProvider:
                     "content": (
                         "You create factual agricultural marketing content. Return one JSON "
                         "object only. Use only verified_sources for factual claims. Never invent "
-                        "certifications, efficacy, prices, yields, or customer outcomes. Preserve "
+                        "certifications, efficacy, prices, yields, inventory, shipping promises, "
+                        "or customer outcomes. Treat verified_supply as the only allowed source "
+                        "for campaign price, stock, specification, harvest, and logistics "
+                        "claims. Preserve "
                         "source provenance in a citations array containing source_id and label. "
                         "Include a risk_notes array. Match the requested content_type."
                     ),
@@ -488,9 +551,10 @@ class OpenAICompatibleProvider:
         brand: Brand,
         product: Product,
         sources: list[ContextSource],
+        supply: CampaignSupplySnapshot | None = None,
     ) -> GenerationResult:
         started = time.perf_counter()
-        payload = self._payload(project, brand, product, sources)
+        payload = self._payload(project, brand, product, sources, supply)
         payload["model"] = self.model
         try:
             with httpx.Client(
