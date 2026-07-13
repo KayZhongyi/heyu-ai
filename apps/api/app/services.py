@@ -338,6 +338,7 @@ def review_knowledge_source(
         )
     source.status = data.status
     source.reviewed_by = actor.user_id
+    source.review_note = data.note
     source.reviewed_at = datetime.now(UTC)
     audit(
         db,
@@ -345,6 +346,7 @@ def review_knowledge_source(
         f"knowledge.{data.status.value}",
         "knowledge_source",
         source.id,
+        {"note": data.note},
     )
     db.commit()
     db.refresh(source)

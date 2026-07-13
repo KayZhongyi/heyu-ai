@@ -138,10 +138,12 @@ class KnowledgeSourceRead(ORMModel):
     status: ReviewStatus
     created_by: str
     reviewed_by: str | None
+    review_note: str
 
 
 class KnowledgeReview(BaseModel):
     status: ReviewStatus
+    note: str = Field(default="", max_length=2000)
 
 
 class ContentProjectCreate(BaseModel):

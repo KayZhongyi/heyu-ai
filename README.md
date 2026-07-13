@@ -14,7 +14,8 @@ history, and auditability.
 - Maintainable content briefs whose edits affect future generations without rewriting
   existing generation runs or immutable content versions
 - Source-backed knowledge documents with review status
-- Explicit draft → pending review → approved/rejected knowledge governance
+- Explicit draft → pending review → approved/rejected knowledge governance with
+  persistent reviewer notes
 - Immutable, linear knowledge revision chains with per-revision integrity metadata
 - Browser-side UTF-8 TXT, Markdown, and CSV knowledge import with source
   filename, media type, and SHA-256 integrity metadata

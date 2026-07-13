@@ -539,10 +539,11 @@ def test_knowledge_requires_submission_before_review(client, auth):
     rejected = client.post(
         f"/v1/knowledge/{source['id']}/review",
         headers=auth,
-        json={"status": "rejected"},
+        json={"status": "rejected", "note": "请补充原始检测报告的日期与出具机构"},
     )
     assert rejected.status_code == 200
     assert rejected.json()["status"] == "rejected"
+    assert rejected.json()["review_note"] == "请补充原始检测报告的日期与出具机构"
     assert (
         client.post(
             f"/v1/knowledge/{source['id']}/review",
@@ -554,6 +555,8 @@ def test_knowledge_requires_submission_before_review(client, auth):
 
     events = client.get("/v1/audit-events", headers=auth).json()
     assert any(event["action"] == "knowledge.submitted" for event in events)
+    review_event = next(event for event in events if event["action"] == "knowledge.rejected")
+    assert review_event["details"]["note"] == "请补充原始检测报告的日期与出具机构"
 
 
 def test_knowledge_revisions_are_immutable_linear_and_generation_uses_latest_approved(client, auth):

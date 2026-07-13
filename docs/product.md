@@ -55,7 +55,8 @@ same approved-source citations and prohibited-claim warnings.
 - Generated claims must be grounded in approved sources.
 - Knowledge review follows the same explicit governance pattern as content:
   `draft` → `pending_review` → `approved` or `rejected`. Only approved sources
-  enter AI context, and completed decisions cannot be silently overwritten.
+  enter AI context, completed decisions cannot be silently overwritten, and the
+  reviewer can preserve a written decision note for later revisions.
 - Reviewed knowledge is corrected by creating a new draft revision, never by
   overwriting the reviewed record. Each linear revision chain retains its group
   ID, parent revision, revision number, change summary, and independent SHA-256
