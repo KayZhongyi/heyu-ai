@@ -280,6 +280,7 @@ def test_campaign_creates_project_atomically_and_uses_defaults(
         "published": 0,
         "required_approved": 0,
         "required_complete": False,
+        "brief_ready": True,
         "supply_ready": False,
         "farmer_evidence_ready": True,
     }
@@ -466,6 +467,7 @@ def test_campaign_can_create_the_default_marketing_pack_in_one_request(
         "published": 0,
         "required_approved": 0,
         "required_complete": False,
+        "brief_ready": True,
         "supply_ready": False,
         "farmer_evidence_ready": True,
     }
@@ -612,6 +614,7 @@ def test_campaign_progress_uses_approved_versions_and_publication_history(
     first = ContentVersion(
         organization_id=campaign["organization_id"],
         project_id=project["id"],
+        brief_revision_id=campaign["current_brief_revision"]["id"],
         version_number=1,
         content={"format": "short_video_30s"},
         status=ReviewStatus.approved,
@@ -633,6 +636,7 @@ def test_campaign_progress_uses_approved_versions_and_publication_history(
     second = ContentVersion(
         organization_id=campaign["organization_id"],
         project_id=project["id"],
+        brief_revision_id=campaign["current_brief_revision"]["id"],
         parent_version_id=first.id,
         version_number=2,
         content={"format": "short_video_30s"},

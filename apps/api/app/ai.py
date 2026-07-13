@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from app.config import Settings, get_settings
 from app.models import (
     Brand,
+    CampaignBriefRevision,
     CampaignFarmerEvidenceSnapshot,
     CampaignSupplySnapshot,
     ContentProject,
@@ -47,6 +48,7 @@ class AIProvider(Protocol):
         sources: list[ContextSource],
         supply: CampaignSupplySnapshot | None = None,
         farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
+        brief: CampaignBriefRevision | None = None,
     ) -> GenerationResult: ...
 
 
@@ -253,6 +255,7 @@ class DeterministicProvider:
         sources: list[ContextSource],
         supply: CampaignSupplySnapshot | None = None,
         farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
+        brief: CampaignBriefRevision | None = None,
     ) -> GenerationResult:
         started = time.perf_counter()
         fact_text, selling_points, citations, risk_notes = self._common_context(
@@ -275,7 +278,59 @@ class DeterministicProvider:
             )
         else:
             content = self._text_content(project, brand, product, fact_text, selling_points, supply)
+        if brief:
+            required_copy = " ".join(
+                message.strip() for message in brief.mandatory_messages if message.strip()
+            )
+            if content["format"] == "short_video_script":
+                if brief.core_message:
+                    content["hook"] = brief.core_message
+                    content["script"] = f"{brief.core_message} {content['script']}"
+                    content["shots"][0]["voiceover"] = brief.core_message
+                if brief.desired_action:
+                    content["cta"] = brief.desired_action
+                    content["script"] = f"{content['script']} {brief.desired_action}"
+                    content["shots"][-1]["voiceover"] = brief.desired_action
+                if required_copy:
+                    content["script"] = f"{content['script']} {required_copy}"
+                    content["shots"][1]["voiceover"] = (
+                        f"{content['shots'][1]['voiceover']} {required_copy}"
+                    )
+            elif content["format"] == "social_post":
+                if brief.core_message:
+                    content["headline"] = brief.core_message
+                if brief.audience_need:
+                    content["body"] = f"{brief.audience_need} {content['body']}"
+                if brief.desired_action:
+                    content["cta"] = brief.desired_action
+                if required_copy:
+                    content["body"] = f"{content['body']} {required_copy}"
+            elif content["format"] == "title_and_cover":
+                if brief.core_message:
+                    content["title_options"][0] = brief.core_message
+                    content["cover_copy_options"][0] = brief.core_message
+                if required_copy:
+                    content["title_options"].append(required_copy)
+            elif content["format"] == "comment_reply":
+                if brief.desired_action:
+                    content["reply_options"].append(brief.desired_action)
+                if required_copy:
+                    content["reply_options"].append(required_copy)
+            elif content["format"].startswith("livestream_"):
+                if brief.core_message:
+                    content["run_of_show"][0]["script"] = brief.core_message
+                if brief.desired_action:
+                    content["run_of_show"][-1]["script"] = brief.desired_action
+                if required_copy:
+                    content["run_of_show"].insert(
+                        -1,
+                        {"stage": "活动必讲信息", "script": required_copy},
+                    )
         content["risk_notes"] = risk_notes
+        if brief:
+            content["risk_notes"].extend(
+                f"不得使用活动简报禁用表述：{message}" for message in brief.prohibited_messages
+            )
         if farmer_evidence:
             content["risk_notes"].append("助农与合作关系声明只能使用已审核且在授权范围内的表述。")
         content["citations"] = citations
@@ -449,6 +504,67 @@ def validate_generation_output(
     return normalized
 
 
+def _content_strings(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [
+            text
+            for key, nested in value.items()
+            if key not in {"citations", "risk_notes"}
+            for text in _content_strings(nested)
+        ]
+    if isinstance(value, list):
+        return [text for nested in value for text in _content_strings(nested)]
+    return []
+
+
+def validate_campaign_brief_output(
+    content: dict,
+    brief: CampaignBriefRevision | None,
+) -> None:
+    """Apply small deterministic marketing constraints after model validation."""
+
+    if brief is None:
+        return
+    searchable = "\n".join(_content_strings(content)).casefold()
+    missing = [
+        message
+        for message in brief.mandatory_messages
+        if message.strip() and message.strip().casefold() not in searchable
+    ]
+    if missing:
+        raise AIProviderError(
+            "Generated content omitted a mandatory campaign message",
+            code="campaign_mandatory_message_missing",
+        )
+    prohibited = [
+        message
+        for message in brief.prohibited_messages
+        if message.strip() and message.strip().casefold() in searchable
+    ]
+    if prohibited:
+        raise AIProviderError(
+            "Generated content used a prohibited campaign message",
+            code="campaign_prohibited_message_used",
+        )
+
+    constraints = brief.channel_constraints or {}
+    maximum_duration = constraints.get("max_duration_seconds")
+    duration = content.get("duration_seconds")
+    if (
+        isinstance(maximum_duration, (int, float))
+        and not isinstance(maximum_duration, bool)
+        and isinstance(duration, (int, float))
+        and not isinstance(duration, bool)
+        and duration > maximum_duration
+    ):
+        raise AIProviderError(
+            "Generated content exceeds the campaign duration limit",
+            code="campaign_duration_exceeded",
+        )
+
+
 class OpenAICompatibleProvider:
     """Adapter for servers implementing the OpenAI chat-completions contract."""
 
@@ -477,6 +593,7 @@ class OpenAICompatibleProvider:
         sources: list[ContextSource],
         supply: CampaignSupplySnapshot | None = None,
         farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
+        brief: CampaignBriefRevision | None = None,
     ) -> dict:
         verified_sources = [
             {
@@ -504,6 +621,28 @@ class OpenAICompatibleProvider:
                 "prohibited_claims": product.prohibited_claims,
             },
             "verified_sources": verified_sources,
+            "campaign_brief": (
+                {
+                    "brief_revision_id": brief.id,
+                    "revision_number": brief.revision_number,
+                    "platform": brief.platform,
+                    "target_audience": brief.target_audience,
+                    "objective": brief.objective,
+                    "tone": brief.tone,
+                    "core_message": brief.core_message,
+                    "audience_need": brief.audience_need,
+                    "desired_action": brief.desired_action,
+                    "proof_points": brief.proof_points,
+                    "claim_evidence": brief.claim_evidence,
+                    "mandatory_messages": brief.mandatory_messages,
+                    "prohibited_messages": brief.prohibited_messages,
+                    "channel_constraints": brief.channel_constraints,
+                    "locale": brief.locale,
+                    "extra_requirements": brief.extra_requirements,
+                }
+                if brief
+                else None
+            ),
             "verified_supply": (
                 {
                     "snapshot_id": supply.id,
@@ -569,6 +708,11 @@ class OpenAICompatibleProvider:
                         "images, voices, or quantified impact. Do not make any such claim when "
                         "verified_farmer_evidence is null, outside consent_scope, listed in "
                         "prohibited_claims, or absent from allowed_claims. "
+                        "When campaign_brief is present, use it as the authoritative marketing "
+                        "direction: address audience_need, lead with core_message, support it "
+                        "with proof_points and their claim_evidence, include mandatory_messages, "
+                        "end with desired_action, "
+                        "obey channel_constraints and locale, and never use prohibited_messages. "
                         "source provenance in a citations array containing source_id and label. "
                         "Include a risk_notes array. Match the requested content_type."
                     ),
@@ -588,6 +732,7 @@ class OpenAICompatibleProvider:
         sources: list[ContextSource],
         supply: CampaignSupplySnapshot | None = None,
         farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
+        brief: CampaignBriefRevision | None = None,
     ) -> GenerationResult:
         started = time.perf_counter()
         payload = self._payload(
@@ -597,6 +742,7 @@ class OpenAICompatibleProvider:
             sources,
             supply,
             farmer_evidence,
+            brief,
         )
         payload["model"] = self.model
         try:

@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -247,8 +248,102 @@ class CampaignPackageUpdate(BaseModel):
     extra_requirements: str = ""
 
 
+class CampaignEvidenceReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_type: Literal[
+        "knowledge_source",
+        "supply_snapshot",
+        "farmer_evidence_snapshot",
+    ]
+    source_id: str = Field(min_length=1)
+    evidence_key: str = Field(default="", max_length=120)
+
+
+class CampaignClaimEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    claim_text: str = Field(min_length=1)
+    claim_type: Literal[
+        "product_fact",
+        "brand_story",
+        "regional_culture",
+        "supply_fact",
+        "farmer_impact",
+        "other",
+    ]
+    evidence_refs: list[CampaignEvidenceReference] = Field(min_length=1, max_length=20)
+
+
+class CampaignChannelConstraints(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    hook_seconds: int | None = Field(default=None, strict=True, ge=1, le=60)
+    max_duration_seconds: int | None = Field(default=None, strict=True, ge=1, le=3600)
+
+
+class CampaignBriefRevisionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    platform: str = Field(default="general", min_length=1, max_length=80)
+    target_audience: str = Field(min_length=1)
+    objective: str = Field(min_length=1)
+    tone: str = Field(default="", max_length=120)
+    core_message: str = Field(min_length=1)
+    audience_need: str = Field(min_length=1)
+    desired_action: str = Field(min_length=1)
+    proof_points: list[str] = Field(default_factory=list, max_length=50)
+    claim_evidence: list[CampaignClaimEvidence] = Field(default_factory=list, max_length=50)
+    mandatory_messages: list[str] = Field(default_factory=list, max_length=50)
+    prohibited_messages: list[str] = Field(default_factory=list, max_length=50)
+    channel_constraints: CampaignChannelConstraints = Field(
+        default_factory=CampaignChannelConstraints
+    )
+    locale: str = Field(default="zh-CN", pattern=r"^(zh-CN|zh-HK|en)$")
+    extra_requirements: str = ""
+    change_summary: str = Field(default="", max_length=255)
+
+
+class CampaignBriefRevisionRead(ORMModel):
+    id: str
+    organization_id: str
+    campaign_package_id: str
+    revision_number: int
+    platform: str
+    target_audience: str
+    objective: str
+    tone: str
+    core_message: str
+    audience_need: str
+    desired_action: str
+    proof_points: list[str]
+    claim_evidence: list[CampaignClaimEvidence]
+    mandatory_messages: list[str]
+    prohibited_messages: list[str]
+    channel_constraints: dict
+    locale: str
+    extra_requirements: str
+    change_summary: str
+    status: ReviewStatus
+    created_by: str
+    reviewed_by: str | None
+    review_note: str
+    reviewed_at: datetime | None
+    created_at: datetime
+
+
 class CampaignStatusUpdate(BaseModel):
     status: CampaignStatus
+
+
+class CampaignClaimEvidenceMapRead(BaseModel):
+    campaign_package_id: str
+    brief_revision_id: str
+    complete: bool
+    mapped_claims: int
+    total_claims: int
+    blockers: list[str]
+    claims: list[CampaignClaimEvidence]
 
 
 class CampaignItemCreate(BaseModel):
@@ -405,6 +500,7 @@ class CampaignProgress(BaseModel):
     published: int
     required_approved: int
     required_complete: bool
+    brief_ready: bool
     supply_ready: bool
     farmer_evidence_ready: bool
 
@@ -424,6 +520,7 @@ class CampaignPackageRead(ORMModel):
     created_by: str
     created_at: datetime
     updated_at: datetime
+    current_brief_revision: CampaignBriefRevisionRead | None
     current_supply_snapshot: CampaignSupplySnapshotRead | None
     current_farmer_evidence_snapshot: CampaignFarmerEvidenceSnapshotRead | None
     items: list[CampaignPackageItemRead]
@@ -440,6 +537,7 @@ class ContentVersionRead(ORMModel):
     id: str
     organization_id: str
     project_id: str
+    brief_revision_id: str | None
     supply_snapshot_id: str | None
     farmer_evidence_snapshot_id: str | None
     generation_run_id: str | None
@@ -452,6 +550,7 @@ class ContentVersionRead(ORMModel):
     created_by: str
     reviewed_by: str | None
     review_note: str
+    brief_current: bool | None = None
     supply_current: bool | None = None
     farmer_evidence_current: bool | None = None
     content_current: bool | None = None
@@ -593,6 +692,7 @@ class PublicationDetailRead(BaseModel):
 class GenerationRead(BaseModel):
     run_id: str
     version: ContentVersionRead
+    brief_revision_id: str | None
     farmer_evidence_snapshot_id: str | None
     provider: str
     model: str
@@ -611,6 +711,7 @@ class GenerationSourceRead(BaseModel):
 class GenerationRunRead(ORMModel):
     id: str
     project_id: str
+    brief_revision_id: str | None
     supply_snapshot_id: str | None
     farmer_evidence_snapshot_id: str | None
     provider: str

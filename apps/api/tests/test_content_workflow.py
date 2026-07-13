@@ -160,7 +160,14 @@ def test_provider_failure_is_persisted_without_creating_a_content_version(
         model = "failure-model"
 
         def generate_script(
-            self, project, brand, product, sources, supply=None, farmer_evidence=None
+            self,
+            project,
+            brand,
+            product,
+            sources,
+            supply=None,
+            farmer_evidence=None,
+            brief=None,
         ):
             raise AIProviderError(
                 "The configured AI provider timed out",
@@ -241,7 +248,14 @@ def test_invalid_provider_output_is_failed_and_never_becomes_content(client, aut
         model = "invalid-model"
 
         def generate_script(
-            self, project, brand, product, sources, supply=None, farmer_evidence=None
+            self,
+            project,
+            brand,
+            product,
+            sources,
+            supply=None,
+            farmer_evidence=None,
+            brief=None,
         ):
             assert project.content_type == ContentType.social_post
             return GenerationResult(
@@ -318,7 +332,14 @@ def test_missing_citation_is_failed_when_reviewed_sources_were_selected(client, 
         model = "missing-citation-model"
 
         def generate_script(
-            self, project, brand, product, sources, supply=None, farmer_evidence=None
+            self,
+            project,
+            brand,
+            product,
+            sources,
+            supply=None,
+            farmer_evidence=None,
+            brief=None,
         ):
             assert [item.id for item in sources] == [source["id"]]
             return GenerationResult(
@@ -396,7 +417,14 @@ def test_successful_generation_replaces_provider_labels_and_deduplicates(client,
         model = "mislabeling-model"
 
         def generate_script(
-            self, project, brand, product, sources, supply=None, farmer_evidence=None
+            self,
+            project,
+            brand,
+            product,
+            sources,
+            supply=None,
+            farmer_evidence=None,
+            brief=None,
         ):
             return GenerationResult(
                 content={

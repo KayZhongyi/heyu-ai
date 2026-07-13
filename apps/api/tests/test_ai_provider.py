@@ -8,10 +8,11 @@ from app.ai import (
     DeterministicProvider,
     OpenAICompatibleProvider,
     get_ai_provider,
+    validate_campaign_brief_output,
     validate_generation_output,
 )
 from app.config import Settings
-from app.models import Brand, ContentProject, ContentType, Product
+from app.models import Brand, CampaignBriefRevision, ContentProject, ContentType, Product
 
 
 def entities():
@@ -34,6 +35,27 @@ def entities():
         prohibited_claims=["治疗疾病"],
     )
     return project, brand, product
+
+
+def campaign_brief():
+    return CampaignBriefRevision(
+        id="brief-1",
+        revision_number=2,
+        platform="douyin",
+        target_audience="Young families",
+        objective="Qualified product-page visits",
+        tone="Warm and specific",
+        core_message="Freshness should be explained with current evidence",
+        audience_need="Know what is available now and why it is trustworthy",
+        desired_action="Open the product page and check today's specification",
+        proof_points=["Current supply snapshot", "Approved origin record"],
+        claim_evidence=[],
+        mandatory_messages=["State today's specification"],
+        prohibited_messages=["Never promise medical benefits"],
+        channel_constraints={"hook_seconds": 3, "max_duration_seconds": 30},
+        locale="zh-CN",
+        extra_requirements="Keep every factual statement traceable",
+    )
 
 
 def test_provider_factory_keeps_zero_cost_default():
@@ -74,7 +96,7 @@ def test_openai_compatible_provider_sends_structured_grounded_request():
         model="example-model",
         transport=httpx.MockTransport(handler),
     )
-    result = provider.generate_script(*entities(), [])
+    result = provider.generate_script(*entities(), [], brief=campaign_brief())
 
     assert result.content["format"] == "short_video_script"
     assert captured["authorization"] == "Bearer secret-test-key"
@@ -82,6 +104,56 @@ def test_openai_compatible_provider_sends_structured_grounded_request():
     task = json.loads(captured["payload"]["messages"][1]["content"])
     assert task["product"]["prohibited_claims"] == ["治疗疾病"]
     assert task["verified_sources"] == []
+    assert task["campaign_brief"]["brief_revision_id"] == "brief-1"
+    assert task["campaign_brief"]["core_message"] == (
+        "Freshness should be explained with current evidence"
+    )
+    assert task["campaign_brief"]["mandatory_messages"] == ["State today's specification"]
+    assert task["campaign_brief"]["claim_evidence"] == []
+
+
+def test_deterministic_provider_uses_campaign_brief_direction():
+    result = DeterministicProvider().generate_script(
+        *entities(),
+        [],
+        brief=campaign_brief(),
+    )
+
+    assert result.content["hook"] == "Freshness should be explained with current evidence"
+    assert result.content["cta"] == ("Open the product page and check today's specification")
+    assert any("Never promise medical benefits" in note for note in result.content["risk_notes"])
+    validate_campaign_brief_output(result.content, campaign_brief())
+
+
+def test_campaign_brief_output_validation_blocks_missing_and_prohibited_copy():
+    brief = campaign_brief()
+    with pytest.raises(AIProviderError) as missing:
+        validate_campaign_brief_output(
+            {"format": "social_post", "body": "Only a generic product message."},
+            brief,
+        )
+    assert missing.value.code == "campaign_mandatory_message_missing"
+
+    brief.mandatory_messages = []
+    with pytest.raises(AIProviderError) as prohibited:
+        validate_campaign_brief_output(
+            {
+                "format": "social_post",
+                "body": "Never promise medical benefits",
+            },
+            brief,
+        )
+    assert prohibited.value.code == "campaign_prohibited_message_used"
+
+
+def test_campaign_brief_output_validation_enforces_duration_limit():
+    brief = campaign_brief()
+    brief.mandatory_messages = []
+    brief.prohibited_messages = []
+    validate_campaign_brief_output({"duration_seconds": 30}, brief)
+    with pytest.raises(AIProviderError) as duration:
+        validate_campaign_brief_output({"duration_seconds": 31}, brief)
+    assert duration.value.code == "campaign_duration_exceeded"
 
 
 def test_openai_compatible_provider_rejects_invalid_response_without_leaking_key():

@@ -14,11 +14,13 @@ from app.ai import (
     AIProviderError,
     ContextSource,
     get_ai_provider,
+    validate_campaign_brief_output,
     validate_generation_output,
 )
 from app.models import (
     AuditEvent,
     Brand,
+    CampaignBriefRevision,
     CampaignFarmerEvidenceSnapshot,
     CampaignPackage,
     CampaignPackageItem,
@@ -44,6 +46,8 @@ from app.schemas import (
     AssetReview,
     BrandCreate,
     BrandUpdate,
+    CampaignBriefRevisionCreate,
+    CampaignClaimEvidenceMapRead,
     CampaignFarmerEvidenceSnapshotCreate,
     CampaignItemCreate,
     CampaignItemLink,
@@ -806,6 +810,22 @@ def _current_campaign_supply(
     return None
 
 
+def _current_campaign_brief(
+    db: Session,
+    campaign_id: str,
+    organization_id: str,
+) -> CampaignBriefRevision | None:
+    return db.scalar(
+        select(CampaignBriefRevision)
+        .where(
+            CampaignBriefRevision.campaign_package_id == campaign_id,
+            CampaignBriefRevision.organization_id == organization_id,
+            CampaignBriefRevision.status == ReviewStatus.approved,
+        )
+        .order_by(CampaignBriefRevision.revision_number.desc())
+    )
+
+
 def _current_campaign_farmer_evidence(
     db: Session,
     campaign_id: str,
@@ -840,12 +860,17 @@ def _current_campaign_farmer_evidence(
     )
 
 
-def _campaign_requested_farmer_claims(campaign: CampaignPackage) -> list[dict]:
+def _campaign_requested_farmer_claims(
+    campaign: CampaignPackage,
+    brief: CampaignBriefRevision | None = None,
+) -> list[dict]:
     return detect_farmer_claims(
         {
-            "target_audience": campaign.target_audience,
-            "objective": campaign.objective,
-            "extra_requirements": campaign.extra_requirements,
+            "target_audience": brief.target_audience if brief else campaign.target_audience,
+            "objective": brief.objective if brief else campaign.objective,
+            "extra_requirements": (
+                brief.extra_requirements if brief else campaign.extra_requirements
+            ),
         }
     )
 
@@ -885,12 +910,21 @@ def _content_version_freshness(
     campaign: CampaignPackage | None = None,
     current_supply: CampaignSupplySnapshot | None = None,
     current_farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
+    current_brief: CampaignBriefRevision | None = None,
 ) -> dict:
     campaign = campaign or _campaign_for_project(db, version.project_id, organization_id)
     stale_reasons: list[str] = []
     if campaign is None:
+        brief_current = True
         supply_current = True
     else:
+        current_brief = current_brief or _current_campaign_brief(db, campaign.id, organization_id)
+        brief_current = bool(current_brief and version.brief_revision_id == current_brief.id)
+        if not brief_current:
+            stale_reasons.append("brief_missing" if current_brief is None else "brief_replaced")
+        elif not _campaign_claim_evidence_map(db, campaign, current_brief).complete:
+            brief_current = False
+            stale_reasons.append("claim_evidence_stale")
         current_supply = current_supply or _current_campaign_supply(
             db, campaign.id, organization_id
         )
@@ -933,10 +967,27 @@ def _content_version_freshness(
                 farmer_evidence_current = False
                 stale_reasons.append("farmer_claims_unauthorized")
 
+    content_claims_current = True
+    if campaign and brief_current and supply_current:
+        content_claim_blockers = _campaign_content_claim_blockers(
+            db,
+            campaign,
+            version,
+            current_brief,
+            current_supply,
+            evidence,
+        )
+        if content_claim_blockers:
+            content_claims_current = False
+            stale_reasons.append("content_claims_unmapped")
+
     return {
+        "brief_current": brief_current,
         "supply_current": supply_current,
         "farmer_evidence_current": farmer_evidence_current,
-        "content_current": supply_current and farmer_evidence_current,
+        "content_current": (
+            brief_current and supply_current and farmer_evidence_current and content_claims_current
+        ),
         "stale_reasons": stale_reasons,
     }
 
@@ -949,6 +1000,7 @@ def _publication_blockers(
     campaign: CampaignPackage | None = None,
     current_supply: CampaignSupplySnapshot | None = None,
     current_farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
+    current_brief: CampaignBriefRevision | None = None,
     freshness: dict | None = None,
 ) -> list[str]:
     freshness = freshness or _content_version_freshness(
@@ -958,11 +1010,51 @@ def _publication_blockers(
         campaign=campaign,
         current_supply=current_supply,
         current_farmer_evidence=current_farmer_evidence,
+        current_brief=current_brief,
     )
     publication_blockers = list(freshness["stale_reasons"])
     if version.status != ReviewStatus.approved:
         publication_blockers.insert(0, "content_not_approved")
     return publication_blockers
+
+
+def _content_review_freshness_error(stale_reasons: list[str]) -> str:
+    messages = {
+        "brief_missing": (
+            "Content review requires a current approved campaign brief; "
+            "approve the campaign brief and regenerate the content first"
+        ),
+        "brief_replaced": (
+            "Content was generated from an older campaign brief; regenerate it before review"
+        ),
+        "claim_evidence_stale": (
+            "Campaign claim evidence is no longer current; rebind and approve a new brief first"
+        ),
+        "supply_missing": (
+            "Content review requires the current approved supply snapshot; "
+            "regenerate the content first"
+        ),
+        "supply_replaced_or_expired": (
+            "Content was generated from an expired or replaced supply snapshot; "
+            "regenerate it before review"
+        ),
+        "farmer_evidence_missing": (
+            "Farmer-impact content requires a current approved farmer evidence snapshot"
+        ),
+        "farmer_evidence_replaced_or_expired": (
+            "Farmer-impact content uses replaced or expired evidence; regenerate it first"
+        ),
+        "farmer_claims_unauthorized": (
+            "Farmer-impact content contains claims outside the approved evidence scope"
+        ),
+        "content_claims_unmapped": (
+            "Content contains factual claims that are not backed by approved campaign evidence"
+        ),
+    }
+    return messages.get(
+        stale_reasons[0],
+        "Content is no longer current; regenerate it before review",
+    )
 
 
 def _content_version_availability(
@@ -973,6 +1065,7 @@ def _content_version_availability(
     campaign: CampaignPackage | None = None,
     current_supply: CampaignSupplySnapshot | None = None,
     current_farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
+    current_brief: CampaignBriefRevision | None = None,
 ) -> dict:
     freshness = _content_version_freshness(
         db,
@@ -981,6 +1074,7 @@ def _content_version_availability(
         campaign=campaign,
         current_supply=current_supply,
         current_farmer_evidence=current_farmer_evidence,
+        current_brief=current_brief,
     )
     publication_blockers = _publication_blockers(
         db,
@@ -989,6 +1083,7 @@ def _content_version_availability(
         campaign=campaign,
         current_supply=current_supply,
         current_farmer_evidence=current_farmer_evidence,
+        current_brief=current_brief,
         freshness=freshness,
     )
     return {
@@ -1015,6 +1110,7 @@ def _content_version_view(
 def _campaign_item_view(
     db: Session,
     item: CampaignPackageItem,
+    current_brief: CampaignBriefRevision | None = None,
     current_supply: CampaignSupplySnapshot | None = None,
     current_farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
 ) -> CampaignPackageItemRead:
@@ -1060,6 +1156,7 @@ def _campaign_item_view(
                 item.organization_id,
                 version,
                 campaign=campaign,
+                current_brief=current_brief,
                 current_supply=current_supply,
                 current_farmer_evidence=current_farmer_evidence,
             )["farmer_evidence_current"]
@@ -1067,6 +1164,8 @@ def _campaign_item_view(
 
     approved_current = bool(
         approved
+        and current_brief
+        and approved.brief_revision_id == current_brief.id
         and current_supply
         and approved.supply_snapshot_id == current_supply.id
         and farmer_evidence_current(approved)
@@ -1083,8 +1182,10 @@ def _campaign_item_view(
     )
     publication_current = bool(
         publication
-        and current_supply
+        and current_brief
         and published_version
+        and published_version.brief_revision_id == current_brief.id
+        and current_supply
         and published_version.supply_snapshot_id == current_supply.id
         and farmer_evidence_current(published_version)
     )
@@ -1094,11 +1195,13 @@ def _campaign_item_view(
             item.organization_id,
             latest,
             campaign=campaign,
+            current_brief=current_brief,
             current_supply=current_supply,
             current_farmer_evidence=current_farmer_evidence,
         )
         if latest
         else {
+            "brief_current": False,
             "supply_current": False,
             "farmer_evidence_current": False,
             "content_current": False,
@@ -1125,6 +1228,7 @@ def _campaign_item_view(
 
 
 def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRead:
+    current_brief = _current_campaign_brief(db, campaign.id, campaign.organization_id)
     current_supply = _current_campaign_supply(db, campaign.id, campaign.organization_id)
     current_farmer_evidence = _current_campaign_farmer_evidence(
         db, campaign.id, campaign.organization_id
@@ -1154,9 +1258,15 @@ def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRea
     requested_farmer_claims = detect_farmer_claims(
         {
             "campaign": {
-                "target_audience": campaign.target_audience,
-                "objective": campaign.objective,
-                "extra_requirements": campaign.extra_requirements,
+                "target_audience": (
+                    current_brief.target_audience if current_brief else campaign.target_audience
+                ),
+                "objective": (current_brief.objective if current_brief else campaign.objective),
+                "extra_requirements": (
+                    current_brief.extra_requirements
+                    if current_brief
+                    else campaign.extra_requirements
+                ),
             },
             "content_projects": [
                 {
@@ -1174,9 +1284,19 @@ def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRea
             _validate_farmer_claims(
                 {
                     "campaign": {
-                        "target_audience": campaign.target_audience,
-                        "objective": campaign.objective,
-                        "extra_requirements": campaign.extra_requirements,
+                        "target_audience": (
+                            current_brief.target_audience
+                            if current_brief
+                            else campaign.target_audience
+                        ),
+                        "objective": (
+                            current_brief.objective if current_brief else campaign.objective
+                        ),
+                        "extra_requirements": (
+                            current_brief.extra_requirements
+                            if current_brief
+                            else campaign.extra_requirements
+                        ),
                     },
                     "content_projects": [
                         {
@@ -1196,6 +1316,7 @@ def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRea
         _campaign_item_view(
             db,
             item,
+            current_brief,
             current_supply,
             current_farmer_evidence,
         )
@@ -1211,6 +1332,7 @@ def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRea
         required_approved=sum(item.approved_version_id is not None for item in required_items),
         required_complete=bool(required_items)
         and all(item.approved_version_id is not None for item in required_items),
+        brief_ready=current_brief is not None,
         supply_ready=current_supply is not None,
         farmer_evidence_ready=farmer_evidence_ready,
     )
@@ -1219,6 +1341,7 @@ def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRea
             column.name: getattr(campaign, column.name)
             for column in CampaignPackage.__table__.columns
         },
+        current_brief_revision=current_brief,
         current_supply_snapshot=current_supply,
         current_farmer_evidence_snapshot=current_farmer_evidence,
         items=items,
@@ -1240,6 +1363,33 @@ def create_campaign_package(
         **payload,
     )
     db.add(campaign)
+    db.flush()
+    initial_brief = CampaignBriefRevision(
+        organization_id=actor.organization_id,
+        campaign_package_id=campaign.id,
+        revision_number=1,
+        platform=campaign.platform,
+        target_audience=campaign.target_audience,
+        objective=campaign.objective,
+        tone=campaign.tone,
+        core_message=campaign.objective,
+        audience_need=campaign.target_audience,
+        desired_action=campaign.objective,
+        proof_points=[],
+        claim_evidence=[],
+        mandatory_messages=[],
+        prohibited_messages=[],
+        channel_constraints={},
+        locale="zh-CN",
+        extra_requirements=campaign.extra_requirements,
+        change_summary="Initial campaign brief",
+        status=ReviewStatus.approved,
+        created_by=actor.user_id,
+        reviewed_by=actor.user_id,
+        review_note="Approved from the campaign creation payload",
+        reviewed_at=utc_now(),
+    )
+    db.add(initial_brief)
     db.flush()
     if data.create_default_items:
         default_items = (
@@ -1297,6 +1447,14 @@ def create_campaign_package(
                 },
             )
     audit(db, actor, "campaign_package.created", "campaign_package", campaign.id)
+    audit(
+        db,
+        actor,
+        "campaign_brief_revision.created",
+        "campaign_brief_revision",
+        initial_brief.id,
+        {"campaign_package_id": campaign.id, "revision_number": 1},
+    )
     db.commit()
     db.refresh(campaign)
     return _campaign_view(db, campaign)
@@ -1313,6 +1471,705 @@ def list_campaign_packages(db: Session, actor: Actor) -> list[CampaignPackageRea
 
 def get_campaign_package(db: Session, actor: Actor, campaign_id: str) -> CampaignPackageRead:
     return _campaign_view(db, _tenant_campaign(db, actor, campaign_id))
+
+
+def create_campaign_brief_revision(
+    db: Session,
+    actor: Actor,
+    campaign_id: str,
+    data: CampaignBriefRevisionCreate,
+) -> CampaignBriefRevision:
+    campaign = _campaign_for_update(db, actor, campaign_id)
+    _ensure_campaign_editable(campaign)
+
+    def cleaned(items: list[str]) -> list[str]:
+        return [str(item).strip() for item in dict.fromkeys(items) if str(item).strip()]
+
+    proof_points = cleaned(data.proof_points)
+    mandatory_messages = cleaned(data.mandatory_messages)
+    prohibited_messages = cleaned(data.prohibited_messages)
+    if {item.casefold() for item in mandatory_messages} & {
+        item.casefold() for item in prohibited_messages
+    }:
+        raise HTTPException(
+            status_code=422,
+            detail="The same message cannot be both mandatory and prohibited",
+        )
+    max_revision = db.scalar(
+        select(func.max(CampaignBriefRevision.revision_number)).where(
+            CampaignBriefRevision.campaign_package_id == campaign.id,
+            CampaignBriefRevision.organization_id == actor.organization_id,
+        )
+    )
+    revision = CampaignBriefRevision(
+        organization_id=actor.organization_id,
+        campaign_package_id=campaign.id,
+        revision_number=(max_revision or 0) + 1,
+        proof_points=proof_points,
+        claim_evidence=[item.model_dump() for item in data.claim_evidence],
+        mandatory_messages=mandatory_messages,
+        prohibited_messages=prohibited_messages,
+        channel_constraints=data.channel_constraints.model_dump(exclude_none=True),
+        created_by=actor.user_id,
+        **data.model_dump(
+            exclude={
+                "proof_points",
+                "claim_evidence",
+                "mandatory_messages",
+                "prohibited_messages",
+                "channel_constraints",
+            }
+        ),
+    )
+    db.add(revision)
+    flush_or_conflict(
+        db,
+        "A campaign brief revision was created concurrently; refresh and try again",
+    )
+    campaign.updated_at = utc_now()
+    audit(
+        db,
+        actor,
+        "campaign_brief_revision.created",
+        "campaign_brief_revision",
+        revision.id,
+        {
+            "campaign_package_id": campaign.id,
+            "revision_number": revision.revision_number,
+            "locale": revision.locale,
+        },
+    )
+    db.commit()
+    db.refresh(revision)
+    return revision
+
+
+def list_campaign_brief_revisions(
+    db: Session,
+    actor: Actor,
+    campaign_id: str,
+) -> list[CampaignBriefRevision]:
+    _tenant_campaign(db, actor, campaign_id)
+    return list(
+        db.scalars(
+            select(CampaignBriefRevision)
+            .where(
+                CampaignBriefRevision.campaign_package_id == campaign_id,
+                CampaignBriefRevision.organization_id == actor.organization_id,
+            )
+            .order_by(CampaignBriefRevision.revision_number.desc())
+        )
+    )
+
+
+KNOWLEDGE_EVIDENCE_KEYS = {"content"}
+SUPPLY_EVIDENCE_KEYS = {
+    "specification",
+    "price_minor",
+    "currency",
+    "price_valid_until",
+    "available_quantity",
+    "quantity_unit",
+    "order_limit",
+    "inventory_confirmed_at",
+    "harvest_status",
+    "harvest_date",
+    "shipping_regions",
+    "ship_within_hours",
+    "freight_policy",
+    "storage_and_freshness",
+    "shortage_policy",
+}
+FARMER_EVIDENCE_KEYS = {
+    "relationship_type",
+    "relationship_summary",
+    "benefit_mechanism",
+    "allowed_claims",
+    "consent_scope",
+}
+
+FACT_VALUE_PATTERN = re.compile(
+    r"(?:\d+(?:[.,]\d+)?|[¥￥$€£]\s*\d|"
+    r"库存|庫存|价格|價格|售价|售價|可售|现货|現貨|采收|採收|"
+    r"发货|發貨|配送|产地|產地|来自|來自|农户|農戶|助农|助農|"
+    r"\b(?:inventory|stock|price|available|harvest|shipping|origin|"
+    r"grown in|farmer|farm-direct)\b)",
+    re.IGNORECASE,
+)
+INSTRUCTION_PREFIX_PATTERN = re.compile(
+    r"^\s*(?:(?:请|請|需|需要|应|應|必须|必須|不得|避免|准确说明|準確說明|"
+    r"清楚说明|清楚說明|如实说明|如實說明|可以使用|可使用|可採用|说明|說明|"
+    r"陈述|陳述|讲清|講清|注明|標明|标明)|"
+    r"(?:state|mention|explain|include|show|avoid|do not|must)\b)",
+    re.IGNORECASE,
+)
+NUMBER_PATTERN = re.compile(r"(?<![\w.])\d+(?:[.,]\d+)?(?![\w.])")
+CONTENT_INVENTORY_PATTERN = re.compile(
+    r"(?:库存|庫存|可售(?:数量|數量)?|现货|現貨|inventory|stock|available)"
+    r"[^0-9]{0,16}(?P<value>\d+(?:[.,]\d+)?)",
+    re.IGNORECASE,
+)
+CONTENT_PRICE_PATTERN = re.compile(
+    r"(?:(?:价格|價格|售价|售價|price)[^0-9]{0,16}|[¥￥$]\s*)"
+    r"(?P<value>\d+(?:[.,]\d+)?)",
+    re.IGNORECASE,
+)
+CONTENT_METADATA_KEYS = {
+    "duration_seconds",
+    "seconds",
+    "revision_number",
+    "position",
+    "source_id",
+}
+
+
+def _normalized_text(value: object) -> str:
+    return " ".join(str(value).casefold().split())
+
+
+def _date_variants(value: object) -> set[str]:
+    if isinstance(value, datetime):
+        value = value.date()
+    if not hasattr(value, "year"):
+        return set()
+    return {
+        value.isoformat(),
+        f"{value.year}-{value.month}-{value.day}",
+        f"{value.year}/{value.month}/{value.day}",
+        f"{value.year}年{value.month}月{value.day}日",
+    }
+
+
+def _claim_contains_supply_value(
+    claim_text: str,
+    supply: CampaignSupplySnapshot,
+    evidence_key: str,
+) -> bool:
+    normalized_claim = _normalized_text(claim_text)
+    value = getattr(supply, evidence_key)
+    if value is None:
+        return False
+    if evidence_key == "price_minor":
+        amount = f"{value / 100:.2f}".rstrip("0").rstrip(".")
+        currency_markers = {
+            supply.currency.casefold(),
+            *(
+                {"¥", "￥", "元"}
+                if supply.currency.upper() in {"CNY", "RMB"}
+                else {"$"}
+                if supply.currency.upper() in {"USD", "HKD"}
+                else set()
+            ),
+        }
+        return amount in normalized_claim and any(
+            marker in normalized_claim for marker in currency_markers
+        )
+    if evidence_key == "available_quantity":
+        return bool(
+            re.search(rf"(?<!\d){re.escape(str(value))}(?!\d)", normalized_claim)
+            and _normalized_text(supply.quantity_unit) in normalized_claim
+        )
+    if evidence_key in {"price_valid_until", "inventory_confirmed_at", "harvest_date"}:
+        return any(item.casefold() in normalized_claim for item in _date_variants(value))
+    if evidence_key == "shipping_regions":
+        return any(
+            _normalized_text(item) in normalized_claim for item in value if _normalized_text(item)
+        )
+    if isinstance(value, list):
+        return any(
+            _normalized_text(item) in normalized_claim for item in value if _normalized_text(item)
+        )
+    if isinstance(value, int):
+        return bool(re.search(rf"(?<!\d){re.escape(str(value))}(?!\d)", normalized_claim))
+    return bool(_normalized_text(value) and _normalized_text(value) in normalized_claim)
+
+
+def _claim_contains_farmer_value(
+    claim_text: str,
+    evidence: CampaignFarmerEvidenceSnapshot,
+    evidence_key: str,
+) -> bool:
+    normalized_claim = _normalized_text(claim_text)
+    value = getattr(evidence, evidence_key)
+    if evidence_key == "allowed_claims":
+        return normalized_claim in {
+            _normalized_text(item) for item in value if _normalized_text(item)
+        }
+    if evidence_key == "consent_scope":
+        return any(
+            _normalized_text(item) in normalized_claim for item in value if _normalized_text(item)
+        )
+    return bool(_normalized_text(value) and _normalized_text(value) in normalized_claim)
+
+
+def _brief_unmapped_fact_blockers(
+    revision: CampaignBriefRevision,
+    proof_points: list[str],
+) -> list[str]:
+    blockers: list[str] = []
+    proof_point_values = [_normalized_text(item) for item in proof_points]
+    fields: dict[str, list[str]] = {
+        "core_message": [revision.core_message],
+        "objective": [revision.objective],
+        "desired_action": [revision.desired_action],
+        "mandatory_messages": revision.mandatory_messages,
+        "extra_requirements": [revision.extra_requirements],
+    }
+    for field_name, values in fields.items():
+        for index, value in enumerate(values):
+            normalized = _normalized_text(value)
+            if (
+                normalized
+                and FACT_VALUE_PATTERN.search(normalized)
+                and not INSTRUCTION_PREFIX_PATTERN.search(normalized)
+                and not any(proof_point in normalized for proof_point in proof_point_values)
+            ):
+                blockers.append(f"brief_field_unmapped_claim:{field_name}:{index}")
+    return blockers
+
+
+def _iter_content_text(
+    value: object,
+    path: tuple[str, ...] = (),
+):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            key_text = str(key)
+            if key_text in CONTENT_METADATA_KEYS:
+                continue
+            yield from _iter_content_text(item, (*path, key_text))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            yield from _iter_content_text(item, (*path, str(index)))
+    elif isinstance(value, str) and value.strip():
+        yield path, value
+
+
+def _normalized_numbers(value: object) -> set[str]:
+    numbers: set[str] = set()
+
+    def collect(item: object) -> None:
+        if isinstance(item, dict):
+            for nested in item.values():
+                collect(nested)
+        elif isinstance(item, (list, tuple, set)):
+            for nested in item:
+                collect(nested)
+        elif item is not None:
+            for match in NUMBER_PATTERN.finditer(str(item)):
+                normalized = match.group(0).replace(",", "")
+                if "." in normalized:
+                    normalized = normalized.rstrip("0").rstrip(".")
+                numbers.add(normalized)
+
+    collect(value)
+    return numbers
+
+
+def _campaign_content_claim_blockers(
+    db: Session,
+    campaign: CampaignPackage,
+    version: ContentVersion,
+    brief: CampaignBriefRevision | None,
+    supply: CampaignSupplySnapshot | None,
+    farmer_evidence: CampaignFarmerEvidenceSnapshot | None,
+) -> list[str]:
+    project = db.scalar(
+        select(ContentProject).where(
+            ContentProject.id == version.project_id,
+            ContentProject.organization_id == campaign.organization_id,
+        )
+    )
+    if project is None:
+        return ["content_project_unavailable"]
+    product = db.scalar(
+        select(Product).where(
+            Product.id == project.product_id,
+            Product.organization_id == campaign.organization_id,
+        )
+    )
+    brand = db.scalar(
+        select(Brand).where(
+            Brand.id == project.brand_id,
+            Brand.organization_id == campaign.organization_id,
+        )
+    )
+    if product is None or brand is None:
+        return ["content_assets_unavailable"]
+
+    trusted_values: list[object] = [
+        {
+            "name": product.name,
+            "origin": product.origin,
+            "specification": product.specification,
+            "price_display": product.price_display,
+            "shelf_life": product.shelf_life,
+            "storage_method": product.storage_method,
+            "selling_points": product.selling_points,
+        },
+        {
+            "name": brand.name,
+            "story": brand.story,
+            "voice": brand.voice,
+        },
+        brief.proof_points if brief else [],
+        brief.channel_constraints if brief else {},
+        supply.__dict__ if supply else {},
+        farmer_evidence.__dict__ if farmer_evidence else {},
+    ]
+    if supply and supply.price_minor is not None:
+        trusted_values.append(supply.price_minor / 100)
+
+    run = (
+        db.scalar(
+            select(GenerationRun).where(
+                GenerationRun.id == version.generation_run_id,
+                GenerationRun.organization_id == campaign.organization_id,
+            )
+        )
+        if version.generation_run_id
+        else None
+    )
+    if run and run.source_ids:
+        trusted_values.extend(
+            source.content
+            for source in db.scalars(
+                select(KnowledgeSource).where(
+                    KnowledgeSource.id.in_(run.source_ids),
+                    KnowledgeSource.organization_id == campaign.organization_id,
+                    KnowledgeSource.status == ReviewStatus.approved,
+                )
+            ).all()
+        )
+
+    authorized_numbers = _normalized_numbers(trusted_values)
+    if project.content_type == ContentType.short_video_30s:
+        authorized_numbers.add("30")
+    elif project.content_type == ContentType.short_video_60s:
+        authorized_numbers.add("60")
+
+    blockers: list[str] = []
+    seen: set[str] = set()
+    origin_patterns: list[re.Pattern[str]] = []
+    if product.name:
+        origin_patterns.append(
+            re.compile(
+                rf"(?:来自|來自)\s*(?P<origin>[^，。！？!?；;]{{1,60}}?)"
+                rf"(?:的|嘅)\s*{re.escape(product.name)}",
+                re.IGNORECASE,
+            )
+        )
+        origin_patterns.extend(
+            [
+                re.compile(
+                    rf"{re.escape(product.name)}\s+(?:is\s+)?"
+                    rf"(?:grown|produced|sourced)\s+in\s+"
+                    rf"(?P<origin>[^,.;!?]{{1,60}}?)"
+                    rf"(?=\s+(?:is|are|with|for|that|and)\b|[,.;!?]|$)",
+                    re.IGNORECASE,
+                ),
+                re.compile(
+                    rf"{re.escape(product.name)}\s+from\s+"
+                    rf"(?P<origin>[^,.;!?]{{1,60}}?)"
+                    rf"(?=\s+(?:is|are|with|for|that|and)\b|[,.;!?]|$)",
+                    re.IGNORECASE,
+                ),
+            ]
+        )
+    normalized_origin = _normalized_text(product.origin)
+    expected_inventory = _normalized_numbers(supply.available_quantity) if supply else set()
+    expected_prices = _normalized_numbers(product.price_display)
+    if supply and supply.price_minor is not None:
+        expected_prices.update(_normalized_numbers(supply.price_minor / 100))
+
+    def add_blocker(blocker: str) -> None:
+        if blocker not in seen:
+            seen.add(blocker)
+            blockers.append(blocker)
+
+    for path, text in _iter_content_text(version.content):
+        path_text = ".".join(path) or "content"
+        for number in _normalized_numbers(text):
+            if number not in authorized_numbers:
+                add_blocker(f"content_numeric_claim_unmapped:{path_text}:{number}")
+        for match in CONTENT_INVENTORY_PATTERN.finditer(text):
+            claimed_value = next(iter(_normalized_numbers(match.group("value"))), "")
+            if not expected_inventory or claimed_value not in expected_inventory:
+                add_blocker(f"content_supply_value_mismatch:{path_text}:available_quantity")
+        for match in CONTENT_PRICE_PATTERN.finditer(text):
+            claimed_value = next(iter(_normalized_numbers(match.group("value"))), "")
+            if not expected_prices or claimed_value not in expected_prices:
+                add_blocker(f"content_supply_value_mismatch:{path_text}:price")
+        for origin_pattern in origin_patterns:
+            for match in origin_pattern.finditer(text):
+                claimed_origin = _normalized_text(match.group("origin"))
+                if claimed_origin in {"产地", "產地"}:
+                    continue
+                if not normalized_origin or (
+                    claimed_origin not in normalized_origin
+                    and normalized_origin not in claimed_origin
+                ):
+                    add_blocker(f"content_origin_claim_unmapped:{path_text}")
+    return blockers
+
+
+def _campaign_claim_evidence_map(
+    db: Session,
+    campaign: CampaignPackage,
+    revision: CampaignBriefRevision,
+) -> CampaignClaimEvidenceMapRead:
+    blockers: list[str] = []
+    claims = revision.claim_evidence or []
+    proof_points = [str(item).strip() for item in revision.proof_points if str(item).strip()]
+    claim_by_text: dict[str, dict] = {}
+
+    for index, claim in enumerate(claims):
+        text = str(claim.get("claim_text", "")).strip()
+        key = text.casefold()
+        if not text:
+            blockers.append(f"claim_text_missing:{index}")
+            continue
+        if key in claim_by_text:
+            blockers.append(f"claim_evidence_duplicate:{index}")
+            continue
+        claim_by_text[key] = claim
+
+    for index, proof_point in enumerate(proof_points):
+        if proof_point.casefold() not in claim_by_text:
+            blockers.append(f"proof_point_unmapped:{index}")
+    proof_point_keys = {item.casefold() for item in proof_points}
+    for index, claim in enumerate(claims):
+        if str(claim.get("claim_text", "")).strip().casefold() not in proof_point_keys:
+            blockers.append(f"claim_not_in_proof_points:{index}")
+    blockers.extend(_brief_unmapped_fact_blockers(revision, proof_points))
+
+    current_supply = _current_campaign_supply(db, campaign.id, campaign.organization_id)
+    current_farmer = _current_campaign_farmer_evidence(
+        db,
+        campaign.id,
+        campaign.organization_id,
+    )
+    for claim_index, claim in enumerate(claims):
+        claim_type = claim.get("claim_type")
+        seen_refs: set[tuple[str, str, str]] = set()
+        for ref_index, ref in enumerate(claim.get("evidence_refs") or []):
+            source_type = ref.get("source_type")
+            source_id = str(ref.get("source_id", "")).strip()
+            evidence_key = str(ref.get("evidence_key", "")).strip()
+            ref_key = (str(source_type), source_id, evidence_key)
+            if ref_key in seen_refs:
+                blockers.append(f"evidence_ref_duplicate:{claim_index}:{ref_index}")
+                continue
+            seen_refs.add(ref_key)
+
+            if source_type == "knowledge_source":
+                if claim_type in {"supply_fact", "farmer_impact"}:
+                    blockers.append(f"claim_source_type_mismatch:{claim_index}:{ref_index}")
+                    continue
+                if evidence_key not in KNOWLEDGE_EVIDENCE_KEYS:
+                    blockers.append(f"evidence_key_invalid:{claim_index}:{ref_index}")
+                    continue
+                source = db.scalar(
+                    select(KnowledgeSource).where(
+                        KnowledgeSource.id == source_id,
+                        KnowledgeSource.organization_id == campaign.organization_id,
+                        KnowledgeSource.status == ReviewStatus.approved,
+                        (KnowledgeSource.product_id == campaign.product_id)
+                        | (KnowledgeSource.brand_id == campaign.brand_id),
+                    )
+                )
+                if source is None:
+                    blockers.append(f"knowledge_source_unavailable:{claim_index}:{ref_index}")
+                    continue
+                latest_approved = db.scalar(
+                    select(KnowledgeSource.id)
+                    .where(
+                        KnowledgeSource.organization_id == campaign.organization_id,
+                        KnowledgeSource.source_group_id == source.source_group_id,
+                        KnowledgeSource.status == ReviewStatus.approved,
+                    )
+                    .order_by(KnowledgeSource.revision_number.desc())
+                    .limit(1)
+                )
+                if latest_approved != source.id:
+                    blockers.append(f"knowledge_source_replaced:{claim_index}:{ref_index}")
+                elif _normalized_text(claim.get("claim_text", "")) not in _normalized_text(
+                    source.content
+                ):
+                    blockers.append(f"claim_value_mismatch:{claim_index}:{ref_index}")
+            elif source_type == "supply_snapshot":
+                if claim_type != "supply_fact":
+                    blockers.append(f"claim_source_type_mismatch:{claim_index}:{ref_index}")
+                elif evidence_key not in SUPPLY_EVIDENCE_KEYS:
+                    blockers.append(f"evidence_key_invalid:{claim_index}:{ref_index}")
+                elif current_supply is None or current_supply.id != source_id:
+                    blockers.append(f"supply_snapshot_not_current:{claim_index}:{ref_index}")
+                elif not _claim_contains_supply_value(
+                    str(claim.get("claim_text", "")),
+                    current_supply,
+                    evidence_key,
+                ):
+                    blockers.append(f"claim_value_mismatch:{claim_index}:{ref_index}")
+            elif source_type == "farmer_evidence_snapshot":
+                if claim_type != "farmer_impact":
+                    blockers.append(f"claim_source_type_mismatch:{claim_index}:{ref_index}")
+                elif evidence_key not in FARMER_EVIDENCE_KEYS:
+                    blockers.append(f"evidence_key_invalid:{claim_index}:{ref_index}")
+                elif current_farmer is None or current_farmer.id != source_id:
+                    blockers.append(
+                        f"farmer_evidence_snapshot_not_current:{claim_index}:{ref_index}"
+                    )
+                elif not _claim_contains_farmer_value(
+                    str(claim.get("claim_text", "")),
+                    current_farmer,
+                    evidence_key,
+                ):
+                    blockers.append(f"claim_value_mismatch:{claim_index}:{ref_index}")
+            else:
+                blockers.append(f"evidence_source_type_invalid:{claim_index}:{ref_index}")
+
+    return CampaignClaimEvidenceMapRead(
+        campaign_package_id=campaign.id,
+        brief_revision_id=revision.id,
+        complete=not blockers,
+        mapped_claims=len(claims)
+        - sum(item.startswith("claim_text_missing:") for item in blockers),
+        total_claims=len(proof_points),
+        blockers=blockers,
+        claims=claims,
+    )
+
+
+def get_campaign_claim_evidence_map(
+    db: Session,
+    actor: Actor,
+    campaign_id: str,
+    revision_id: str,
+) -> CampaignClaimEvidenceMapRead:
+    campaign = _tenant_campaign(db, actor, campaign_id)
+    revision = db.scalar(
+        select(CampaignBriefRevision).where(
+            CampaignBriefRevision.id == revision_id,
+            CampaignBriefRevision.campaign_package_id == campaign.id,
+            CampaignBriefRevision.organization_id == actor.organization_id,
+        )
+    )
+    if revision is None:
+        raise HTTPException(status_code=404, detail="Campaign brief revision not found")
+    return _campaign_claim_evidence_map(db, campaign, revision)
+
+
+def submit_campaign_brief_revision(
+    db: Session,
+    actor: Actor,
+    campaign_id: str,
+    revision_id: str,
+) -> CampaignBriefRevision:
+    campaign = _tenant_campaign(db, actor, campaign_id)
+    _ensure_campaign_editable(campaign)
+    revision = db.scalar(
+        select(CampaignBriefRevision).where(
+            CampaignBriefRevision.id == revision_id,
+            CampaignBriefRevision.campaign_package_id == campaign_id,
+            CampaignBriefRevision.organization_id == actor.organization_id,
+        )
+    )
+    if revision is None:
+        raise HTTPException(status_code=404, detail="Campaign brief revision not found")
+    if revision.status != ReviewStatus.draft:
+        raise HTTPException(
+            status_code=409,
+            detail="Only draft campaign brief revisions can be submitted for review",
+        )
+    evidence_map = _campaign_claim_evidence_map(db, campaign, revision)
+    if not evidence_map.complete:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "campaign_claim_evidence_incomplete",
+                "blockers": evidence_map.blockers,
+            },
+        )
+    revision.status = ReviewStatus.pending_review
+    audit(
+        db,
+        actor,
+        "campaign_brief_revision.submitted",
+        "campaign_brief_revision",
+        revision.id,
+        {"campaign_package_id": campaign_id},
+    )
+    db.commit()
+    db.refresh(revision)
+    return revision
+
+
+def review_campaign_brief_revision(
+    db: Session,
+    actor: Actor,
+    campaign_id: str,
+    revision_id: str,
+    data: ContentReview,
+) -> CampaignBriefRevision:
+    if data.status not in {ReviewStatus.approved, ReviewStatus.rejected}:
+        raise HTTPException(status_code=422, detail="Review must approve or reject")
+    if data.status == ReviewStatus.rejected and not data.note.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="A review note is required when rejecting a campaign brief",
+        )
+    campaign = _campaign_for_update(db, actor, campaign_id)
+    _ensure_campaign_editable(campaign)
+    revision = db.scalar(
+        select(CampaignBriefRevision).where(
+            CampaignBriefRevision.id == revision_id,
+            CampaignBriefRevision.campaign_package_id == campaign_id,
+            CampaignBriefRevision.organization_id == actor.organization_id,
+        )
+    )
+    if revision is None:
+        raise HTTPException(status_code=404, detail="Campaign brief revision not found")
+    if revision.status != ReviewStatus.pending_review:
+        raise HTTPException(
+            status_code=409,
+            detail="Only pending campaign brief revisions can be reviewed",
+        )
+    if data.status == ReviewStatus.approved:
+        evidence_map = _campaign_claim_evidence_map(db, campaign, revision)
+        if not evidence_map.complete:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "campaign_claim_evidence_stale",
+                    "blockers": evidence_map.blockers,
+                },
+            )
+    revision.status = data.status
+    revision.reviewed_by = actor.user_id
+    revision.review_note = data.note
+    revision.reviewed_at = utc_now()
+    if data.status == ReviewStatus.approved:
+        campaign.platform = revision.platform
+        campaign.target_audience = revision.target_audience
+        campaign.objective = revision.objective
+        campaign.tone = revision.tone
+        campaign.extra_requirements = revision.extra_requirements
+        campaign.updated_at = utc_now()
+    audit(
+        db,
+        actor,
+        f"campaign_brief_revision.{data.status.value}",
+        "campaign_brief_revision",
+        revision.id,
+        {
+            "campaign_package_id": campaign_id,
+            "revision_number": revision.revision_number,
+            "note": data.note,
+        },
+    )
+    db.commit()
+    db.refresh(revision)
+    return revision
 
 
 def update_campaign_package(
@@ -1740,6 +2597,11 @@ def update_campaign_status(
         raise HTTPException(status_code=409, detail="Campaign status transition is not allowed")
     if new_status == CampaignStatus.active:
         view = _campaign_view(db, campaign)
+        if not view.progress.brief_ready:
+            raise HTTPException(
+                status_code=409,
+                detail="Campaign activation requires an approved campaign brief revision",
+            )
         if view.progress.total == 0:
             raise HTTPException(
                 status_code=409,
@@ -2049,6 +2911,11 @@ def create_publication(db: Session, actor: Actor, data: PublicationCreate) -> Pu
     if publication_blockers:
         blocker_details = {
             "content_not_approved": "Only approved content versions can be recorded as published",
+            "brief_missing": "Campaign publication requires a current approved campaign brief",
+            "brief_replaced": (
+                "Content was approved against an older campaign brief; "
+                "regenerate and review it before publication"
+            ),
             "supply_missing": "Campaign publication requires a current approved supply snapshot",
             "supply_replaced_or_expired": (
                 "Content was approved against an older supply snapshot; "
@@ -2063,10 +2930,20 @@ def create_publication(db: Session, actor: Actor, data: PublicationCreate) -> Pu
             "farmer_claims_unauthorized": (
                 "Farmer-impact claims exceed the approved wording or consent scope"
             ),
+            "claim_evidence_stale": (
+                "Campaign claim evidence is no longer current; "
+                "approve a new evidence-backed brief and regenerate the content"
+            ),
+            "content_claims_unmapped": (
+                "Content contains factual claims that are not backed by approved campaign evidence"
+            ),
         }
         raise HTTPException(
             status_code=409,
-            detail=blocker_details[publication_blockers[0]],
+            detail=blocker_details.get(
+                publication_blockers[0],
+                "Content is not eligible for publication",
+            ),
         )
     publication = Publication(
         organization_id=actor.organization_id,
@@ -2378,6 +3255,12 @@ def create_draft_from_improvement_brief(
     version = ContentVersion(
         organization_id=actor.organization_id,
         project_id=publication.project_id,
+        brief_revision_id=db.scalar(
+            select(ContentVersion.brief_revision_id).where(
+                ContentVersion.id == brief.source_content_version_id,
+                ContentVersion.organization_id == actor.organization_id,
+            )
+        ),
         supply_snapshot_id=db.scalar(
             select(ContentVersion.supply_snapshot_id).where(
                 ContentVersion.id == brief.source_content_version_id,
@@ -2433,6 +3316,11 @@ def generate_content(
     brand = _tenant_brand(db, actor, project.brand_id)
     product = _tenant_product(db, actor, project.product_id)
     campaign = _campaign_for_project(db, project.id, actor.organization_id)
+    brief = (
+        _current_campaign_brief(db, campaign.id, actor.organization_id)
+        if campaign is not None
+        else None
+    )
     supply = (
         _current_campaign_supply(db, campaign.id, actor.organization_id)
         if campaign is not None
@@ -2448,12 +3336,32 @@ def generate_content(
             status_code=409,
             detail="Campaign generation requires a current approved supply snapshot",
         )
+    if campaign is not None and brief is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Campaign generation requires an approved campaign brief revision",
+        )
+    if campaign is not None and brief is not None:
+        evidence_map = _campaign_claim_evidence_map(db, campaign, brief)
+        if not evidence_map.complete:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "campaign_claim_evidence_stale",
+                    "blockers": evidence_map.blockers,
+                },
+            )
     requested_farmer_claims = detect_farmer_claims(
         {
             "campaign": {
-                "target_audience": campaign.target_audience if campaign else "",
-                "objective": campaign.objective if campaign else "",
-                "extra_requirements": campaign.extra_requirements if campaign else "",
+                "target_audience": brief.target_audience if brief else "",
+                "objective": brief.objective if brief else "",
+                "core_message": brief.core_message if brief else "",
+                "audience_need": brief.audience_need if brief else "",
+                "desired_action": brief.desired_action if brief else "",
+                "proof_points": brief.proof_points if brief else [],
+                "mandatory_messages": brief.mandatory_messages if brief else [],
+                "extra_requirements": brief.extra_requirements if brief else "",
             },
             "project": {
                 "target_audience": project.target_audience,
@@ -2525,6 +3433,28 @@ def generate_content(
         "context_policy": "lexical-v1",
         "context_sources": context_manifest,
         "campaign_package_id": campaign.id if campaign else None,
+        "brief_revision_id": brief.id if brief else None,
+        "brief_revision_number": brief.revision_number if brief else None,
+        "campaign_brief": (
+            {
+                "platform": brief.platform,
+                "target_audience": brief.target_audience,
+                "objective": brief.objective,
+                "tone": brief.tone,
+                "core_message": brief.core_message,
+                "audience_need": brief.audience_need,
+                "desired_action": brief.desired_action,
+                "proof_points": brief.proof_points,
+                "claim_evidence": brief.claim_evidence,
+                "mandatory_messages": brief.mandatory_messages,
+                "prohibited_messages": brief.prohibited_messages,
+                "channel_constraints": brief.channel_constraints,
+                "locale": brief.locale,
+                "extra_requirements": brief.extra_requirements,
+            }
+            if brief
+            else None
+        ),
         "supply_snapshot_id": supply.id if supply else None,
         "supply_revision_number": supply.revision_number if supply else None,
         "farmer_evidence_snapshot_id": farmer_evidence.id if farmer_evidence else None,
@@ -2541,18 +3471,21 @@ def generate_content(
             sources,
             supply,
             farmer_evidence,
+            brief,
         )
         validated_content = validate_generation_output(
             result.content,
             project.content_type,
             {source.id: source.citation_label or source.title for source in sources},
         )
+        validate_campaign_brief_output(validated_content, brief)
         _validate_farmer_claims(validated_content, farmer_evidence)
     except FarmerClaimViolation as exc:
         latency_ms = max(1, int((time.perf_counter() - started) * 1000))
         failed_run = GenerationRun(
             organization_id=actor.organization_id,
             project_id=project.id,
+            brief_revision_id=brief.id if brief else None,
             supply_snapshot_id=supply.id if supply else None,
             farmer_evidence_snapshot_id=farmer_evidence.id if farmer_evidence else None,
             provider=provider.name,
@@ -2592,6 +3525,7 @@ def generate_content(
         failed_run = GenerationRun(
             organization_id=actor.organization_id,
             project_id=project.id,
+            brief_revision_id=brief.id if brief else None,
             supply_snapshot_id=supply.id if supply else None,
             farmer_evidence_snapshot_id=farmer_evidence.id if farmer_evidence else None,
             provider=provider.name,
@@ -2630,6 +3564,7 @@ def generate_content(
     run = GenerationRun(
         organization_id=actor.organization_id,
         project_id=project.id,
+        brief_revision_id=brief.id if brief else None,
         supply_snapshot_id=supply.id if supply else None,
         farmer_evidence_snapshot_id=farmer_evidence.id if farmer_evidence else None,
         provider=provider.name,
@@ -2653,6 +3588,7 @@ def generate_content(
     version = ContentVersion(
         organization_id=actor.organization_id,
         project_id=project.id,
+        brief_revision_id=brief.id if brief else None,
         supply_snapshot_id=supply.id if supply else None,
         farmer_evidence_snapshot_id=farmer_evidence.id if farmer_evidence else None,
         generation_run_id=run.id,
@@ -2814,6 +3750,7 @@ def create_content_version(
     version = ContentVersion(
         organization_id=actor.organization_id,
         project_id=project_id,
+        brief_revision_id=parent.brief_revision_id,
         supply_snapshot_id=parent.supply_snapshot_id,
         farmer_evidence_snapshot_id=parent.farmer_evidence_snapshot_id,
         parent_version_id=parent.id,
@@ -2853,26 +3790,18 @@ def submit_content_version(
             status_code=409,
             detail="Only draft content versions can be submitted for review",
         )
-    try:
-        _validate_content_farmer_evidence_current(
-            db,
-            actor.organization_id,
-            version.content,
-            version.farmer_evidence_snapshot_id,
-        )
-    except FarmerClaimViolation as exc:
-        raise _farmer_claim_http_error(exc) from exc
     campaign = _campaign_for_project(db, project_id, actor.organization_id)
-    if campaign is not None:
-        supply = _current_campaign_supply(db, campaign.id, actor.organization_id)
-        if supply is None or version.supply_snapshot_id != supply.id:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    "Content review requires the current approved supply snapshot; "
-                    "regenerate the content first"
-                ),
-            )
+    freshness = _content_version_freshness(
+        db,
+        actor.organization_id,
+        version,
+        campaign=campaign,
+    )
+    if freshness["stale_reasons"]:
+        raise HTTPException(
+            status_code=409,
+            detail=_content_review_freshness_error(freshness["stale_reasons"]),
+        )
     version.status = ReviewStatus.pending_review
     audit(
         db,
@@ -2914,25 +3843,18 @@ def review_content_version(
             status_code=409,
             detail="Only pending content versions can be reviewed",
         )
-    try:
-        _validate_content_farmer_evidence_current(
+    if data.status == ReviewStatus.approved:
+        campaign = _campaign_for_project(db, project_id, actor.organization_id)
+        freshness = _content_version_freshness(
             db,
             actor.organization_id,
-            version.content,
-            version.farmer_evidence_snapshot_id,
+            version,
+            campaign=campaign,
         )
-    except FarmerClaimViolation as exc:
-        raise _farmer_claim_http_error(exc) from exc
-    campaign = _campaign_for_project(db, project_id, actor.organization_id)
-    if campaign is not None:
-        supply = _current_campaign_supply(db, campaign.id, actor.organization_id)
-        if supply is None or version.supply_snapshot_id != supply.id:
+        if freshness["stale_reasons"]:
             raise HTTPException(
                 status_code=409,
-                detail=(
-                    "Content was generated from an expired or replaced supply snapshot; "
-                    "regenerate it before review"
-                ),
+                detail=_content_review_freshness_error(freshness["stale_reasons"]),
             )
     version.status = data.status
     version.reviewed_by = actor.user_id

@@ -226,6 +226,43 @@ class CampaignPackage(Base):
     )
 
 
+class CampaignBriefRevision(Base):
+    __tablename__ = "campaign_brief_revisions"
+    __table_args__ = (
+        UniqueConstraint("campaign_package_id", "revision_number"),
+        Index(
+            "ix_campaign_brief_revisions_campaign_status",
+            "campaign_package_id",
+            "status",
+        ),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    campaign_package_id: Mapped[str] = mapped_column(ForeignKey("campaign_packages.id"), index=True)
+    revision_number: Mapped[int] = mapped_column()
+    platform: Mapped[str] = mapped_column(String(80), default="general")
+    target_audience: Mapped[str] = mapped_column(Text, default="")
+    objective: Mapped[str] = mapped_column(Text, default="")
+    tone: Mapped[str] = mapped_column(String(120), default="")
+    core_message: Mapped[str] = mapped_column(Text, default="")
+    audience_need: Mapped[str] = mapped_column(Text, default="")
+    desired_action: Mapped[str] = mapped_column(Text, default="")
+    proof_points: Mapped[list] = mapped_column(JSON, default=list)
+    claim_evidence: Mapped[list] = mapped_column(JSON, default=list)
+    mandatory_messages: Mapped[list] = mapped_column(JSON, default=list)
+    prohibited_messages: Mapped[list] = mapped_column(JSON, default=list)
+    channel_constraints: Mapped[dict] = mapped_column(JSON, default=dict)
+    locale: Mapped[str] = mapped_column(String(20), default="zh-CN")
+    extra_requirements: Mapped[str] = mapped_column(Text, default="")
+    change_summary: Mapped[str] = mapped_column(String(255), default="")
+    status: Mapped[ReviewStatus] = mapped_column(Enum(ReviewStatus), default=ReviewStatus.draft)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    reviewed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    review_note: Mapped[str] = mapped_column(Text, default="")
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class CampaignPackageItem(Base):
     __tablename__ = "campaign_package_items"
     __table_args__ = (
@@ -324,6 +361,9 @@ class GenerationRun(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("content_projects.id"), index=True)
+    brief_revision_id: Mapped[str | None] = mapped_column(
+        ForeignKey("campaign_brief_revisions.id"), index=True
+    )
     supply_snapshot_id: Mapped[str | None] = mapped_column(
         ForeignKey("campaign_supply_snapshots.id"), index=True
     )
@@ -349,6 +389,9 @@ class ContentVersion(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("content_projects.id"), index=True)
+    brief_revision_id: Mapped[str | None] = mapped_column(
+        ForeignKey("campaign_brief_revisions.id"), index=True
+    )
     supply_snapshot_id: Mapped[str | None] = mapped_column(
         ForeignKey("campaign_supply_snapshots.id"), index=True
     )

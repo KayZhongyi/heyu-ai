@@ -25,6 +25,7 @@ class BrowserE2EProvider:
         sources,
         supply=None,
         farmer_evidence=None,
+        brief=None,
     ):
         if project.title.startswith("[E2E invalid citation]"):
             return GenerationResult(
@@ -46,6 +47,7 @@ class BrowserE2EProvider:
             sources,
             supply,
             farmer_evidence,
+            brief,
         )
 
 

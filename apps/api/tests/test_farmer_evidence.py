@@ -410,6 +410,7 @@ def test_ai_and_manual_content_cannot_add_unapproved_farmer_claims(
             sources,
             supply=None,
             farmer_evidence=None,
+            brief=None,
         ):
             assert farmer_evidence.id == evidence["id"]
             return GenerationResult(
@@ -460,6 +461,7 @@ def test_ai_and_manual_content_cannot_add_unapproved_farmer_claims(
             sources,
             supply=None,
             farmer_evidence=None,
+            brief=None,
         ):
             assert farmer_evidence.id == evidence["id"]
             return GenerationResult(
@@ -708,6 +710,7 @@ def test_allowed_wording_does_not_authorize_other_claims_in_same_field(
             sources,
             supply=None,
             farmer_evidence=None,
+            brief=None,
         ):
             return GenerationResult(
                 content={

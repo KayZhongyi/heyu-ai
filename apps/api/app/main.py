@@ -32,6 +32,9 @@ from app.schemas import (
     BrandCreate,
     BrandRead,
     BrandUpdate,
+    CampaignBriefRevisionCreate,
+    CampaignBriefRevisionRead,
+    CampaignClaimEvidenceMapRead,
     CampaignFarmerEvidenceSnapshotCreate,
     CampaignFarmerEvidenceSnapshotRead,
     CampaignItemCreate,
@@ -89,6 +92,7 @@ from app.security import (
 from app.services import (
     audit,
     create_brand,
+    create_campaign_brief_revision,
     create_campaign_farmer_evidence_snapshot,
     create_campaign_item,
     create_campaign_package,
@@ -103,10 +107,12 @@ from app.services import (
     create_publication,
     create_video_diagnosis,
     generate_content,
+    get_campaign_claim_evidence_map,
     get_campaign_package,
     get_publication_detail,
     link_campaign_item,
     list_brands,
+    list_campaign_brief_revisions,
     list_campaign_farmer_evidence_snapshots,
     list_campaign_packages,
     list_campaign_supply_snapshots,
@@ -120,6 +126,7 @@ from app.services import (
     list_publications,
     list_video_diagnoses,
     review_brand,
+    review_campaign_brief_revision,
     review_campaign_farmer_evidence_snapshot,
     review_campaign_supply_snapshot,
     review_content_version,
@@ -127,6 +134,7 @@ from app.services import (
     review_product,
     revise_knowledge_source,
     submit_brand,
+    submit_campaign_brief_revision,
     submit_campaign_farmer_evidence_snapshot,
     submit_campaign_supply_snapshot,
     submit_content_version,
@@ -977,6 +985,76 @@ def patch_campaign_package_status(
 
 
 @app.post(
+    "/v1/campaign-packages/{campaign_id}/brief-revisions",
+    response_model=CampaignBriefRevisionRead,
+    status_code=201,
+)
+def post_campaign_brief_revision(
+    campaign_id: str,
+    data: CampaignBriefRevisionCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> CampaignBriefRevisionRead:
+    return create_campaign_brief_revision(db, actor, campaign_id, data)
+
+
+@app.get(
+    "/v1/campaign-packages/{campaign_id}/brief-revisions",
+    response_model=list[CampaignBriefRevisionRead],
+)
+def get_campaign_brief_revisions(
+    campaign_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> list[CampaignBriefRevisionRead]:
+    return list_campaign_brief_revisions(db, actor, campaign_id)
+
+
+@app.get(
+    "/v1/campaign-packages/{campaign_id}/brief-revisions/{revision_id}/claim-evidence-map",
+    response_model=CampaignClaimEvidenceMapRead,
+)
+def get_campaign_brief_claim_evidence_map(
+    campaign_id: str,
+    revision_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> CampaignClaimEvidenceMapRead:
+    return get_campaign_claim_evidence_map(db, actor, campaign_id, revision_id)
+
+
+@app.post(
+    "/v1/campaign-packages/{campaign_id}/brief-revisions/{revision_id}/submit",
+    response_model=CampaignBriefRevisionRead,
+)
+def post_campaign_brief_revision_submit(
+    campaign_id: str,
+    revision_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> CampaignBriefRevisionRead:
+    return submit_campaign_brief_revision(db, actor, campaign_id, revision_id)
+
+
+@app.post(
+    "/v1/campaign-packages/{campaign_id}/brief-revisions/{revision_id}/review",
+    response_model=CampaignBriefRevisionRead,
+)
+def post_campaign_brief_revision_review(
+    campaign_id: str,
+    revision_id: str,
+    data: ContentReview,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.reviewer)),
+) -> CampaignBriefRevisionRead:
+    return review_campaign_brief_revision(db, actor, campaign_id, revision_id, data)
+
+
+@app.post(
     "/v1/campaign-packages/{campaign_id}/supply-snapshots",
     response_model=CampaignSupplySnapshotRead,
     status_code=201,
@@ -1312,6 +1390,7 @@ def generate_project_content(
     return GenerationRead(
         run_id=run.id,
         version=ContentVersionRead.model_validate(version),
+        brief_revision_id=run.brief_revision_id,
         farmer_evidence_snapshot_id=run.farmer_evidence_snapshot_id,
         provider=run.provider,
         model=run.model,
@@ -1362,6 +1441,7 @@ def get_generation_runs(
             normalized_input=run.normalized_input,
             output=run.output,
             status=run.status,
+            brief_revision_id=run.brief_revision_id,
             supply_snapshot_id=run.supply_snapshot_id,
             farmer_evidence_snapshot_id=run.farmer_evidence_snapshot_id,
             latency_ms=run.latency_ms,
