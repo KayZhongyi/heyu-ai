@@ -63,6 +63,30 @@ def test_development_settings_keep_zero_cost_defaults():
     Settings().validate_runtime()
 
 
+def test_openai_compatible_settings_require_explicit_connection_values():
+    settings = Settings(
+        ai_provider="openai-compatible",
+        ai_base_url="",
+        ai_api_key="",
+        ai_model="",
+    )
+    with pytest.raises(RuntimeError) as exc:
+        settings.validate_runtime()
+    assert "AI_BASE_URL" in str(exc.value)
+    assert "AI_API_KEY" in str(exc.value)
+    assert "AI_MODEL" in str(exc.value)
+
+
+def test_openai_compatible_settings_accept_valid_values():
+    Settings(
+        ai_provider="openai-compatible",
+        ai_base_url="https://model.example/v1",
+        ai_api_key="user-provided-key",
+        ai_model="example-model",
+        ai_timeout_seconds=30,
+    ).validate_runtime()
+
+
 def test_login_accepts_organization_slug(client):
     bootstrap = client.post(
         "/v1/auth/bootstrap",

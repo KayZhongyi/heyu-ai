@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./agri_content.db"
     ai_provider: str = "mock"
     ai_model: str = "deterministic-v1"
+    ai_base_url: str = ""
+    ai_api_key: str = ""
+    ai_timeout_seconds: float = 45.0
     cors_origins: str = "http://localhost:3000"
     auto_create_schema: bool = True
 
@@ -44,6 +47,20 @@ class Settings(BaseSettings):
 
             if self.auto_create_schema:
                 errors.append("AUTO_CREATE_SCHEMA must be false in production")
+
+        provider = self.ai_provider.strip().lower()
+        if provider not in {"mock", "openai-compatible"}:
+            errors.append("AI_PROVIDER must be mock or openai-compatible")
+        if provider == "openai-compatible":
+            parsed = urlparse(self.ai_base_url)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                errors.append("AI_BASE_URL must be a valid HTTP(S) URL")
+            if not self.ai_model.strip():
+                errors.append("AI_MODEL is required for openai-compatible")
+            if not self.ai_api_key.strip():
+                errors.append("AI_API_KEY is required for openai-compatible")
+            if self.ai_timeout_seconds <= 0 or self.ai_timeout_seconds > 300:
+                errors.append("AI_TIMEOUT_SECONDS must be between 0 and 300")
 
         if errors:
             raise RuntimeError("Unsafe production configuration: " + "; ".join(errors))

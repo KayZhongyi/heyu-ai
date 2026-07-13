@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.ai import PROMPT_NAME, PROMPT_VERSION, ContextSource, get_ai_provider
+from app.ai import PROMPT_NAME, PROMPT_VERSION, AIProviderError, ContextSource, get_ai_provider
 from app.models import (
     AuditEvent,
     Brand,
@@ -820,7 +820,10 @@ def generate_content(
         list(latest_approved_by_group.values()), project, brand, product
     )
     provider = get_ai_provider()
-    result = provider.generate_script(project, brand, product, sources)
+    try:
+        result = provider.generate_script(project, brand, product, sources)
+    except AIProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     normalized_input = {
         "content_type": project.content_type.value,
         "platform": project.platform,

@@ -1,7 +1,11 @@
+import json
 import time
 from dataclasses import dataclass
 from typing import Protocol
 
+import httpx
+
+from app.config import Settings, get_settings
 from app.models import Brand, ContentProject, ContentType, Product
 
 PROMPT_NAME = "agricultural-content-script"
@@ -237,5 +241,134 @@ class DeterministicProvider:
         )
 
 
-def get_ai_provider() -> AIProvider:
+class AIProviderError(RuntimeError):
+    """A safe, credential-free error raised when an external provider fails."""
+
+
+class OpenAICompatibleProvider:
+    """Adapter for servers implementing the OpenAI chat-completions contract."""
+
+    name = "openai-compatible"
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        model: str,
+        timeout_seconds: float = 45,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+        self.model = model
+        self.timeout_seconds = timeout_seconds
+        self.transport = transport
+
+    @staticmethod
+    def _payload(
+        project: ContentProject,
+        brand: Brand,
+        product: Product,
+        sources: list[ContextSource],
+    ) -> dict:
+        verified_sources = [
+            {
+                "source_id": source.id,
+                "label": source.citation_label or source.title,
+                "content": source.content,
+            }
+            for source in sources
+        ]
+        task = {
+            "content_type": project.content_type.value,
+            "platform": project.platform,
+            "target_audience": project.target_audience,
+            "objective": project.objective,
+            "tone": project.tone,
+            "extra_requirements": project.extra_requirements,
+            "brand": {"name": brand.name, "story": brand.story, "voice": brand.voice},
+            "product": {
+                "name": product.name,
+                "origin": product.origin,
+                "specification": product.specification,
+                "price_display": product.price_display,
+                "storage_method": product.storage_method,
+                "selling_points": product.selling_points,
+                "prohibited_claims": product.prohibited_claims,
+            },
+            "verified_sources": verified_sources,
+        }
+        return {
+            "model": "",
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You create factual agricultural marketing content. Return one JSON "
+                        "object only. Use only verified_sources for factual claims. Never invent "
+                        "certifications, efficacy, prices, yields, or customer outcomes. Preserve "
+                        "source provenance in a citations array containing source_id and label. "
+                        "Include a risk_notes array. Match the requested content_type."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(task, ensure_ascii=False),
+                },
+            ],
+        }
+
+    def generate_script(
+        self,
+        project: ContentProject,
+        brand: Brand,
+        product: Product,
+        sources: list[ContextSource],
+    ) -> GenerationResult:
+        started = time.perf_counter()
+        payload = self._payload(project, brand, product, sources)
+        payload["model"] = self.model
+        try:
+            with httpx.Client(
+                timeout=self.timeout_seconds,
+                transport=self.transport,
+            ) as client:
+                response = client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
+            raw_content = data["choices"][0]["message"]["content"]
+            content = json.loads(raw_content)
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
+            raise AIProviderError(
+                "The configured AI provider did not return valid structured content"
+            ) from None
+        if not isinstance(content, dict):
+            raise AIProviderError("The configured AI provider returned a non-object response")
+        content.setdefault("citations", [])
+        content.setdefault("risk_notes", [])
+        return GenerationResult(
+            content=content,
+            latency_ms=max(1, int((time.perf_counter() - started) * 1000)),
+        )
+
+
+def get_ai_provider(settings: Settings | None = None) -> AIProvider:
+    settings = settings or get_settings()
+    if settings.ai_provider.strip().lower() == "openai-compatible":
+        return OpenAICompatibleProvider(
+            base_url=settings.ai_base_url,
+            api_key=settings.ai_api_key,
+            model=settings.ai_model,
+            timeout_seconds=settings.ai_timeout_seconds,
+        )
     return DeterministicProvider()
