@@ -16,6 +16,9 @@ No milestone is called "commercial-grade" solely because it has a polished UI.
 - [x] CI runs formatting/linting, tests, and migration validation.
 - [x] Backup/restore and deployment instructions are documented.
 - [x] PostgreSQL backup restores into a fresh data volume in CI.
+- [x] Production mode rejects default secrets, SQLite, wildcard/non-HTTPS CORS,
+      and automatic schema creation.
+- [x] Separate liveness and database-readiness probes are available.
 - [ ] A human reviewer completes the end-to-end acceptance script.
 
 Evidence and limits:
@@ -38,6 +41,9 @@ Evidence and limits:
   volume, restores into a newly created volume, logs in with the original
   account, and verifies the original brand ID and name.
 - The complete human acceptance script remains open.
+- `/health` reports process liveness while `/ready` verifies a live database
+  query. Docker Compose uses the readiness endpoint for its application
+  healthcheck.
 
 ## Anti-toy red lines
 

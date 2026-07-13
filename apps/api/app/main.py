@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -96,6 +96,7 @@ from app.services import (
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings = get_settings()
+    settings.validate_runtime()
     if settings.auto_create_schema:
         Base.metadata.create_all(bind=engine)
     elif not inspect(engine).has_table("alembic_version"):
@@ -148,6 +149,18 @@ def workspace() -> FileResponse:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready(db: Session = Depends(get_db)) -> dict[str, str]:
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database is not ready.",
+        ) from exc
+    return {"status": "ready"}
 
 
 @app.post("/v1/auth/bootstrap", response_model=TokenResponse, status_code=201)

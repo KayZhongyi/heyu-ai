@@ -18,7 +18,7 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      APP_ENV: development
+      APP_ENV: ${APP_ENV:-development}
       APP_SECRET: ${APP_SECRET:-local-development-secret}
       AUTO_CREATE_SCHEMA: "false"
       DATABASE_URL: postgresql+psycopg://agri:agri@db:5432/agri
@@ -27,6 +27,18 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     ports:
       - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     depends_on:
       db:
         condition: service_healthy

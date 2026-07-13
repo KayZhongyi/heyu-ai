@@ -1,5 +1,9 @@
 from pathlib import Path
 
+import pytest
+from sqlalchemy.exc import OperationalError
+
+from app.config import Settings
 from app.main import find_web_dir
 
 
@@ -7,6 +11,56 @@ def test_health(client):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_ready_checks_database(client):
+    response = client.get("/ready")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+
+
+def test_ready_returns_503_when_database_is_unavailable(client, db, monkeypatch):
+    def unavailable(*_args, **_kwargs):
+        raise OperationalError("SELECT 1", {}, RuntimeError("offline"))
+
+    monkeypatch.setattr(db, "execute", unavailable)
+    response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Database is not ready."}
+
+
+def test_production_settings_require_secure_runtime_values():
+    settings = Settings(
+        app_env="production",
+        app_secret="local-development-secret",
+        database_url="sqlite:///./heyu.db",
+        cors_origins="*",
+        auto_create_schema=True,
+    )
+
+    with pytest.raises(RuntimeError) as error:
+        settings.validate_runtime()
+
+    message = str(error.value)
+    assert "APP_SECRET" in message
+    assert "PostgreSQL" in message
+    assert "CORS_ORIGINS" in message
+    assert "AUTO_CREATE_SCHEMA" in message
+
+
+def test_production_settings_accept_explicit_secure_values():
+    Settings(
+        app_env="production",
+        app_secret="a-unique-production-secret-with-more-than-32-characters",
+        database_url="postgresql+psycopg://app:secret@db:5432/heyu",
+        cors_origins="https://heyu.example,https://admin.heyu.example",
+        auto_create_schema=False,
+    ).validate_runtime()
+
+
+def test_development_settings_keep_zero_cost_defaults():
+    Settings().validate_runtime()
 
 
 def test_login_accepts_organization_slug(client):

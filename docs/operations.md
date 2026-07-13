@@ -73,7 +73,22 @@ restores regularly, and define retention and recovery-point objectives.
 4. Rebuild dependencies or container images.
 5. Run `alembic upgrade head`.
 6. Start the service.
-7. Check `/health`, then execute `docs/acceptance-test.md`.
+7. Check `/health` for process liveness and `/ready` for database readiness,
+   then execute `docs/acceptance-test.md`.
+
+## Production configuration guardrails
+
+Set `APP_ENV=production` only with all of the following:
+
+- a unique `APP_SECRET` containing at least 32 characters
+- a PostgreSQL `DATABASE_URL`
+- `AUTO_CREATE_SCHEMA=false` so Alembic remains the schema authority
+- one or more explicit HTTPS origins in `CORS_ORIGINS`
+
+The application refuses to start in production when these requirements are not
+met. Development keeps the zero-cost SQLite defaults. Docker Compose also
+checks `/ready`, which performs a database query rather than reporting only
+that the web process is alive.
 
 ## Rollback
 
@@ -89,7 +104,7 @@ Application rollback and database rollback are separate decisions.
 ## Secrets and external AI providers
 
 - Never commit `.env`, tokens, API keys, production databases, or user files.
-- Use a long random `SECRET_KEY` outside local demonstrations.
+- Use a long random `APP_SECRET` outside local demonstrations.
 - Treat ChatGPT or Codex subscriptions as separate from API credentials.
 - Keep the deterministic provider as the no-cost fallback.
 - When an external provider is configured, record provider, model, prompt

@@ -108,6 +108,11 @@ docker compose up --build
 The workspace is then available at `http://localhost:8000/`. Developer API
 documentation is available at `http://localhost:8000/docs`.
 
+`/health` is the process liveness endpoint. `/ready` additionally verifies
+database connectivity. Production mode fails closed when it detects a default
+or short application secret, SQLite, automatic schema creation, or
+non-explicit/non-HTTPS CORS origins; see `docs/operations.md`.
+
 For backend-only development, see [apps/api/README.md](apps/api/README.md).
 For backups, upgrades, and recovery, see
 [docs/operations.md](docs/operations.md). For manual release verification, see
