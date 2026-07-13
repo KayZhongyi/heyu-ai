@@ -32,16 +32,20 @@ def main() -> None:
         expect_finding("private/material.pdf", "not inspected", root)
         expect_finding("config/.env", "SAFE=value", root)
         expect_finding(
-            "notes.md", "token = ghp_abcdefghijklmnopqrstuvwxyz1234567890", root
+            "notes.md",
+            "token = " + "ghp_" + "abcdefghijklmnopqrstuvwxyz1234567890",
+            root,
         )
         expect_finding(
             "server.pem",
-            "-----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----",
+            "-----BEGIN "
+            + "PRIVATE KEY-----\nsecret\n-----END "
+            + "PRIVATE KEY-----",
             root,
         )
         expect_finding(
             "config.yaml",
-            "APP_SECRET: genuinely-secret-production-value-123456",
+            "APP_" + "SECRET: genuinely-secret-production-value-123456",
             root,
         )
 
