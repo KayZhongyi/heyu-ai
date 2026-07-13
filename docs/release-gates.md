@@ -7,8 +7,8 @@ Evidence must refer to the exact commit being evaluated.
 
 The verified functional release-candidate baseline is:
 
-- Commit: `5f8895a6eb95335b2d71f2dba42f61a8241417f1`
-- GitHub Actions run: `29254510221`
+- Commit: `b38e9182cf01fc5fa1f21d84368492630a6dce8f`
+- GitHub Actions run: `29267742493`
 - Result: `SUCCESS`
 - Jobs: `api`, `repository-audit`, `browser-e2e`, `windows-package`, and
   `docker-build` all passed.
@@ -20,12 +20,13 @@ treated as verified.
 
 Local and remote evidence for the baseline:
 
-- 59 Python tests passed with 97.09% coverage.
+- 64 Python tests passed locally; the exact-commit API job passed its 80%
+  coverage gate.
 - Ruff lint and format checks passed.
 - JavaScript syntax, i18n dictionary, content-renderer, and repository-audit
   checks passed.
-- Playwright E2E passed for `zh-CN`, `zh-HK`, `en`, invitations, and
-  390/700/1440-pixel layouts.
+- Playwright E2E passed for `zh-CN`, `zh-HK`, `en`, invitation creation,
+  listing and revocation, and 390/700/1440-pixel layouts.
 - The browser test binds the invalid-provider UI flow to the same HTTP request
   and verifies:
   - `POST /generate` returns `502`;
@@ -42,11 +43,13 @@ Local and remote evidence for the baseline:
   source IDs are deterministically removed.
 - The invalid-provider test double is isolated in `apps/api/e2e_app.py`; the
   production entry point remains `app.main:app`.
-- SQLite migrations passed through `d8f4a1c2b3e6`.
+- SQLite migrations passed through `e1b2c3d4f5a6`, including full
+  upgrade/downgrade/re-upgrade and an empty autogenerate check.
 - PostgreSQL was migrated from an empty database, restarted, backed up, and
   restored into a fresh volume.
-- The PostgreSQL workflow created and accepted an invitation, then verified
-  owner and invited-user access after restart and restore.
+- The PostgreSQL workflow created, listed, revoked, and replaced an invitation;
+  it also verified revoked-link rejection and owner/invited-user access after
+  restart and restore.
 
 ## Competition/local demo gate
 
