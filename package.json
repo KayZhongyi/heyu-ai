@@ -1,0 +1,12 @@
+{
+  "name": "heyu-ai",
+  "private": true,
+  "scripts": {
+    "test:i18n": "node scripts/test-i18n.js",
+    "test:renderer": "node scripts/test-content-renderer.js",
+    "test:e2e": "node scripts/test-browser-e2e.js"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
+  }
+}

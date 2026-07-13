@@ -52,6 +52,32 @@ def bootstrap(client: TestClient, slug: str, email: str) -> dict:
     return response.json()
 
 
+def invite_and_accept(
+    client: TestClient,
+    auth: dict[str, str],
+    email: str,
+    role: str,
+    password: str,
+    display_name: str | None = None,
+) -> tuple[dict, dict]:
+    invitation = client.post(
+        "/v1/invitations",
+        headers=auth,
+        json={"email": email, "role": role, "expires_in_hours": 72},
+    )
+    assert invitation.status_code == 201, invitation.text
+    accepted = client.post(
+        "/v1/invitations/accept",
+        json={
+            "token": invitation.json()["token"],
+            "display_name": display_name or role.replace("_", " ").title(),
+            "password": password,
+        },
+    )
+    assert accepted.status_code == 200, accepted.text
+    return invitation.json(), accepted.json()
+
+
 @pytest.fixture()
 def owner(client: TestClient):
     return bootstrap(client, "green-farm", "owner@green.example")

@@ -2,75 +2,115 @@
 
 ## Deployment profiles
 
-- **Local demo:** SQLite, local files, deterministic mock AI. No paid service.
-- **Local AI:** SQLite/PostgreSQL plus an optional local model runtime.
-- **Team/production:** PostgreSQL, private object storage, job workers, and a
-  configured AI provider.
+- **Local demo:** SQLite plus the deterministic provider; no paid service.
+- **External-model development:** SQLite/PostgreSQL plus an explicitly
+  configured OpenAI-compatible API.
+- **Team/production candidate:** PostgreSQL, production secrets, explicit HTTPS
+  origins, durable backups, and an approved provider.
 
-The same application code supports all profiles. The free local profile is not
-a separate throwaway demo.
+The same modular-monolith application supports all profiles. Ollama, Docker
+Desktop, and a paid API are not prerequisites.
 
-## Shape
-
-The MVP uses a modular monolith for transactional business logic and an
-AI-provider boundary designed to move long-running work into workers without
-rewriting domain services.
+## System shape
 
 ```mermaid
 flowchart LR
-  Web["Web workspace"] --> API["FastAPI API"]
-  API --> Auth["Identity and RBAC"]
+  Web["Homepage and workspace"] --> I18n["zh-CN / zh-HK / en dictionaries"]
+  Web --> API["FastAPI API"]
+  API --> Auth["Identity, membership, RBAC"]
+  Auth --> Invite["Hashed, expiring, single-use invitations"]
   API --> Domain["Brands, products, knowledge, content, operations"]
-  Domain --> DB["PostgreSQL"]
-  Domain --> Gateway["AI gateway"]
-  Domain --> Diagnosis["Evidence-led video diagnosis"]
-  Domain --> PublicationDetail["Publication operations detail"]
+  Domain --> DB["SQLite or PostgreSQL"]
+  Domain --> Gateway["AI provider gateway"]
+  Gateway --> Deterministic["DeterministicProvider"]
+  Gateway --> External["Configured OpenAI-compatible provider"]
+  Domain --> Audit["Audit and generation provenance"]
+  Domain --> Publication["Publication and raw snapshots"]
+  Publication --> Diagnosis["Human evidence-led diagnosis"]
   Diagnosis --> Brief["Immutable improvement brief"]
-  Brief --> Version["Explicit successor content draft"]
-  Gateway --> Mock["Deterministic local provider"]
-  Gateway --> Providers["Configured external providers"]
-  Domain --> Audit["Audit and provenance records"]
-  PublicationDetail --> DB
-  Brief --> DB
-  Version --> DB
+  Brief --> Version["Explicit successor draft"]
 ```
+
+Long-running ingestion, media processing, and provider calls are future worker
+candidates. Premature microservice decomposition is intentionally avoided.
 
 ## Tenant isolation
 
-Tenant-owned tables include a non-null `organization_id`. Service methods
-receive an authenticated actor and organization context, then scope every read
-and mutation by both. Cross-tenant behavior has explicit negative tests.
-PostgreSQL row-level security is planned as defense in depth before production.
+Tenant-owned tables include non-null `organization_id`. Authenticated service
+operations scope reads and writes by actor and organization. Cross-tenant
+negative tests cover domain modules. PostgreSQL row-level security remains a
+future defense-in-depth option, not a claimed current control.
 
-## AI provenance
+## AI provenance and retrieval
 
 Each generation stores:
 
 - provider and model
-- prompt template name and version
-- normalized input brief
-- source document IDs
+- prompt template and version
+- normalized content brief
+- source IDs and resolved citation labels
 - raw structured output
-- latency and status
-- creator and organization
+- latency, status, creator, and organization
 
-Before the provider call, the application selects a bounded context from the
-latest approved revision in each eligible knowledge chain. The first policy is
-deterministic and provider-neutral: product scope is preferred, Chinese
-character n-grams and Latin terms provide lightweight relevance ordering, and
-hard source/character limits prevent unbounded prompts. The normalized input
-records the policy, selected source IDs, full-source SHA-256 values,
-excerpt SHA-256 values, included character counts, and truncation flags.
+Before a provider call, `lexical-v1` selects a bounded context from the latest
+approved revision in each eligible chain. Product scope is preferred; Chinese
+character n-grams and Latin terms provide lightweight relevance ordering.
+Hard source and character limits prevent unbounded prompts. The context
+manifest stores source and excerpt hashes, included character counts, scope,
+and truncation state.
 
-This is intentionally not presented as semantic vector search. PostgreSQL
-full-text search or embeddings can replace the ranking policy later without
-changing generation provenance or provider interfaces.
+This is deliberately not called semantic RAG. PostgreSQL search or embeddings
+can replace the policy later without changing provenance or provider
+interfaces.
 
-Content versions reference the generation that produced them but remain
-editable through append-only successor versions.
+## Internationalization
 
-## Evolution
+The browser loads one i18n runtime and explicit dictionaries for `zh-CN`,
+`zh-HK`, and `en`. Static HTML and dynamic application messages resolve through
+the same translation keys. Locale state is browser-local and does not mutate
+API records.
 
-The first extraction candidates are document ingestion/video processing workers
-and model calls. They will use durable jobs and object storage when those
-features enter scope. Premature service decomposition is intentionally avoided.
+Business-data nodes are marked with `data-business-data` or
+`data-i18n-ignore`; translation traversal must not alter them. Dictionary tests
+check key parity and placeholders. Browser E2E verifies that unsaved form
+values and saved brand data remain unchanged across locale switches.
+
+## Secure invitation flow
+
+```mermaid
+sequenceDiagram
+  participant Admin
+  participant API
+  participant DB
+  participant Invitee
+
+  Admin->>API: POST /v1/invitations
+  API->>DB: Store token hash, email, role, expiry
+  API-->>Admin: Return plaintext token once
+  Admin-->>Invitee: Share /workspace/#invite=TOKEN
+  Invitee->>Invitee: Read fragment and clear address bar
+  Invitee->>API: POST /v1/invitations/inspect
+  API-->>Invitee: Summary + Cache-Control no-store
+  Invitee->>API: POST /v1/invitations/accept
+  API->>DB: Lock, create membership, mark invitation used
+  API-->>Invitee: Session + Cache-Control no-store
+```
+
+Fragments keep tokens out of ordinary request paths and server access logs, but
+do not prevent browser extensions, screen capture, or recipient disclosure.
+Tokens therefore remain expiring and single-use. A conditional uniqueness key
+prevents duplicate active invitations for one organization and normalized
+email.
+
+## Verification architecture
+
+- Python tests exercise domain behavior, state transitions, permissions, and
+  tenant boundaries.
+- SQLite Alembic round trips check current migrations in the API CI job.
+- Playwright runs a real browser against a temporary API for localization,
+  invitation handling, and responsive layout evidence.
+- Windows CI installs and starts through the user-facing scripts.
+- Docker CI applies migrations to empty PostgreSQL, exercises the deployment,
+  restarts it, and performs backup/restore into a fresh volume.
+- Repository audit rejects private documents, databases, secrets, and common
+  credential patterns.

@@ -2,36 +2,36 @@
 
 Product name: **禾语 AI / Heyu AI**
 
-Positioning: an agricultural content and operations workspace that helps good
-products communicate clearly, accurately, and consistently.
+Positioning: an agricultural content and operations workspace that helps real
+products be described accurately, consistently, and with traceable evidence.
 
 ## Primary users
 
-1. Organization owner: manages membership, brands, and billing boundaries.
-2. Product manager: maintains verified product facts and source documents.
-3. Content creator: creates briefs, generates scripts, and edits drafts.
-4. Reviewer: approves knowledge and content versions.
-5. Viewer: read-only access to approved assets.
+1. Organization Owner: controls membership and organization boundaries.
+2. Admin: manages the team except for granting Owner.
+3. Product Manager: maintains brand, product, and reviewed knowledge.
+4. Creator: creates briefs, generates content, and prepares revisions.
+5. Reviewer: makes explicit knowledge and content decisions.
+6. Viewer: reads authorized records without write access.
 
 ## First complete workflow
 
-1. Create an organization and first owner.
-2. Add a brand and an agricultural product.
-3. Maintain brand and product facts without recreating records; edits are limited to
-   owner, admin, and product-manager roles and are written to the organization audit trail.
-4. Add source documents, submit them for review, and approve verified sources.
-5. Create a structured content brief.
-   Owners, admins, creators, and product managers may correct the brief later; edits
-   are tenant-scoped, audited, and only affect subsequent generation runs.
-6. Generate a source-backed script through the AI gateway.
-7. Edit the generated content into a new immutable version.
-8. Explicitly submit a draft version for review.
-9. Approve or reject only a version currently pending review.
-10. Inspect the audit trail and generation provenance.
-11. Register an approved version as published and append timestamped performance
-    snapshots as real platform data becomes available.
+1. Bootstrap an organization and first Owner.
+2. Invite team members through expiring, single-use links.
+3. Create and maintain a brand and agricultural product.
+4. Enter or import knowledge, submit it, and approve verified sources.
+5. Create and later correct a structured content brief.
+6. Generate source-backed content through the provider gateway.
+7. Edit the result into append-only versions.
+8. Submit a draft and explicitly approve or reject it.
+9. Register an approved version as externally published.
+10. Append observed performance snapshots.
+11. Record an evidence-led human diagnosis.
+12. Convert findings into an improvement brief.
+13. Explicitly create a successor draft and return it to normal review.
+14. Inspect the audit trail and provenance throughout.
 
-## Content types in the first release
+## Content types
 
 - 30-second short-video script
 - 60-second short-video script
@@ -42,63 +42,72 @@ products communicate clearly, accurately, and consistently.
 - Social post
 - Titles and cover copy
 
-The local deterministic provider returns a structure appropriate to each
-content type rather than relabeling one generic script: timed shot lists for
-short video, run-of-show segments for livestreams, and dedicated fields for
-comment replies, social posts, titles, and cover copy. Every format retains the
-same approved-source citations and prohibited-claim warnings.
+The deterministic provider returns format-specific structures rather than
+renaming one generic script. The browser provides a human-readable preview and
+zero-cost TXT/JSON export without discarding the underlying structured data.
 
-The browser converts those structures into a human-readable delivery draft
-without discarding the underlying JSON. Users can copy the reading view or
-download UTF-8 TXT and JSON files locally without an external storage service.
+## Language experience
+
+The interface supports Simplified Chinese (`zh-CN`), Hong Kong Traditional
+Chinese (`zh-HK`), and English (`en`). Hong Kong Traditional Chinese is an
+explicit product locale, not an automatic character conversion; terms such as
+儲存、連結、檔案、影片 and 團隊 are selected for a natural Hong Kong interface.
+
+Locale switching changes UI copy, dynamic validation and feedback, dates, and
+content presentation. It must never translate or overwrite organization names,
+brands, product facts, knowledge, briefs, or other user-entered business data.
+
+## Team onboarding
+
+An Owner or Admin can invite Admin, Product Manager, Creator, Reviewer, or
+Viewer. Admin cannot invite Owner. A high-entropy token is returned once; only
+its SHA-256 hash, normalized email, role, expiry, and state are stored.
+Existing users authenticate with their existing password. New users choose a
+password during acceptance.
+
+The local MVP exposes the link for manual sharing. Email delivery, invitation
+revocation, and public-network rate limiting are not current capabilities.
 
 ## Product principles
 
 - MVP means minimum scope, not disposable engineering.
 - Human approval remains authoritative.
-- Generated claims must be grounded in approved sources.
-- Knowledge review follows the same explicit governance pattern as content:
-  `draft` → `pending_review` → `approved` or `rejected`. Only approved sources
-  enter AI context, completed decisions cannot be silently overwritten, and the
-  reviewer can preserve a written decision note for later revisions.
-- Reviewed knowledge is corrected by creating a new draft revision, never by
-  overwriting the reviewed record. Each linear revision chain retains its group
-  ID, parent revision, revision number, change summary, and independent SHA-256
-  digest. Generation selects the latest approved revision in the chain; a
-  rejected revision leaves the previous approved revision active.
-- Text knowledge can be entered manually or imported from a local UTF-8 TXT,
-  Markdown, or CSV file up to 1 MB. The original file is not persisted; the
-  submitted text, source filename, media type, and SHA-256 digest are retained.
-- A SHA-256 digest detects whether submitted source text changed. It does not
-  validate factual accuracy, replace provenance review, or grant approval.
-- PDF, DOCX, and PPTX extraction are outside the current MVP and must not be
-  presented as supported import formats.
-- Unsupported performance predictions are excluded.
-- Provider-specific AI behavior stays behind an internal gateway.
-- Generation provenance remains queryable after reload, including normalized
-  input, full output, provider/model, prompt version, latency, and resolved
-  source titles and citation labels.
-- Generation context is bounded before it reaches an AI provider. The current
-  deterministic lexical policy prioritizes product-scoped and query-relevant
-  approved sources, limits source count and characters, and persists source and
-  excerpt hashes so the exact context selection can be audited.
-- Tenant isolation is tested as a security invariant.
-- Content review follows an explicit state machine: `draft` →
-  `pending_review` → `approved` or `rejected`. Drafts cannot be reviewed
-  directly, and completed reviews cannot be silently overwritten.
-- The first operations loop stores publication platform, time, external
-  reference, and raw performance snapshots such as views, likes, comments,
-  shares, saves, follower gains, orders, and revenue. It deliberately does not
-  invent a cross-platform score or claim predictive performance.
-- Video diagnosis is initially an evidence-led human workflow. Each immutable
-  report is linked to a publication and stores observation time, summary,
-  optional transcript excerpt, and structured findings with evidence and
-  recommendations. Automated media extraction can be added later without
-  changing the audit model.
-- A tenant-scoped publication detail endpoint groups the immutable publication
-  record, raw performance history, and diagnosis history for the operations
-  workspace without replacing the underlying records.
-- Teams can convert a diagnosis into an immutable improvement brief containing
-  evidence-backed actions and guardrails. A creator may then explicitly create
-  a successor draft linked to both the brief and the published source version;
-  no diagnosis automatically changes approved content.
+- Only approved knowledge can support generated claims.
+- Knowledge follows `draft → pending_review → approved/rejected`.
+- Reviewed knowledge is corrected through a new linear revision, never an
+  overwrite or history fork.
+- Content follows the same explicit review-state principle and append-only
+  version history.
+- A SHA-256 digest proves submitted-text identity, not factual truth.
+- Provider behavior stays behind one internal boundary.
+- Every generation preserves normalized input, output, provider/model, prompt
+  version, source/context evidence, status, and latency.
+- Context selection is bounded before any provider call.
+- Tenant isolation is a tested security invariant.
+- Metrics remain raw timestamped observations; no invented cross-platform
+  score or viral prediction is shown.
+- Diagnosis is immutable evidence-led human review.
+- No diagnosis automatically modifies approved or published content.
+
+## Honest capability boundaries
+
+- `DeterministicProvider` is not a real language model.
+- `lexical-v1` is not semantic RAG or vector retrieval.
+- Publication registration is not automatic social-platform publishing.
+- Performance snapshots are not automatic analytics ingestion.
+- Video diagnosis is not automatic video understanding.
+- PDF, DOCX, and PPTX extraction are not supported by the current importer.
+- The architecture anticipates commercial use, but the current release is not
+  approved for unsupervised internet operation.
+
+## Release levels
+
+1. **Competition/local demo:** supervised local workflow with synthetic or
+   explicitly authorized data and the zero-cost provider.
+2. **Engineering MVP:** reproducible install, current migrations, green CI for
+   the exact commit, documented limitations, recovery evidence, and human
+   acceptance.
+3. **Public commercial operation:** engineering MVP plus abuse controls,
+   complete invitation/account lifecycle, production observability, privacy
+   and retention policy, recovery objectives, security review, and an approved
+   external-model data-processing arrangement.

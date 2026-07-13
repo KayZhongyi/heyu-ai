@@ -7,7 +7,7 @@
   <title>禾语 AI · 可信农产品内容引擎</title>
   <link rel="stylesheet" href="/assets/landing.css">
 </head>
-<body>
+<body data-i18n-title="meta.landing.title" data-i18n-description="meta.landing.description">
   <div class="landing-ambient" aria-hidden="true">
     <i class="landing-sun"></i><i class="landing-ribbon ribbon-a"></i><i class="landing-ribbon ribbon-b"></i><i class="landing-orb"></i>
   </div>
@@ -17,7 +17,14 @@
       <span><strong>禾语 AI</strong><small>Heyu Intelligence</small></span>
     </a>
     <nav aria-label="首页导航"><a href="#capabilities">核心能力</a><a href="#workflow">工作流程</a><a href="#principles">可信原则</a></nav>
-    <a class="nav-cta" href="/workspace/">进入工作台 <b>↗</b></a>
+    <div class="landing-nav-actions">
+      <div class="language-switcher" role="group" aria-label="语言 / Language">
+        <button type="button" data-locale="zh-CN">简</button>
+        <button type="button" data-locale="zh-HK">繁</button>
+        <button type="button" data-locale="en">EN</button>
+      </div>
+      <a class="nav-cta" href="/workspace/">进入工作台 <b>↗</b></a>
+    </div>
   </header>
 
   <main>
@@ -69,5 +76,9 @@
     <section class="principle-card" id="principles"><p>TRUST BY DESIGN</p><h2>AI 可以加速表达，<br>但不能替代事实与责任。</h2><div><span>不伪造引用</span><span>不覆盖历史</span><span>不展示未经验证的爆款预测</span><span>不要求付费服务才能启动</span></div><a class="primary-cta" href="/workspace/">进入禾语工作台 <b>→</b></a></section>
   </main>
   <footer><span>禾语 AI · Open-source agricultural content intelligence</span><span>本地优先 · 可审核 · 可追溯</span></footer>
+  <script src="/assets/locales/zh-CN.js"></script>
+  <script src="/assets/locales/zh-HK.js"></script>
+  <script src="/assets/locales/en.js"></script>
+  <script src="/assets/i18n.js"></script>
 </body>
 </html>

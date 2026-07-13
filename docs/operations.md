@@ -1,126 +1,137 @@
 # Operations guide
 
-This guide describes the current zero-cost local deployment and the
-PostgreSQL-backed Docker profile. Keep backups outside the project directory
-when possible.
+This guide covers the zero-cost Windows/SQLite profile and optional
+Docker/PostgreSQL profile. Keep backups outside the project directory where
+possible.
 
 ## Local Windows profile
 
 ### Install and start
 
 1. Install Python 3.12.
-2. Run `瀹夎绂捐AI.bat` once.
-3. Run `鍚姩绂捐AI.bat` whenever the workspace is needed.
+2. Run `安装禾语AI.bat` once.
+3. Run `启动禾语AI.bat` whenever the workspace is needed.
 4. Open `http://127.0.0.1:8000/`.
 
 The installer creates `.venv` and runtime data inside the extracted repository.
-It does not require Docker, Node.js, a domain, or a paid AI provider.
+It does not require Docker, Node.js, a domain, Ollama, or a paid AI provider.
 
-### SQLite backup
+### Interface language and business data
 
-Stop the application before copying the database, so the backup represents one
-consistent transaction boundary.
+Use 简、繁、or EN on the homepage or workspace. The preference is stored in
+the browser. Switching locale does not translate or rewrite business records.
+If localized brand content is required, create and review it as an explicit
+business asset rather than relying on the interface switch.
+
+### Team invitations
+
+An Owner or Admin opens the team module, enters an email, role, and expiry, then
+copies the generated link. Share it through a trusted channel. The recipient
+reviews the organization and role, then uses an existing password or chooses a
+new-user password.
+
+The plaintext token is shown once. Losing a link currently means waiting for
+expiry before creating another active invitation for the same normalized
+email. There is no invitation email, explicit revocation, or internet-facing
+rate limiting. Do not expose the local demo directly to the internet.
+
+### SQLite backup and restore
+
+Stop the application before copying the configured SQLite database:
 
 ```powershell
 New-Item -ItemType Directory -Force backups
-Copy-Item apps\api\agri_content.db "backups\agri_content-$(Get-Date -Format yyyyMMdd-HHmmss).db"
+Copy-Item apps\api\agri_content.db `
+  "backups\agri-content-$(Get-Date -Format yyyyMMdd-HHmmss).db"
 ```
 
-If `DATABASE_URL` points to another SQLite path, back up that file instead.
-Copy uploaded assets with the database when file uploads are enabled in a later
-release.
+To restore, stop the application, preserve the current file, copy the selected
+backup to the configured path, restart, and run the acceptance smoke. Never
+merge SQLite files or restore a newer schema into older application code.
 
-### SQLite restore
+## Browser E2E verification
 
-1. Stop the application.
-2. Preserve the current database under a different name.
-3. Copy the selected backup to the configured SQLite database path.
-4. Start the application and complete the acceptance smoke test.
+Node.js is not required for ordinary use. Maintainers run:
 
-Do not merge SQLite files or restore a database created by a newer schema into
-older application code.
+```powershell
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
+$env:HEYU_BASE_URL = "http://127.0.0.1:8000"
+pnpm test:e2e
+```
 
-## Docker Compose profile
+Set `HEYU_BROWSER_PATH` to an existing Chromium-family executable to avoid a
+browser download. Evidence is written under `outputs/browser-e2e` and ignored
+by Git.
 
-Create `.env` from `.env.example`, replace all production secrets, then run:
+## Docker/PostgreSQL profile
+
+Create `.env` from `.env.example`, replace production secrets, then run:
 
 ```bash
 docker compose up --build
 ```
 
-The API container runs `alembic upgrade head` before serving requests.
-Application data is stored in the named PostgreSQL volume declared in
-`compose.yaml`.
+The API container runs `alembic upgrade head` before serving. PostgreSQL data
+uses the named volume in `compose.yaml`.
 
 ### PostgreSQL backup and restore
 
-Use the actual Compose service name and credentials from `compose.yaml` and
-`.env`.
-
 ```bash
 docker compose exec -T db pg_dump -U agri -d agri -Fc > heyu.backup
-docker compose exec -T db pg_restore -U agri -d agri --clean --if-exists --no-owner --no-privileges < heyu.backup
+docker compose exec -T db pg_restore \
+  -U agri -d agri --clean --if-exists --no-owner --no-privileges \
+  < heyu.backup
 ```
 
-For a production deployment, store encrypted backups outside the host, test
-restores regularly, and define retention and recovery-point objectives.
+Production backups should be encrypted, stored outside the host, restored
+regularly, and governed by explicit retention, RPO, and RTO.
 
-## Upgrade procedure
+## Upgrade and rollback
+
+Upgrade:
 
 1. Read release notes and back up the database.
-2. Stop content edits or schedule a maintenance window.
-3. Pull or extract the new source version.
-4. Rebuild dependencies or container images.
+2. Stop edits or schedule maintenance.
+3. pull/extract the exact new version.
+4. Rebuild dependencies or images.
 5. Run `alembic upgrade head`.
-6. Start the service.
-7. Check `/health` for process liveness and `/ready` for database readiness,
-   then execute `docs/acceptance-test.md`.
+6. Start and check `/health` plus `/ready`.
+7. Run `docs/acceptance-test.md`.
+
+Rollback application code and database separately. Prefer restoring the
+pre-upgrade backup with its matching application version. Use `alembic
+downgrade` only after reviewing data-loss consequences.
 
 ## Production configuration guardrails
 
-Set `APP_ENV=production` only with all of the following:
+Set `APP_ENV=production` only with:
 
-- a unique `APP_SECRET` containing at least 32 characters
-- a PostgreSQL `DATABASE_URL`
-- `AUTO_CREATE_SCHEMA=false` so Alembic remains the schema authority
-- one or more explicit HTTPS origins in `CORS_ORIGINS`
+- a unique `APP_SECRET` of at least 32 characters
+- PostgreSQL `DATABASE_URL`
+- `AUTO_CREATE_SCHEMA=false`
+- one or more explicit HTTPS `CORS_ORIGINS`
 
-The application refuses to start in production when these requirements are not
-met. Development keeps the zero-cost SQLite defaults. Docker Compose also
-checks `/ready`, which performs a database query rather than reporting only
-that the web process is alive.
+The application refuses production startup when these are absent.
 
-## Rollback
+## Secrets and providers
 
-Application rollback and database rollback are separate decisions.
-
-1. Stop writes and retain a fresh backup.
-2. Prefer restoring the pre-upgrade backup with the matching application
-   version.
-3. Use `alembic downgrade` only after reviewing the target migration for data
-   loss.
-4. Start the previous application version and repeat acceptance checks.
-
-## Secrets and external AI providers
-
-- Never commit `.env`, tokens, API keys, production databases, or user files.
-- Run `python scripts/audit-repository.py` before a release. CI runs the same
-  tracked-file audit and fails on private documents, database files, private
-  keys, environment files, and common credential formats. This is a release
-  guardrail, not a replacement for credential rotation or a dedicated secret
-  scanner.
-- Use a long random `APP_SECRET` outside local demonstrations.
-- Treat ChatGPT or Codex subscriptions as separate from API credentials.
+- Never commit `.env`, tokens, API keys, databases, or user/private source
+  files.
+- Run `python scripts/audit-repository.py` before release.
+- ChatGPT/Codex subscriptions are not API credentials.
 - Keep the deterministic provider as the no-cost fallback.
-- When an external provider is configured, record provider, model, prompt
-  version, source IDs, status, and latency for every generation.
+- Do not make paid calls without explicit authorization.
+- Record provider, model, prompt version, sources, status, and latency for each
+  external generation.
 
-## Current verification boundary
+## Verification boundary
 
-The Windows/SQLite profile has been exercised locally. CI validates a clean
-Windows install, Docker image construction, empty PostgreSQL migration,
-container restart persistence, and backup restoration into a newly created
-PostgreSQL volume. Both deployment jobs also run
-`scripts/acceptance-smoke.py` and upload the resulting JSON report as a CI
-artifact. A human still needs to complete the visual, responsive, wording, and
-usability portions of `docs/acceptance-test.md` before a release is approved.
+CI is configured for a clean Windows install, browser localization and
+invitation handling, Docker image construction, empty PostgreSQL migration,
+restart persistence, and backup/restore. Deployment jobs run
+`scripts/acceptance-smoke.py`; browser CI uploads screenshots and a trace.
+
+Only a green workflow for the exact release commit is valid evidence. Older
+runs do not prove a newer or uncommitted worktree. A human must still complete
+visual, wording, accessibility, usability, and business acceptance.

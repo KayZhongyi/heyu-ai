@@ -44,6 +44,40 @@ Git.
 - [ ] Confirm a user from another organization cannot read or modify this
       organization's brands, products, knowledge, projects, or versions.
 
+## 2A. Language experience
+
+- [ ] Open the homepage and workspace in `zh-CN`, `zh-HK`, and `en`.
+- [ ] Confirm addressable workspace modules remain usable in all three locales
+      and no raw translation key is visible.
+- [ ] Confirm Hong Kong Traditional Chinese uses reviewed local terminology
+      rather than mechanical character conversion.
+- [ ] Enter a mixed-language organization name, brand, product fact, and brief;
+      switch through all locales and confirm every business value is unchanged.
+- [ ] Save a brand, switch locale, reload, and confirm stored business data is
+      unchanged.
+- [ ] Confirm dynamic validation, success/error messages, review actions,
+      invitations, operations, diagnoses, briefs, and successor drafts use the
+      selected interface locale.
+
+## 2B. Secure team invitations
+
+- [ ] As Owner, create an expiring invitation for a non-Owner role and confirm
+      the plaintext token appears only in the creation response/link.
+- [ ] Confirm an Admin cannot invite an Owner.
+- [ ] Open `/workspace/#invite=TOKEN` and confirm the fragment is promptly
+      removed from the address bar.
+- [ ] Confirm inspection and acceptance are POST requests and success/error
+      responses include `Cache-Control: no-store`.
+- [ ] Accept as a new user with a new password and confirm the assigned role.
+- [ ] Invite an existing user and confirm acceptance requires the existing
+      password.
+- [ ] Confirm a second accept fails and concurrent acceptance cannot create
+      duplicate membership.
+- [ ] Confirm expired and duplicate-active invitations are rejected.
+- [ ] Confirm `invitation.created` and `invitation.accepted` audit events.
+- [ ] Record that email, revocation, and internet-facing rate limiting are not
+      current capabilities.
+
 ## 3. Brand and product assets
 
 - [ ] Create a brand with story and voice guidance.
@@ -180,6 +214,11 @@ Git.
 - [ ] Confirm GitHub Actions passes for the exact release commit.
 - [ ] Capture screenshots of overview, knowledge review, generation result,
       version review, and the successful CI run.
+- [ ] Run `pnpm test:e2e` against the release build and retain screenshots plus
+      `trace.zip`.
+- [ ] Confirm 390px, 700px, and 1440px viewports have no horizontal overflow.
+- [ ] Confirm the exact release commit has green `api`, `repository-audit`,
+      `browser-e2e`, `windows-package`, and `docker-build` jobs.
 
 ## Acceptance record
 

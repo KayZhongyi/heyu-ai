@@ -1,66 +1,93 @@
 # Release gates
 
-No milestone is called "commercial-grade" solely because it has a polished UI.
+No milestone is called “commercial-grade” solely because it has a polished UI.
+Evidence must refer to the exact commit being evaluated.
 
-## MVP release gate
+## Current evidence status
 
-- [x] Fresh clone starts with one documented Docker Compose command.
-- [x] Database schema migration succeeds on an empty PostgreSQL database.
-- [x] Tests cover happy paths and cross-tenant denial for every tenant module.
-- [x] Authentication and authorization are enforced server-side.
-- [x] No committed secret or private business document.
-- [x] AI generation works with the deterministic local provider.
-- [x] Every generation exposes model, prompt, source, status, and timing data.
-- [x] Only approved sources are eligible for production generation.
-- [x] Content edits create versions instead of overwriting review history.
-- [x] CI runs formatting/linting, tests, and migration validation.
-- [x] CI audits tracked files for private documents, databases, environment
-      files, private keys, and obvious credential patterns.
-- [x] Backup/restore and deployment instructions are documented.
-- [x] PostgreSQL backup restores into a fresh data volume in CI.
-- [x] Production mode rejects default secrets, SQLite, wildcard/non-HTTPS CORS,
-      and automatic schema creation.
-- [x] Separate liveness and database-readiness probes are available.
-- [ ] A human reviewer completes the end-to-end acceptance script.
+The current worktree includes secure invitations, three-language UI, and
+browser E2E changes that still require a remote GitHub Actions result. Older
+successful runs prove only their recorded commits and are historical evidence,
+not approval for this worktree.
 
-Evidence and limits:
+Local evidence recorded before the next release candidate:
 
-- Local Ruff, pytest, coverage, tenant-isolation tests, and isolated SQLite
-  Alembic round trips have passed.
-- GitHub Actions run `29198245091` passed for commit `62fd822`: API quality
-  gates, the Windows user-facing installer/startup path and ZIP artifact, and
-  the Docker Compose/PostgreSQL path all completed successfully.
-- The Docker job built the image, started PostgreSQL and the API from a fresh
-  checkout, applied Alembic migrations, bootstrapped a tenant, created a brand,
-  restarted the API container, logged in again, and verified the persisted
-  record.
-- GitHub Actions run `29199231230` passed for commit `68dbdb0`: all 13 API
-  tests passed, including cross-tenant denial for brands, products, knowledge,
-  content projects, versions, reviews, generation, and audit records.
-- `docs/operations.md` and `docs/acceptance-test.md` define the operator and
-  human checks.
-- CI creates a PostgreSQL custom-format backup, destroys the original Compose
-  volume, restores into a newly created volume, logs in with the original
-  account, and verifies the original brand ID and name.
-- The complete human acceptance script remains open.
-- `/health` reports process liveness while `/ready` verifies a live database
-  query. Docker Compose uses the readiness endpoint for its application
-  healthcheck.
+- 45 Python tests passed.
+- Ruff lint and format checks passed.
+- i18n dictionary and content-renderer checks passed.
+- Playwright E2E passed for `zh-CN`, `zh-HK`, `en`, invitations, and
+  390/700/1440-pixel layouts.
+- SQLite Alembic upgrade/check/downgrade/upgrade passed through migration
+  `c4e9a8b7d6f5`.
+
+These checks must be rerun after final edits. Record a commit SHA and Actions
+URL only after a real run; never invent or reuse an unrelated run ID.
+
+## Competition/local demo gate
+
+- [x] Tenant-scoped workflow exists beyond the landing-page UI.
+- [x] Zero-cost generation works without Ollama or Docker.
+- [x] Knowledge and content require explicit review.
+- [x] Generation and versions retain provenance and history.
+- [x] Publication, raw metrics, human diagnosis, improvement brief, and
+      successor draft form a demonstrable loop.
+- [x] Three locales and secure manual invitation flow are implemented.
+- [x] Local automated and browser checks pass.
+- [ ] A human completes the demo acceptance record using synthetic or
+      explicitly authorized data.
+
+**Decision:** conditional GO for a supervised local demonstration. This is not
+approval to expose the service publicly.
+
+## Engineering MVP gate
+
+- [x] Authentication, tenant isolation, and RBAC are server-side.
+- [x] Current schema has an Alembic migration chain.
+- [x] No committed secret, private source material, database, or E2E output.
+- [x] Deterministic and OpenAI-compatible provider boundaries are explicit.
+- [x] Limits avoid claims of semantic RAG, automatic video understanding,
+      automatic publishing, or automatic analytics.
+- [x] Browser E2E covers locale preservation, invitations, and layout.
+- [ ] Exact-commit CI passes `api`, `repository-audit`, `browser-e2e`,
+      `windows-package`, and `docker-build`.
+- [ ] Empty PostgreSQL migration, restart persistence, and backup/restore pass
+      with the invitation migration.
+- [ ] A human acceptance record is retained.
+- [ ] An independent reviewer closes all P0/P1 findings.
+
+**Decision:** NO-GO until the unchecked evidence exists.
+
+## Public commercial operation gate
+
+All engineering-MVP gates plus:
+
+- [ ] Invitation listing and explicit revocation
+- [ ] Authentication/invitation rate limiting and abuse controls
+- [ ] Approved email delivery and account recovery
+- [ ] Production observability, alerting, incident ownership, and audit
+      retention
+- [ ] Rehearsed recovery with defined RPO/RTO
+- [ ] Privacy, retention, deletion, and external-AI data-processing policies
+- [ ] Security review of deployed topology and secret lifecycle
+- [ ] Capacity/reliability targets tested against expected use
+
+**Decision:** NO-GO / STOP.
 
 ## Anti-toy red lines
 
 - UI-only access control
-- shared tenant queries without organization scoping
+- tenant queries without organization scoping
 - unversioned prompts or generated content
-- AI calls embedded directly throughout business endpoints
+- provider calls scattered through business endpoints
 - silent AI failures or fabricated citations
 - production dependence on seed/demo data
 - hard-coded credentials
+- marketing claims beyond implemented behavior
 
 ## Anti-overengineering red lines
 
-- microservices before an independently scaled workload exists
+- microservices before independently scaled workloads exist
 - a custom foundation model for the MVP
-- a separate vector database before PostgreSQL search is measured insufficient
-- distributed event infrastructure for synchronous CRUD workflows
-- unsupported prediction metrics presented as product capabilities
+- a separate vector database before measured retrieval needs justify it
+- distributed events for synchronous CRUD
+- unsupported prediction metrics presented as capabilities

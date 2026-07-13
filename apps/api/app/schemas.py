@@ -37,15 +37,39 @@ class Actor(BaseModel):
     role: Role
 
 
-class MemberCreate(BaseModel):
-    email: EmailStr
-    display_name: str = Field(min_length=1, max_length=120)
-    password: str = Field(min_length=10, max_length=128)
-    role: Role
-
-
 class MemberRoleUpdate(BaseModel):
     role: Role
+
+
+class InvitationCreate(BaseModel):
+    email: EmailStr
+    role: Role
+    expires_in_hours: int = Field(default=72, ge=1, le=168)
+
+
+class InvitationRead(BaseModel):
+    id: str
+    organization_id: str
+    organization_name: str
+    email: EmailStr
+    role: Role
+    expires_at: datetime
+    accepted_at: datetime | None
+    created_at: datetime
+
+
+class InvitationCreated(InvitationRead):
+    token: str
+
+
+class InvitationInspect(BaseModel):
+    token: str = Field(min_length=20, max_length=512)
+
+
+class InvitationAccept(BaseModel):
+    token: str = Field(min_length=20, max_length=512)
+    display_name: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=10, max_length=128)
 
 
 class MemberRead(BaseModel):

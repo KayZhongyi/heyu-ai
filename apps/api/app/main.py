@@ -1,11 +1,15 @@
+import hashlib
+import secrets
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -15,6 +19,7 @@ from app.models import (
     KnowledgeSource,
     Membership,
     Organization,
+    OrganizationInvitation,
     Role,
     User,
 )
@@ -37,12 +42,16 @@ from app.schemas import (
     ImprovementBriefCreate,
     ImprovementBriefRead,
     ImprovementDraftCreate,
+    InvitationAccept,
+    InvitationCreate,
+    InvitationCreated,
+    InvitationInspect,
+    InvitationRead,
     KnowledgeReview,
     KnowledgeSourceCreate,
     KnowledgeSourceRead,
     KnowledgeSourceRevisionCreate,
     LoginRequest,
-    MemberCreate,
     MemberRead,
     MemberRoleUpdate,
     PerformanceSnapshotCreate,
@@ -122,6 +131,14 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def protect_invitation_responses(request, call_next):
+    response = await call_next(request)
+    if request.url.path in {"/v1/invitations/inspect", "/v1/invitations/accept"}:
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 def find_web_dir(module_file: Path = Path(__file__)) -> Path:
     """Locate the web bundle in both repository and container layouts."""
     resolved = module_file.resolve()
@@ -198,13 +215,14 @@ def ready(db: Session = Depends(get_db)) -> dict[str, str]:
 
 @app.post("/v1/auth/bootstrap", response_model=TokenResponse, status_code=201)
 def bootstrap(data: BootstrapRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    if db.scalar(select(User).where(User.email == data.email)):
+    email = str(data.email).strip().lower()
+    if db.scalar(select(User).where(User.email == email)):
         raise HTTPException(status_code=409, detail="Email already exists")
     if db.scalar(select(Organization).where(Organization.slug == data.organization_slug)):
         raise HTTPException(status_code=409, detail="Organization slug already exists")
 
     user = User(
-        email=data.email,
+        email=email,
         display_name=data.display_name,
         password_hash=hash_password(data.password),
     )
@@ -228,7 +246,8 @@ def bootstrap(data: BootstrapRequest, db: Session = Depends(get_db)) -> TokenRes
 
 @app.post("/v1/auth/login", response_model=TokenResponse)
 def login(data: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    user = db.scalar(select(User).where(User.email == data.email))
+    email = str(data.email).strip().lower()
+    user = db.scalar(select(User).where(User.email == email))
     if user is None or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     organization_id = data.organization_id
@@ -285,58 +304,197 @@ def get_members(
     ]
 
 
-@app.post("/v1/members", response_model=MemberRead, status_code=201)
-def add_member(
-    data: MemberCreate,
+def invitation_view(
+    invitation: OrganizationInvitation,
+    organization: Organization,
+) -> InvitationRead:
+    return InvitationRead(
+        id=invitation.id,
+        organization_id=organization.id,
+        organization_name=organization.name,
+        email=invitation.email,
+        role=invitation.role,
+        expires_at=invitation.expires_at,
+        accepted_at=invitation.accepted_at,
+        created_at=invitation.created_at,
+    )
+
+
+def invitation_by_token(
+    db: Session,
+    token: str,
+    *,
+    for_update: bool = False,
+) -> tuple[OrganizationInvitation, Organization]:
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    statement = (
+        select(OrganizationInvitation, Organization)
+        .join(Organization, Organization.id == OrganizationInvitation.organization_id)
+        .where(OrganizationInvitation.token_hash == token_hash)
+    )
+    if for_update:
+        statement = statement.with_for_update()
+    row = db.execute(statement).one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    return row
+
+
+@app.post("/v1/invitations", response_model=InvitationCreated, status_code=201)
+def create_invitation(
+    data: InvitationCreate,
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
-) -> MemberRead:
+) -> InvitationCreated:
+    email = str(data.email).strip().lower()
     if data.role == Role.owner and actor.role != Role.owner:
-        raise HTTPException(status_code=403, detail="Only an owner can add another owner")
-    user = db.scalar(select(User).where(User.email == data.email))
+        raise HTTPException(status_code=403, detail="Only an owner can invite another owner")
+    existing_user = db.scalar(select(User).where(User.email == email))
+    if existing_user and db.scalar(
+        select(Membership).where(
+            Membership.organization_id == actor.organization_id,
+            Membership.user_id == existing_user.id,
+        )
+    ):
+        raise HTTPException(status_code=409, detail="User is already a member")
+    now = datetime.now(UTC)
+    expired_invitations = db.scalars(
+        select(OrganizationInvitation).where(
+            OrganizationInvitation.organization_id == actor.organization_id,
+            OrganizationInvitation.email == email,
+            OrganizationInvitation.accepted_at.is_(None),
+            OrganizationInvitation.expires_at <= now,
+            OrganizationInvitation.active_key.is_not(None),
+        )
+    ).all()
+    for expired_invitation in expired_invitations:
+        expired_invitation.active_key = None
+    active = db.scalar(
+        select(OrganizationInvitation).where(
+            OrganizationInvitation.organization_id == actor.organization_id,
+            OrganizationInvitation.email == email,
+            OrganizationInvitation.accepted_at.is_(None),
+            OrganizationInvitation.expires_at > now,
+        )
+    )
+    if active is not None:
+        raise HTTPException(status_code=409, detail="An active invitation already exists")
+    token = secrets.token_urlsafe(32)
+    invitation = OrganizationInvitation(
+        organization_id=actor.organization_id,
+        email=email,
+        role=data.role,
+        token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+        active_key=hashlib.sha256(f"{actor.organization_id}:{email}".encode()).hexdigest(),
+        invited_by=actor.user_id,
+        expires_at=now + timedelta(hours=data.expires_in_hours),
+    )
+    db.add(invitation)
+    db.flush()
+    audit(
+        db,
+        actor,
+        "invitation.created",
+        "organization_invitation",
+        invitation.id,
+        {"email": email, "role": data.role.value},
+    )
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="An active invitation already exists",
+        ) from error
+    organization = db.get(Organization, actor.organization_id)
+    return InvitationCreated(
+        **invitation_view(invitation, organization).model_dump(),
+        token=token,
+    )
+
+
+@app.post("/v1/invitations/inspect", response_model=InvitationRead)
+def inspect_invitation(
+    data: InvitationInspect,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> InvitationRead:
+    response.headers["Cache-Control"] = "no-store"
+    invitation, organization = invitation_by_token(db, data.token)
+    return invitation_view(invitation, organization)
+
+
+@app.post("/v1/invitations/accept", response_model=TokenResponse)
+def accept_invitation(
+    data: InvitationAccept,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> TokenResponse:
+    response.headers["Cache-Control"] = "no-store"
+    invitation, _ = invitation_by_token(db, data.token, for_update=True)
+    now = datetime.now(UTC)
+    expires_at = invitation.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    if invitation.accepted_at is not None:
+        raise HTTPException(status_code=409, detail="Invitation has already been accepted")
+    if expires_at <= now:
+        raise HTTPException(status_code=410, detail="Invitation has expired")
+    user = db.scalar(select(User).where(User.email == invitation.email))
     if user is None:
         user = User(
-            email=data.email,
+            email=invitation.email,
             display_name=data.display_name,
             password_hash=hash_password(data.password),
         )
         db.add(user)
         db.flush()
     elif not verify_password(data.password, user.password_hash):
-        raise HTTPException(
-            status_code=409,
-            detail="This email already exists; provide its current password to add it",
-        )
+        raise HTTPException(status_code=401, detail="Invalid credentials for invited email")
     existing = db.scalar(
         select(Membership).where(
-            Membership.organization_id == actor.organization_id,
+            Membership.organization_id == invitation.organization_id,
             Membership.user_id == user.id,
         )
     )
     if existing is not None:
         raise HTTPException(status_code=409, detail="User is already a member")
     membership = Membership(
-        organization_id=actor.organization_id,
+        organization_id=invitation.organization_id,
         user_id=user.id,
-        role=data.role,
+        role=invitation.role,
     )
     db.add(membership)
     db.flush()
+    invitation.accepted_at = now
+    invitation.accepted_by = user.id
+    invitation.active_key = None
+    invite_actor = Actor(
+        user_id=user.id,
+        organization_id=invitation.organization_id,
+        role=invitation.role,
+    )
     audit(
         db,
-        actor,
-        "membership.created",
-        "membership",
-        membership.id,
-        {"user_id": user.id, "role": data.role.value},
+        invite_actor,
+        "invitation.accepted",
+        "organization_invitation",
+        invitation.id,
+        {"membership_id": membership.id, "role": invitation.role.value},
     )
-    db.commit()
-    return MemberRead(
-        membership_id=membership.id,
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Invitation was already accepted or membership already exists",
+        ) from error
+    return TokenResponse(
+        access_token=create_token(user.id, invitation.organization_id, invitation.role),
+        organization_id=invitation.organization_id,
         user_id=user.id,
-        email=user.email,
-        display_name=user.display_name,
-        role=membership.role,
     )
 
 

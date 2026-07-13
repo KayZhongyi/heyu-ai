@@ -3,11 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
   <meta name="description" content="禾语 AI 农产品智能内容与运营平台">
   <title>禾语 AI · 农产品智能内容工作台</title>
   <link rel="stylesheet" href="/assets/app.css">
 </head>
-<body>
+<body data-i18n-title="meta.workspace.title" data-i18n-description="meta.workspace.description">
   <div class="ambient" aria-hidden="true"></div>
   <div class="shell">
     <aside class="sidebar">
@@ -43,6 +44,11 @@
         </div>
         <div class="header-actions">
           <span class="status-dot">本地服务正常</span>
+          <div class="language-switcher" role="group" aria-label="语言 / Language">
+            <button type="button" data-locale="zh-CN">简</button>
+            <button type="button" data-locale="zh-HK">繁</button>
+            <button type="button" data-locale="en">EN</button>
+          </div>
           <button class="ghost" id="logout">退出</button>
         </div>
       </header>
@@ -57,6 +63,7 @@
         <div class="auth-tabs" role="tablist" aria-label="进入工作台方式">
           <button type="button" class="active" data-auth-mode="bootstrap">首次创建</button>
           <button type="button" data-auth-mode="login">已有账号</button>
+          <button type="button" data-auth-mode="invite" hidden>接受邀请</button>
         </div>
         <form id="bootstrap-form" data-auth-panel="bootstrap">
           <h3>创建本地工作空间</h3>
@@ -75,6 +82,15 @@
           <label>密码<input type="password" name="password" value="HeyuDemo2026!" required></label>
           <button class="primary" type="submit">登录工作台</button>
           <p class="form-note">组织标识是首次创建工作空间时填写的英文标识。</p>
+        </form>
+        <form id="invite-accept-form" data-auth-panel="invite" hidden>
+          <h3>接受团队邀请</h3>
+          <input name="token" type="hidden">
+          <p id="invite-summary" data-business-data class="invite-summary">正在读取邀请信息…</p>
+          <label>你的称呼<input name="display_name" placeholder="例如：内容负责人" required></label>
+          <label>账号密码<input type="password" name="password" minlength="10" placeholder="已有账号请填写原密码；新账号请设置密码" required></label>
+          <button class="primary" type="submit">接受邀请并进入工作台</button>
+          <p class="form-note">邀请只能使用一次；已有禾语账号不会被修改密码。</p>
         </form>
         </div>
       </section>
@@ -115,7 +131,7 @@
             <form class="panel" id="brand-form"><input name="id" type="hidden"><h2 id="brand-form-title">新建品牌</h2><label>品牌名称<input name="name" placeholder="例如：田埂播播菜" required></label><label>品牌故事<textarea name="story" placeholder="为什么开始、服务谁、坚持什么"></textarea></label><label>表达风格<textarea name="voice" placeholder="真诚、朴实、有知识感"></textarea></label><button class="primary" id="brand-save-button">保存品牌</button><button class="ghost wide" id="brand-edit-cancel" type="button" hidden>取消编辑</button></form>
             <form class="panel" id="product-form"><input name="id" type="hidden"><h2 id="product-form-title">新建农产品</h2><label>所属品牌<select name="brand_id" class="brand-select" required></select></label><label>产品名称<input name="name" placeholder="例如：当季有机番茄" required></label><div class="form-grid"><label>产地<input name="origin"></label><label>规格<input name="specification"></label><label>展示价格<input name="price_display"></label><label>保质期<input name="shelf_life"></label></div><label>储存方式<textarea name="storage_method"></textarea></label><label>核心卖点（每行一条）<textarea name="selling_points"></textarea></label><label>禁止表述（每行一条）<textarea name="prohibited_claims"></textarea></label><button class="primary" id="product-save-button">保存产品</button><button class="ghost wide" id="product-edit-cancel" type="button" hidden>取消编辑</button></form>
           </div>
-          <div class="section-head"><div><p class="eyebrow">ASSET LIBRARY</p><h2>已有资产</h2></div></div><div id="asset-list" class="card-list empty">暂无品牌与产品</div>
+<div class="section-head"><div><p class="eyebrow">ASSET LIBRARY</p><h2>已有资产</h2></div></div><div id="asset-list" class="card-list empty" data-business-data>暂无品牌与产品</div>
         </section>
 
         <section class="page" data-page-panel="knowledge">
@@ -144,21 +160,21 @@
               <button class="primary" id="knowledge-save-button">保存为知识草稿</button>
               <button class="ghost wide" id="knowledge-revision-cancel" type="button" hidden>取消修订</button>
             </form>
-            <div class="panel"><div class="panel-heading"><div><p class="eyebrow">SOURCE REVIEW</p><h2>资料审核</h2></div><span class="pill">Owner 可审核</span></div><div id="knowledge-list" class="stack empty">暂无知识资料</div></div>
+<div class="panel"><div class="panel-heading"><div><p class="eyebrow">SOURCE REVIEW</p><h2>资料审核</h2></div><span class="pill">Owner 可审核</span></div><div id="knowledge-list" class="stack empty" data-business-data>暂无知识资料</div></div>
           </div>
         </section>
 
         <section class="page" data-page-panel="studio">
           <div class="two-col studio-grid">
             <form class="panel" id="project-form"><input name="id" type="hidden"><h2 id="project-form-title">创建内容任务</h2><label>任务名称<input name="title" placeholder="番茄采摘季首发视频" required></label><label>品牌<select name="brand_id" class="brand-select" required></select></label><label>产品<select name="product_id" class="product-select" required></select></label><label>内容类型<select name="content_type"><option value="short_video_30s">30 秒短视频</option><option value="short_video_60s">60 秒短视频</option><option value="livestream_opening">直播开场</option><option value="livestream_product_pitch">直播产品讲解</option><option value="livestream_interaction">直播互动</option><option value="comment_reply">评论回复</option><option value="social_post">社交媒体文案</option><option value="title_and_cover">标题与封面文案</option></select></label><div class="form-grid"><label>发布平台<input name="platform" value="抖音"></label><label>内容语气<input name="tone" value="真诚、有烟火气"></label></div><label>目标受众<textarea name="target_audience"></textarea></label><label>传播目标<textarea name="objective"></textarea></label><label>额外要求<textarea name="extra_requirements"></textarea></label><button class="primary" id="project-save-button">创建任务</button><button class="ghost wide" id="project-edit-cancel" type="button" hidden>取消编辑</button></form>
-            <div class="panel result-panel"><div class="panel-heading"><div><p class="eyebrow">AI STUDIO</p><h2>生成结果</h2></div><span class="pill">可信来源限定</span></div><label>选择任务<select id="project-select"></select></label><button class="primary wide" id="generate-button">生成内容脚本</button><div class="content-toolbar" id="content-toolbar" hidden><button type="button" data-result-mode="preview" class="active">阅读稿</button><button type="button" data-result-mode="json">结构化 JSON</button><button type="button" id="copy-content">复制阅读稿</button><button type="button" id="download-content">下载 TXT</button><button type="button" id="download-json">下载 JSON</button></div><div id="generation-preview" class="generation-preview">请先建立品牌、产品和至少一条审核通过的知识资料。</div><pre id="generation-output" hidden></pre><div id="edit-version" hidden><label>人工修改版本<textarea id="version-editor" rows="12"></textarea></label><label>修改说明<input id="change-summary" value="人工优化脚本表达"></label><button class="primary wide" id="save-version-button" type="button">保存为新版本</button></div><div class="generation-history"><div class="panel-heading"><div><p class="eyebrow">PROVENANCE HISTORY</p><h2>生成记录</h2></div><span class="quiet-meta">持久化记录</span></div><div id="generation-history-list" class="stack empty">选择任务后查看生成历史</div></div></div>
+            <div class="panel result-panel"><div class="panel-heading"><div><p class="eyebrow">AI STUDIO</p><h2>生成结果</h2></div><span class="pill">可信来源限定</span></div><label>选择任务<select id="project-select"></select></label><button class="primary wide" id="generate-button">生成内容脚本</button><div class="content-toolbar" id="content-toolbar" hidden><button type="button" data-result-mode="preview" class="active">阅读稿</button><button type="button" data-result-mode="json">结构化 JSON</button><button type="button" id="copy-content">复制阅读稿</button><button type="button" id="download-content">下载 TXT</button><button type="button" id="download-json">下载 JSON</button></div><div id="generation-preview" data-business-data class="generation-preview">请先建立品牌、产品和至少一条审核通过的知识资料。</div><pre id="generation-output" data-business-data hidden></pre><div id="edit-version" hidden><label>人工修改版本<textarea id="version-editor" rows="12"></textarea></label><label>修改说明<input id="change-summary" value="人工优化脚本表达"></label><button class="primary wide" id="save-version-button" type="button">保存为新版本</button></div><div class="generation-history"><div class="panel-heading"><div><p class="eyebrow">PROVENANCE HISTORY</p><h2>生成记录</h2></div><span class="quiet-meta">持久化记录</span></div><div id="generation-history-list" data-business-data class="stack empty">选择任务后查看生成历史</div></div></div>
           </div>
           <div class="section-head"><div><p class="eyebrow">CONTENT BRIEFS</p><h2>已有内容任务</h2></div><span class="quiet-meta">修改只影响后续生成</span></div>
-          <div id="project-list" class="card-list empty">暂无内容任务</div>
+<div id="project-list" class="card-list empty" data-business-data>暂无内容任务</div>
         </section>
 
         <section class="page" data-page-panel="review">
-          <div class="panel"><div class="panel-heading"><div><p class="eyebrow">VERSION CONTROL</p><h2>内容版本与审核</h2></div><span class="pill">不可覆盖版本链</span></div><label>选择内容项目<select id="review-project-select"></select></label><div id="review-list" class="stack empty">暂无待审核内容</div></div>
+<div class="panel"><div class="panel-heading"><div><p class="eyebrow">VERSION CONTROL</p><h2>内容版本与审核</h2></div><span class="pill">不可覆盖版本链</span></div><label>选择内容项目<select id="review-project-select"></select></label><div id="review-list" class="stack empty" data-business-data>暂无待审核内容</div></div>
         </section>
 
         <section class="page" data-page-panel="operations">
@@ -177,30 +193,35 @@
             <div class="panel">
               <div class="panel-heading"><div><p class="eyebrow">OPERATIONS</p><h2>发布与数据快照</h2></div><span class="pill">保留历史</span></div>
               <p class="panel-intro">每次数据录入都会形成独立快照，不覆盖历史数据，也不计算未经验证的“爆款分数”。</p>
-              <div id="publication-list" class="stack empty">暂无发布记录</div>
+<div id="publication-list" class="stack empty" data-business-data>暂无发布记录</div>
             </div>
           </div>
         </section>
 
         <section class="page" data-page-panel="audit">
-          <div class="panel"><div class="panel-heading"><div><p class="eyebrow">AUDIT TRAIL</p><h2>组织审计记录</h2></div><span class="pill">最近 100 条</span></div><p class="panel-intro">品牌、产品、知识审核、AI 生成与内容版本操作均按组织隔离记录。</p><div id="audit-list" class="stack empty">暂无审计记录</div></div>
+<div class="panel"><div class="panel-heading"><div><p class="eyebrow">AUDIT TRAIL</p><h2>组织审计记录</h2></div><span class="pill">最近 100 条</span></div><p class="panel-intro">品牌、产品、知识审核、AI 生成与内容版本操作均按组织隔离记录。</p><div id="audit-list" class="stack empty" data-business-data>暂无审计记录</div></div>
         </section>
 
         <section class="page" data-page-panel="members">
           <div class="two-col member-layout">
             <form class="panel" id="member-form">
-              <div class="panel-heading"><div><p class="eyebrow">TEAM ACCESS</p><h2>新增团队成员</h2></div><span class="pill">Owner / Admin</span></div>
-              <p class="panel-intro">为真实协作建立独立账号。成员权限由角色控制，后续调整会立即使旧登录凭证失效。</p>
+              <div class="panel-heading"><div><p class="eyebrow">TEAM ACCESS</p><h2>邀请团队成员</h2></div><span class="pill">Owner / Admin</span></div>
+              <p class="panel-intro">生成一次性邀请链接，让成员自行设置或验证账号密码。平台不会要求管理员接触成员密码。</p>
               <label>成员邮箱<input type="email" name="email" placeholder="member@example.com" required></label>
-              <label>显示名称<input name="display_name" placeholder="例如：内容负责人" required></label>
-              <label>初始密码<input type="password" name="password" minlength="10" placeholder="至少 10 个字符" required></label>
               <label>初始角色<select name="role" class="role-select"></select></label>
-              <button class="primary" type="submit">创建成员账号</button>
+              <label>有效时间<select name="expires_in_hours"><option value="24">24 小时</option><option value="72" selected>3 天</option><option value="168">7 天</option></select></label>
+              <button class="primary" type="submit">生成邀请链接</button>
+              <div id="invite-result" class="invite-result" hidden>
+                <strong>邀请已生成</strong>
+                <input id="invite-link" data-business-data readonly aria-label="邀请链接">
+                <button id="copy-invite-link" class="ghost wide" type="button">复制邀请链接</button>
+                <small>链接只在创建时显示，请通过可信渠道发送给对应邮箱的成员。</small>
+              </div>
             </form>
             <div class="panel">
               <div class="panel-heading"><div><p class="eyebrow">ROLE GOVERNANCE</p><h2>成员与权限</h2></div><span class="pill" id="member-count">0 位成员</span></div>
               <p class="panel-intro">每个成员只访问所属组织的数据。Owner 负责最高权限，Admin 可管理 Owner 之外的成员。</p>
-              <div id="member-list" class="stack member-list empty">暂无团队成员</div>
+<div id="member-list" class="stack member-list empty" data-business-data>暂无团队成员</div>
             </div>
           </div>
         </section>
@@ -208,6 +229,10 @@
       <div id="toast" role="status"></div>
     </main>
   </div>
+  <script src="/assets/locales/zh-CN.js"></script>
+  <script src="/assets/locales/zh-HK.js"></script>
+  <script src="/assets/locales/en.js"></script>
+  <script src="/assets/i18n.js"></script>
   <script src="/assets/content-renderer.js" defer></script>
   <script src="/assets/app.js" defer></script>
 </body>

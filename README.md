@@ -1,178 +1,188 @@
 # 禾语 AI · Heyu AI
 
-禾语 AI is an open-source, multi-tenant AI workspace for agricultural brands and producer
-organizations. The platform turns verified product knowledge into traceable
-short-video and livestream scripts, while preserving human review, version
-history, and auditability.
+禾语 AI is an Apache-2.0-licensed, multi-tenant AI content and operations
+workspace for agricultural brands and producer organizations. It turns reviewed
+product knowledge into traceable short-video and livestream content while
+preserving human review, version history, tenant isolation, and auditability.
 
-## MVP scope
+The repository is currently **private during pre-release review**. It is
+structured for a later public source release, but it must not be described as
+already public or generally available.
 
-- Multi-tenant organizations, memberships, and role-based access control
-- Owner/Admin team management with immediate role-change enforcement
-- Maintainable brand and agricultural product records with tenant-scoped editing,
-  role enforcement, and audit events
-- Maintainable content briefs whose edits affect future generations without rewriting
-  existing generation runs or immutable content versions
-- Source-backed knowledge documents with review status
-- Explicit draft → pending review → approved/rejected knowledge governance with
-  persistent reviewer notes
-- Immutable, linear knowledge revision chains with per-revision integrity metadata
-- Browser-side UTF-8 TXT, Markdown, and CSV knowledge import with source
-  filename, media type, and SHA-256 integrity metadata
-- Structured AI content briefs and script generation
-- Human-readable script preview plus zero-cost TXT and JSON export
-- Bounded, deterministic knowledge-context selection with excerpt provenance
-- Immutable content versions and human approval workflow
-- Explicit draft → pending review → approved/rejected content governance
-- Approved-content publication records and append-only performance snapshots
-- Append-only, evidence-based structured video diagnosis reports
-- Tenant-scoped publication detail views grouping raw metrics and diagnoses
-- Immutable diagnosis-derived improvement briefs and explicitly created successor drafts
-- Provider-neutral AI gateway with a deterministic local development provider
-- Docker-based local environment, automated tests, and CI
+## What the MVP does
 
-Not in the MVP: VR or medical features, autonomous digital-human livestreaming,
-federated learning, blockchain/NFT features, or unsupported “viral prediction”.
+- Multi-tenant organizations, membership, RBAC, and immediate role-change
+  enforcement
+- Expiring, single-use team invitation links; plaintext tokens are returned
+  once and only SHA-256 hashes are stored
+- Editable brand, product, and content-brief records with tenant-scoped audit
+  events
+- TXT, Markdown, and CSV knowledge import with source metadata and SHA-256
+  content identity
+- Explicit knowledge submission, review, rejection, and immutable revision
+  chains
+- Bounded `lexical-v1` context selection using only the latest approved
+  knowledge revision
+- Eight structured output types, including short-video, livestream, comments,
+  social copy, titles, and cover copy
+- Provider-neutral generation gateway with a zero-cost deterministic provider
+  and an OpenAI-compatible provider boundary
+- Generation provenance: provider, model, prompt version, selected sources,
+  context hashes, output, timing, and status
+- Immutable content versions and explicit human review
+- Publication registration, append-only performance snapshots, evidence-led
+  human video diagnosis, improvement briefs, and explicit successor drafts
+- Simplified Chinese, Hong Kong Traditional Chinese, and English interface
+  switching without rewriting user-entered business data
+- Windows/SQLite local startup without Docker, plus optional
+  Docker/PostgreSQL deployment
+- Python, repository-audit, browser E2E, Windows-package, and PostgreSQL CI jobs
+
+Not in the MVP: VR, medical features, autonomous digital-human livestreaming,
+federated learning, blockchain/NFT features, or unsupported “viral
+prediction”.
+
+## Honest capability boundaries
+
+- `DeterministicProvider` is a zero-cost development provider, not a real
+  language model.
+- `lexical-v1` is deterministic lexical ranking, not semantic RAG or vector
+  search.
+- Video diagnosis is structured human input, not automatic video
+  understanding.
+- Publication is a registration record, not automatic posting to social
+  platforms.
+- Performance snapshots are manually entered, not automatically collected.
+- The current system is an engineering-oriented MVP, not an approved
+  internet-facing commercial service.
 
 ## Repository layout
 
 ```text
 apps/
-  api/        FastAPI application and background-ready AI domain
-  web/        Browser workspace served by the API
+  api/                    FastAPI application and Alembic migrations
+  web/                    Homepage and authenticated browser workspace
 docs/
-  architecture.md
-  acceptance-test.md
-  operations.md
-  product.md
-  release-gates.md
+  acceptance-test.md      Manual acceptance record
+  architecture.md         Boundaries and system shape
+  operations.md           Startup, backup, restore, and testing
+  product.md              Product behavior and scope
+  release-gates.md        Demo, engineering MVP, and production gates
 scripts/
+  acceptance-smoke.py
+  audit-repository.py
   setup-windows.ps1
   start-windows.ps1
+  test-browser-e2e.js
+  test-content-renderer.js
+  test-i18n.js
 安装禾语AI.bat
 启动禾语AI.bat
 ```
 
-## Zero-cost local demo
+## Zero-cost Windows demo
 
-The demo is designed to run entirely on the user's computer:
+Prerequisite: Python 3.12. Docker, Node.js, a domain, Ollama, and a paid model
+API are not required for ordinary use.
 
-- no domain name
-- no cloud server
-- no paid database
-- no mandatory paid AI API
-- SQLite and a deterministic local AI provider by default
-
-Knowledge import currently accepts UTF-8 `.txt`, `.md`, `.markdown`, and
-`.csv` files up to 1 MB. The browser reads the file locally and sends only the
-editable extracted text plus source filename and media type to the API; the
-original file is not stored. The API records a SHA-256 digest of the submitted
-text so later changes can be detected. This digest proves content identity,
-not factual truth, so human review remains required. PDF, DOCX, and PPTX
-parsing are intentionally not included yet.
-
-Download the GitHub ZIP, extract it, and run the included local start scripts.
-Docker Compose remains available for a
-production-like PostgreSQL environment, but it is not required for the basic
-demo.
-
-Every successful GitHub Actions run also publishes a
-`heyu-ai-windows-source` artifact. It contains the same source-package layout
-used by the automated Windows install-and-start verification.
-
-### Windows source package
-
-The current source package can run without Docker. Python 3.12 is the only
-prerequisite until the standalone Windows release is published.
-
-1. Extract the repository to a drive with at least 2 GB free space.
+1. Extract the repository or Windows source artifact to a drive with at least
+   2 GB free space.
 2. Double-click `安装禾语AI.bat` once.
 3. Double-click `启动禾语AI.bat`.
-4. The browser opens the local workspace at `http://127.0.0.1:8000/`.
+4. Open `http://127.0.0.1:8000/`.
 
-Developer API documentation remains available at
-`http://127.0.0.1:8000/docs`.
+The installer keeps `.venv`, SQLite data, and runtime files inside the extracted
+project directory. Set `HEYU_PYTHON` when automatic Python discovery is not
+suitable.
 
-The installer creates `.venv`, `data`, and runtime files inside the extracted
-project directory. It does not intentionally install project packages into the
-system Python environment. Set `HEYU_PYTHON` to a Python 3.12 executable when
-automatic Python discovery is not suitable.
+Knowledge import currently accepts UTF-8 `.txt`, `.md`, `.markdown`, and `.csv`
+files up to 1 MB. The browser reads the file locally and sends editable text,
+filename, and media type. The original file is not stored. PDF, DOCX, and PPTX
+parsing are intentionally outside the current MVP.
 
-The current ZIP workflow requires Python 3.12 for the one-time installation.
-A future standalone Windows package may bundle the runtime, but it is not part
-of the current verified release.
-
-## Docker quick start
-
-Prerequisites: Docker with Compose.
+## Optional Docker/PostgreSQL start
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-The product homepage is available at `http://localhost:8000/`, and the
-authenticated workspace is available at `http://localhost:8000/workspace/`.
-Each workspace module has a stable URL such as `/workspace/knowledge` or
-`/workspace/studio`. Developer API documentation is available at
+The homepage is at `http://localhost:8000/`, the workspace at
+`http://localhost:8000/workspace/`, and API docs at
 `http://localhost:8000/docs`.
 
-`/health` is the process liveness endpoint. `/ready` additionally verifies
-database connectivity. Production mode fails closed when it detects a default
-or short application secret, SQLite, automatic schema creation, or
-non-explicit/non-HTTPS CORS origins; see `docs/operations.md`.
+`/health` reports process liveness. `/ready` also verifies database
+connectivity. Production mode fails closed on a default/short secret, SQLite,
+automatic schema creation, or non-explicit/non-HTTPS CORS origins.
 
-For backend-only development, see [apps/api/README.md](apps/api/README.md).
-For backups, upgrades, and recovery, see
-[docs/operations.md](docs/operations.md). For manual release verification, see
-[docs/acceptance-test.md](docs/acceptance-test.md).
+## Language support
 
-Run the zero-dependency deployment smoke against a started instance:
+The homepage and workspace support:
 
-```bash
-python scripts/acceptance-smoke.py \
-  --base-url http://127.0.0.1:8000 \
+- `zh-CN`: Simplified Chinese
+- `zh-HK`: Hong Kong Traditional Chinese with locally reviewed terminology
+- `en`: English
+
+Interface labels, dynamic feedback, dates, and generated-content presentation
+follow the selected locale. Organization names, brand and product facts,
+knowledge, briefs, and other business records stay exactly as entered. Locale
+switching never machine-translates or overwrites them.
+
+## Team invitation boundary
+
+Owners and admins can create a manually shareable invitation link for a
+non-Owner role. The link contains a cryptographically random token. Only its
+hash is stored; it expires and can be accepted once. Inspection and acceptance
+use POST with `Cache-Control: no-store`, and the browser removes the fragment
+from the address bar after reading it.
+
+The current MVP does not send invitation emails, revoke invitations before
+expiry, or provide public-network rate limiting. Do not expose the local demo
+directly to the internet.
+
+## Verification
+
+```powershell
+python -m ruff check apps scripts
+python -m ruff format --check apps scripts
+python -m pytest -q
+node scripts/test-i18n.js
+node scripts/test-content-renderer.js
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
+pnpm test:e2e
+python scripts/audit-repository.py
+```
+
+Run deployment smoke against a started instance:
+
+```powershell
+python scripts/acceptance-smoke.py `
+  --base-url http://127.0.0.1:8000 `
   --output outputs/acceptance/local.json
 ```
 
-The JSON report proves the deployed API workflow and tenant boundary. Human
-visual and usability review remains a separate release requirement.
+Automated evidence does not replace human visual, wording, accessibility,
+usability, and business acceptance. See
+[docs/acceptance-test.md](docs/acceptance-test.md) and
+[docs/release-gates.md](docs/release-gates.md).
 
 ## Security posture
 
-- Every tenant-owned row carries an `organization_id`.
-- Authorization is enforced in application services, not just the UI.
-- AI outputs record provider, model, prompt version, source IDs, and latency.
-- Source documents must be approved before production generation can cite them.
-- Generation uses the latest approved revision in each knowledge chain. A rejected
-  revision does not displace the preceding approved revision.
-- AI context is capped and deterministically selected rather than sending an
-  organization's entire knowledge base. Each generation records source and
-  excerpt hashes, included character counts, and truncation state.
-- A publication can reference only an approved content version. Operational
-  metrics are stored as timestamped raw snapshots so later observations do not
-  overwrite earlier evidence.
-- Video diagnosis starts as a structured human-review record linked to a
-  publication. Findings require a category, evidence, and an observation,
-  opportunity, or risk label; the system does not invent an automatic score.
-- `GET /v1/publications/{publication_id}` returns the publication, newest-first
-  performance snapshots, diagnosis history, and improvement briefs without
-  deriving a score.
-- An improvement brief references one diagnosis and the exact published source
-  version. Creating a successor draft is an explicit action; the approved,
-  published version is never overwritten.
-- The publication operations workspace exposes this flow directly: open a
-  diagnosis, create an evidence-backed improvement brief, then explicitly
-  create a successor draft. The new draft continues through the normal content
-  review workflow.
-- The repository contains synthetic examples only; supplied business materials
-  are not committed without explicit authorization.
+- Tenant-owned rows carry `organization_id`; authorization is server-side.
+- Only approved knowledge may enter generation context.
+- Rejected revisions do not displace the preceding approved revision.
+- Context is bounded and records source/excerpt hashes and truncation state.
+- Publications reference approved content; later observations do not overwrite
+  prior metrics, diagnoses, briefs, or versions.
+- Supplied private business materials are not committed without explicit
+  authorization.
+- `.env`, tokens, API keys, databases, original private PDFs/PPTs, and E2E
+  evidence must not be committed.
 
-## Status
+## Status and license
 
-The project is in active MVP development. See [docs/product.md](docs/product.md)
-and [docs/release-gates.md](docs/release-gates.md) for acceptance criteria.
-
-## License
+The supervised local demo is functional. Engineering-MVP and public-operation
+approval depend on the exact gates in `docs/release-gates.md`.
 
 Apache-2.0. See [LICENSE](LICENSE).

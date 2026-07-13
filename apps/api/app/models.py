@@ -83,6 +83,21 @@ class Membership(Base):
     role: Mapped[Role] = mapped_column(Enum(Role))
 
 
+class OrganizationInvitation(Base):
+    __tablename__ = "organization_invitations"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    role: Mapped[Role] = mapped_column(Enum(Role))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    active_key: Mapped[str | None] = mapped_column(String(64), unique=True)
+    invited_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    accepted_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class Brand(Base):
     __tablename__ = "brands"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
