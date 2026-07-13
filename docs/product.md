@@ -21,6 +21,8 @@ products communicate clearly, accurately, and consistently.
    owner, admin, and product-manager roles and are written to the organization audit trail.
 4. Add source documents, submit them for review, and approve verified sources.
 5. Create a structured content brief.
+   Owners, admins, creators, and product managers may correct the brief later; edits
+   are tenant-scoped, audited, and only affect subsequent generation runs.
 6. Generate a source-backed script through the AI gateway.
 7. Edit the generated content into a new immutable version.
 8. Explicitly submit a draft version for review.

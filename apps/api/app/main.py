@@ -27,6 +27,7 @@ from app.schemas import (
     BrandUpdate,
     ContentProjectCreate,
     ContentProjectRead,
+    ContentProjectUpdate,
     ContentReview,
     ContentVersionCreate,
     ContentVersionRead,
@@ -93,6 +94,7 @@ from app.services import (
     submit_content_version,
     submit_knowledge_source,
     update_brand,
+    update_content_project,
     update_product,
 )
 
@@ -516,6 +518,18 @@ def get_content_projects(
     db: Session = Depends(get_db), actor: Actor = Depends(current_actor)
 ) -> list[ContentProjectRead]:
     return list_content_projects(db, actor)
+
+
+@app.put("/v1/content-projects/{project_id}", response_model=ContentProjectRead)
+def edit_content_project(
+    project_id: str,
+    data: ContentProjectUpdate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> ContentProjectRead:
+    return update_content_project(db, actor, project_id, data)
 
 
 @app.post("/v1/publications", response_model=PublicationRead, status_code=201)

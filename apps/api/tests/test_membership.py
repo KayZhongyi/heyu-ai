@@ -179,6 +179,61 @@ def test_non_asset_roles_cannot_edit_brand_or_product(client, auth, role):
     )
 
 
+def test_reviewer_cannot_edit_content_project(client, auth):
+    brand = client.post(
+        "/v1/brands",
+        headers=auth,
+        json={"name": "Project brand", "story": "", "voice": ""},
+    ).json()
+    product = client.post(
+        "/v1/products",
+        headers=auth,
+        json={"brand_id": brand["id"], "name": "Project product"},
+    ).json()
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "title": "Protected brief",
+            "content_type": "social_post",
+        },
+    ).json()
+    client.post(
+        "/v1/members",
+        headers=auth,
+        json={
+            "email": "brief-reviewer@example.com",
+            "display_name": "Brief Reviewer",
+            "password": "reviewer-password",
+            "role": "reviewer",
+        },
+    )
+    login = client.post(
+        "/v1/auth/login",
+        json={
+            "organization_slug": "green-farm",
+            "email": "brief-reviewer@example.com",
+            "password": "reviewer-password",
+        },
+    ).json()
+    reviewer_auth = {"Authorization": f"Bearer {login['access_token']}"}
+    assert (
+        client.put(
+            f"/v1/content-projects/{project['id']}",
+            headers=reviewer_auth,
+            json={
+                "brand_id": brand["id"],
+                "product_id": product["id"],
+                "title": "Forbidden edit",
+                "content_type": "social_post",
+            },
+        ).status_code
+        == 403
+    )
+
+
 def test_member_management_is_tenant_scoped_and_owner_protected(client, auth):
     member = client.post(
         "/v1/members",

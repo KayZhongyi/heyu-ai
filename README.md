@@ -11,6 +11,8 @@ history, and auditability.
 - Owner/Admin team management with immediate role-change enforcement
 - Maintainable brand and agricultural product records with tenant-scoped editing,
   role enforcement, and audit events
+- Maintainable content briefs whose edits affect future generations without rewriting
+  existing generation runs or immutable content versions
 - Source-backed knowledge documents with review status
 - Explicit draft → pending review → approved/rejected knowledge governance
 - Immutable, linear knowledge revision chains with per-revision integrity metadata

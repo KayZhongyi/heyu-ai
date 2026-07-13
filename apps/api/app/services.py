@@ -29,6 +29,7 @@ from app.schemas import (
     BrandCreate,
     BrandUpdate,
     ContentProjectCreate,
+    ContentProjectUpdate,
     ContentReview,
     ContentVersionCreate,
     ImprovementBriefCreate,
@@ -376,6 +377,49 @@ def list_content_projects(db: Session, actor: Actor) -> list[ContentProject]:
             .order_by(ContentProject.created_at.desc())
         )
     )
+
+
+def _tenant_project(db: Session, actor: Actor, project_id: str) -> ContentProject:
+    project = db.scalar(
+        select(ContentProject).where(
+            ContentProject.id == project_id,
+            ContentProject.organization_id == actor.organization_id,
+        )
+    )
+    if project is None:
+        raise HTTPException(status_code=404, detail="Content project not found")
+    return project
+
+
+def update_content_project(
+    db: Session,
+    actor: Actor,
+    project_id: str,
+    data: ContentProjectUpdate,
+) -> ContentProject:
+    project = _tenant_project(db, actor, project_id)
+    brand = _tenant_brand(db, actor, data.brand_id)
+    product = _tenant_product(db, actor, data.product_id)
+    if product.brand_id != brand.id:
+        raise HTTPException(status_code=422, detail="Product does not belong to brand")
+    changes = {
+        field: value
+        for field, value in data.model_dump().items()
+        if getattr(project, field) != value
+    }
+    for field, value in changes.items():
+        setattr(project, field, value)
+    audit(
+        db,
+        actor,
+        "content_project.updated",
+        "content_project",
+        project.id,
+        {"fields": sorted(changes)},
+    )
+    db.commit()
+    db.refresh(project)
+    return project
 
 
 def create_publication(db: Session, actor: Actor, data: PublicationCreate) -> Publication:

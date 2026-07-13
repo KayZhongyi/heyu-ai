@@ -156,6 +156,10 @@ class ContentProjectCreate(BaseModel):
     extra_requirements: str = ""
 
 
+class ContentProjectUpdate(ContentProjectCreate):
+    pass
+
+
 class ContentProjectRead(ORMModel):
     id: str
     organization_id: str

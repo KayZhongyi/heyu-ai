@@ -24,6 +24,96 @@ def create_brand_and_product(client, auth):
     return brand, product
 
 
+def test_editing_a_brief_only_changes_future_generations(client, auth):
+    brand, product = create_brand_and_product(client, auth)
+    source = client.post(
+        "/v1/knowledge",
+        headers=auth,
+        json={
+            "title": "Stable facts",
+            "kind": "product_fact",
+            "content": "The product is harvested by hand.",
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+        },
+    ).json()
+    client.post(f"/v1/knowledge/{source['id']}/submit", headers=auth)
+    client.post(
+        f"/v1/knowledge/{source['id']}/review",
+        headers=auth,
+        json={"status": "approved"},
+    )
+    original_brief = {
+        "brand_id": brand["id"],
+        "product_id": product["id"],
+        "title": "Original brief",
+        "content_type": "short_video_30s",
+        "platform": "douyin",
+        "target_audience": "Young families",
+        "objective": "Introduce the product",
+        "tone": "Warm",
+        "extra_requirements": "Use a short opening",
+    }
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json=original_brief,
+    ).json()
+    first = client.post(
+        f"/v1/content-projects/{project['id']}/generate",
+        headers=auth,
+    ).json()
+    first_version = first["version"]
+    first_run = client.get(
+        f"/v1/content-projects/{project['id']}/generation-runs",
+        headers=auth,
+    ).json()[0]
+
+    updated_brief = {
+        **original_brief,
+        "title": "Updated brief",
+        "content_type": "short_video_60s",
+        "platform": "wechat_channels",
+        "target_audience": "Restaurant buyers",
+        "objective": "Explain sourcing",
+        "tone": "Clear and restrained",
+        "extra_requirements": "Include traceable facts",
+    }
+    updated = client.put(
+        f"/v1/content-projects/{project['id']}",
+        headers=auth,
+        json=updated_brief,
+    )
+    assert updated.status_code == 200, updated.text
+    second = client.post(
+        f"/v1/content-projects/{project['id']}/generate",
+        headers=auth,
+    )
+    assert second.status_code == 201, second.text
+
+    runs = client.get(
+        f"/v1/content-projects/{project['id']}/generation-runs",
+        headers=auth,
+    ).json()
+    runs_by_id = {run["id"]: run for run in runs}
+    assert runs_by_id[first_run["id"]]["normalized_input"]["content_type"] == "short_video_30s"
+    assert runs_by_id[first_run["id"]]["normalized_input"]["objective"] == "Introduce the product"
+    assert runs_by_id[second.json()["run_id"]]["normalized_input"]["content_type"] == (
+        "short_video_60s"
+    )
+    assert runs_by_id[second.json()["run_id"]]["normalized_input"]["objective"] == (
+        "Explain sourcing"
+    )
+
+    versions = client.get(
+        f"/v1/content-projects/{project['id']}/versions",
+        headers=auth,
+    ).json()
+    original_version = next(item for item in versions if item["id"] == first_version["id"])
+    assert original_version["content"] == first_version["content"]
+    assert original_version["generation_run_id"] == first_run["id"]
+
+
 def test_approved_knowledge_is_cited_and_versions_are_append_only(client, auth):
     brand, product = create_brand_and_product(client, auth)
     source = client.post(

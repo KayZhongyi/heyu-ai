@@ -66,6 +66,11 @@ commit SHA, deployment profile, reviewer, and pass/fail evidence.
 ## 5. AI content workflow
 
 - [ ] Create a 30-second short-video project for the product.
+- [ ] Edit its platform, audience, objective, or tone and confirm the revised brief
+      is used only for future generation runs.
+- [ ] Confirm existing generation output and content versions remain unchanged.
+- [ ] Confirm `content_project.updated` appears in the audit trail and a reviewer
+      cannot edit the brief.
 - [ ] Generate a script with the deterministic local provider.
 - [ ] Confirm the output is structured and cites only approved source IDs.
 - [ ] Inspect the generation record and confirm provider, model, prompt

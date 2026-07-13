@@ -93,6 +93,61 @@ def test_brand_and_product_updates_are_scoped_and_audited(client, auth):
     assert "product.updated" in actions
 
 
+def test_content_project_updates_are_scoped_and_audited(client, auth):
+    brand = client.post(
+        "/v1/brands",
+        headers=auth,
+        json={"name": "Brief brand", "story": "", "voice": ""},
+    ).json()
+    product = client.post(
+        "/v1/products",
+        headers=auth,
+        json={"brand_id": brand["id"], "name": "Brief product"},
+    ).json()
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "title": "Original brief",
+            "content_type": "short_video_30s",
+        },
+    ).json()
+    second = bootstrap(client, "brief-editor-second", "brief-editor@example.com")
+    second_auth = {"Authorization": f"Bearer {second['access_token']}"}
+    payload = {
+        "brand_id": brand["id"],
+        "product_id": product["id"],
+        "title": "Updated brief",
+        "content_type": "short_video_60s",
+        "platform": "视频号",
+        "target_audience": "城市家庭",
+        "objective": "解释产品价值",
+        "tone": "清晰、克制",
+        "extra_requirements": "避免夸大",
+    }
+
+    assert (
+        client.put(
+            f"/v1/content-projects/{project['id']}",
+            headers=second_auth,
+            json=payload,
+        ).status_code
+        == 404
+    )
+    updated = client.put(
+        f"/v1/content-projects/{project['id']}",
+        headers=auth,
+        json=payload,
+    )
+    assert updated.status_code == 200
+    assert updated.json()["title"] == "Updated brief"
+    assert updated.json()["content_type"] == "short_video_60s"
+    actions = [item["action"] for item in client.get("/v1/audit-events", headers=auth).json()]
+    assert "content_project.updated" in actions
+
+
 def test_invalid_token_is_rejected(client):
     response = client.get("/v1/brands", headers={"Authorization": "Bearer invalid"})
     assert response.status_code == 401
