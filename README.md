@@ -20,6 +20,7 @@ history, and auditability.
 - Browser-side UTF-8 TXT, Markdown, and CSV knowledge import with source
   filename, media type, and SHA-256 integrity metadata
 - Structured AI content briefs and script generation
+- Human-readable script preview plus zero-cost TXT and JSON export
 - Bounded, deterministic knowledge-context selection with excerpt provenance
 - Immutable content versions and human approval workflow
 - Explicit draft → pending review → approved/rejected content governance

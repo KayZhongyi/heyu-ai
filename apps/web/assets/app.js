@@ -10,6 +10,24 @@ const escapeHtml=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<
 const fileBaseName=name=>name.replace(/\.(txt|md|markdown|csv)$/i,"");
 const knowledgeMediaType=file=>file.type||({txt:"text/plain",md:"text/markdown",markdown:"text/markdown",csv:"text/csv"}[file.name.split(".").pop().toLowerCase()]||"text/plain");
 const request=async(fn,success)=>{try{await fn();if(success)toast(success)}catch(error){toast(error.message,true)}};
+const resultContent=()=>state.currentVersion?.content||null;
+const resultText=()=>HeyuContent.renderContent(resultContent());
+const renderGenerationResult=content=>{
+  $("#generation-preview").textContent=HeyuContent.renderContent(content);
+  $("#generation-output").textContent=JSON.stringify(content,null,2);
+  $("#content-toolbar").hidden=false;
+  $$("[data-result-mode]").forEach(button=>button.classList.toggle("active",button.dataset.resultMode==="preview"));
+  $("#generation-preview").hidden=false;
+  $("#generation-output").hidden=true;
+};
+const downloadResult=(content,type)=>{
+  const project=state.projects.find(item=>item.id===state.currentVersion?.project_id);
+  const basename=HeyuContent.safeFilename(project?.title||"heyu-content");
+  const isJson=type==="json";
+  const body=isJson?JSON.stringify(content,null,2):HeyuContent.renderContent(content);
+  const blob=new Blob([body],{type:isJson?"application/json;charset=utf-8":"text/plain;charset=utf-8"});
+  const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download=`${basename}.${isJson?"json":"txt"}`;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),0);
+};
 const workspacePages=["overview","assets","knowledge","studio","operations","review","audit","members"];
 const pageFromLocation=()=>{const page=location.pathname.split("/").filter(Boolean)[1]||"overview";return workspacePages.includes(page)?page:"overview"};
 
@@ -138,8 +156,12 @@ const resetProjectForm=()=>{const form=$("#project-form");form.reset();form.elem
 $("#project-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{const data=formData(event.target);const id=data.id;delete data.id;await api(id?`/v1/content-projects/${id}`:"/v1/content-projects",{method:id?"PUT":"POST",body:JSON.stringify(data)});resetProjectForm();await refresh()},event.target.elements.id.value?"内容任务已更新":"内容任务已创建")});
 $("#project-edit-cancel").addEventListener("click",resetProjectForm);
 $("#member-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{await api("/v1/members",{method:"POST",body:JSON.stringify(formData(event.target))});event.target.reset();await refresh()},"团队成员已创建")});
-$("#generate-button").addEventListener("click",()=>request(async()=>{const id=$("#project-select").value;if(!id)throw new Error("请先选择内容任务");const result=await api(`/v1/content-projects/${id}/generate`,{method:"POST"});state.currentVersion=result.version;const content=JSON.stringify(result.version.content,null,2);$("#generation-output").textContent=content;$("#version-editor").value=content;$("#edit-version").hidden=false;let provenance=$("#generation-provenance");if(!provenance){provenance=document.createElement("div");provenance.id="generation-provenance";provenance.className="provenance";$("#generation-output").before(provenance)}provenance.innerHTML=`<span>Provider: ${escapeHtml(result.provider)}</span><span>Model: ${escapeHtml(result.model)}</span><span>Prompt: ${escapeHtml(result.prompt_name)} v${escapeHtml(result.prompt_version)}</span><span>Sources: ${result.source_ids.length}</span><span>${result.latency_ms} ms</span>`;state.versions=await api(`/v1/content-projects/${id}/versions`);state.audit=await api("/v1/audit-events");await loadGenerationRuns(id);renderReviews(id)},"内容已生成并进入审核"));
-$("#save-version-button").addEventListener("click",()=>request(async()=>{if(!state.currentVersion)throw new Error("请先生成内容");let content;try{content=JSON.parse($("#version-editor").value)}catch{throw new Error("修改内容必须是有效的 JSON 格式")}const projectId=state.currentVersion.project_id;const version=await api(`/v1/content-projects/${projectId}/versions`,{method:"POST",body:JSON.stringify({parent_version_id:state.currentVersion.id,content,change_summary:$("#change-summary").value})});state.currentVersion=version;$("#generation-output").textContent=JSON.stringify(version.content,null,2);state.versions=await api(`/v1/content-projects/${projectId}/versions`);renderReviews(projectId)},"人工修改已保存为新版本"));
+$("#generate-button").addEventListener("click",()=>request(async()=>{const id=$("#project-select").value;if(!id)throw new Error("请先选择内容任务");const result=await api(`/v1/content-projects/${id}/generate`,{method:"POST"});state.currentVersion=result.version;const content=JSON.stringify(result.version.content,null,2);renderGenerationResult(result.version.content);$("#version-editor").value=content;$("#edit-version").hidden=false;let provenance=$("#generation-provenance");if(!provenance){provenance=document.createElement("div");provenance.id="generation-provenance";provenance.className="provenance";$("#content-toolbar").before(provenance)}provenance.innerHTML=`<span>Provider: ${escapeHtml(result.provider)}</span><span>Model: ${escapeHtml(result.model)}</span><span>Prompt: ${escapeHtml(result.prompt_name)} v${escapeHtml(result.prompt_version)}</span><span>Sources: ${result.source_ids.length}</span><span>${result.latency_ms} ms</span>`;state.versions=await api(`/v1/content-projects/${id}/versions`);state.audit=await api("/v1/audit-events");await loadGenerationRuns(id);renderReviews(id)},"内容已生成并进入审核"));
+$("#save-version-button").addEventListener("click",()=>request(async()=>{if(!state.currentVersion)throw new Error("请先生成内容");let content;try{content=JSON.parse($("#version-editor").value)}catch{throw new Error("修改内容必须是有效的 JSON 格式")}const projectId=state.currentVersion.project_id;const version=await api(`/v1/content-projects/${projectId}/versions`,{method:"POST",body:JSON.stringify({parent_version_id:state.currentVersion.id,content,change_summary:$("#change-summary").value})});state.currentVersion=version;renderGenerationResult(version.content);state.versions=await api(`/v1/content-projects/${projectId}/versions`);renderReviews(projectId)},"人工修改已保存为新版本"));
+$$("[data-result-mode]").forEach(button=>button.addEventListener("click",()=>{$$("[data-result-mode]").forEach(item=>item.classList.toggle("active",item===button));const preview=button.dataset.resultMode==="preview";$("#generation-preview").hidden=!preview;$("#generation-output").hidden=preview}));
+$("#copy-content").addEventListener("click",()=>request(async()=>{if(!resultContent())throw new Error("请先生成内容");await navigator.clipboard.writeText(resultText())},"阅读稿已复制"));
+$("#download-content").addEventListener("click",()=>request(async()=>{if(!resultContent())throw new Error("请先生成内容");downloadResult(resultContent(),"txt")},"阅读稿已下载"));
+$("#download-json").addEventListener("click",()=>request(async()=>{if(!resultContent())throw new Error("请先生成内容");downloadResult(resultContent(),"json")},"JSON 已下载"));
 $("#review-project-select").addEventListener("change",event=>request(()=>renderReviews(event.target.value)));
 $("#project-select").addEventListener("change",event=>request(()=>loadGenerationRuns(event.target.value)));
 $("#publication-project-select").addEventListener("change",event=>request(async()=>{

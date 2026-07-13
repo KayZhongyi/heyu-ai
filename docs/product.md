@@ -48,6 +48,10 @@ short video, run-of-show segments for livestreams, and dedicated fields for
 comment replies, social posts, titles, and cover copy. Every format retains the
 same approved-source citations and prohibited-claim warnings.
 
+The browser converts those structures into a human-readable delivery draft
+without discarding the underlying JSON. Users can copy the reading view or
+download UTF-8 TXT and JSON files locally without an external storage service.
+
 ## Product principles
 
 - MVP means minimum scope, not disposable engineering.
