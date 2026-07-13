@@ -28,6 +28,8 @@ const requiredMessages = [
   "farmerEvidence.claim.general_support",
   "farmerEvidence.consent.relationship",
   "farmerEvidence.ready",
+  "contentFreshness.farmer_evidence_replaced_or_expired",
+  "publication.noPublishableVersion",
 ];
 for (const locale of Object.keys(locales)) {
   for (const key of requiredMessages) {

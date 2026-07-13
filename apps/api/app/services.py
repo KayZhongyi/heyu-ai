@@ -877,12 +877,148 @@ def _campaign_for_project(
     return campaigns[0] if campaigns else None
 
 
+def _content_version_freshness(
+    db: Session,
+    organization_id: str,
+    version: ContentVersion,
+    *,
+    campaign: CampaignPackage | None = None,
+    current_supply: CampaignSupplySnapshot | None = None,
+    current_farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
+) -> dict:
+    campaign = campaign or _campaign_for_project(db, version.project_id, organization_id)
+    stale_reasons: list[str] = []
+    if campaign is None:
+        supply_current = True
+    else:
+        current_supply = current_supply or _current_campaign_supply(
+            db, campaign.id, organization_id
+        )
+        supply_current = bool(current_supply and version.supply_snapshot_id == current_supply.id)
+        if not supply_current:
+            stale_reasons.append(
+                "supply_missing" if current_supply is None else "supply_replaced_or_expired"
+            )
+
+    claims = detect_farmer_claims(version.content)
+    evidence = (
+        db.scalar(
+            select(CampaignFarmerEvidenceSnapshot).where(
+                CampaignFarmerEvidenceSnapshot.id == version.farmer_evidence_snapshot_id,
+                CampaignFarmerEvidenceSnapshot.organization_id == organization_id,
+            )
+        )
+        if version.farmer_evidence_snapshot_id
+        else None
+    )
+    if not claims and evidence is None:
+        farmer_evidence_current = True
+    elif evidence is None:
+        farmer_evidence_current = False
+        stale_reasons.append("farmer_evidence_missing")
+    else:
+        if current_farmer_evidence is None:
+            current_farmer_evidence = _current_campaign_farmer_evidence(
+                db, evidence.campaign_package_id, organization_id
+            )
+        farmer_evidence_current = bool(
+            current_farmer_evidence and current_farmer_evidence.id == evidence.id
+        )
+        if not farmer_evidence_current:
+            stale_reasons.append("farmer_evidence_replaced_or_expired")
+        else:
+            try:
+                _validate_farmer_claims(version.content, evidence)
+            except FarmerClaimViolation:
+                farmer_evidence_current = False
+                stale_reasons.append("farmer_claims_unauthorized")
+
+    return {
+        "supply_current": supply_current,
+        "farmer_evidence_current": farmer_evidence_current,
+        "content_current": supply_current and farmer_evidence_current,
+        "stale_reasons": stale_reasons,
+    }
+
+
+def _publication_blockers(
+    db: Session,
+    organization_id: str,
+    version: ContentVersion,
+    *,
+    campaign: CampaignPackage | None = None,
+    current_supply: CampaignSupplySnapshot | None = None,
+    current_farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
+    freshness: dict | None = None,
+) -> list[str]:
+    freshness = freshness or _content_version_freshness(
+        db,
+        organization_id,
+        version,
+        campaign=campaign,
+        current_supply=current_supply,
+        current_farmer_evidence=current_farmer_evidence,
+    )
+    publication_blockers = list(freshness["stale_reasons"])
+    if version.status != ReviewStatus.approved:
+        publication_blockers.insert(0, "content_not_approved")
+    return publication_blockers
+
+
+def _content_version_availability(
+    db: Session,
+    organization_id: str,
+    version: ContentVersion,
+    *,
+    campaign: CampaignPackage | None = None,
+    current_supply: CampaignSupplySnapshot | None = None,
+    current_farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
+) -> dict:
+    freshness = _content_version_freshness(
+        db,
+        organization_id,
+        version,
+        campaign=campaign,
+        current_supply=current_supply,
+        current_farmer_evidence=current_farmer_evidence,
+    )
+    publication_blockers = _publication_blockers(
+        db,
+        organization_id,
+        version,
+        campaign=campaign,
+        current_supply=current_supply,
+        current_farmer_evidence=current_farmer_evidence,
+        freshness=freshness,
+    )
+    return {
+        **freshness,
+        "publishable": not publication_blockers,
+        "publication_blockers": publication_blockers,
+    }
+
+
+def _content_version_view(
+    db: Session,
+    organization_id: str,
+    version: ContentVersion,
+) -> dict:
+    return {
+        **{
+            column.name: getattr(version, column.name)
+            for column in ContentVersion.__table__.columns
+        },
+        **_content_version_availability(db, organization_id, version),
+    }
+
+
 def _campaign_item_view(
     db: Session,
     item: CampaignPackageItem,
     current_supply: CampaignSupplySnapshot | None = None,
     current_farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
 ) -> CampaignPackageItemRead:
+    campaign = _campaign_for_project(db, item.content_project_id, item.organization_id)
     project = db.scalar(
         select(ContentProject).where(
             ContentProject.id == item.content_project_id,
@@ -917,14 +1053,16 @@ def _campaign_item_view(
     publication = publications[0] if publications else None
 
     def farmer_evidence_current(version: ContentVersion | None) -> bool:
-        if version is None:
-            return False
-        claims = detect_farmer_claims(version.content)
-        if not claims and version.farmer_evidence_snapshot_id is None:
-            return True
         return bool(
-            current_farmer_evidence
-            and version.farmer_evidence_snapshot_id == current_farmer_evidence.id
+            version
+            and _content_version_availability(
+                db,
+                item.organization_id,
+                version,
+                campaign=campaign,
+                current_supply=current_supply,
+                current_farmer_evidence=current_farmer_evidence,
+            )["farmer_evidence_current"]
         )
 
     approved_current = bool(
@@ -950,6 +1088,23 @@ def _campaign_item_view(
         and published_version.supply_snapshot_id == current_supply.id
         and farmer_evidence_current(published_version)
     )
+    latest_availability = (
+        _content_version_availability(
+            db,
+            item.organization_id,
+            latest,
+            campaign=campaign,
+            current_supply=current_supply,
+            current_farmer_evidence=current_farmer_evidence,
+        )
+        if latest
+        else {
+            "supply_current": False,
+            "farmer_evidence_current": False,
+            "content_current": False,
+            "stale_reasons": [],
+        }
+    )
     return CampaignPackageItemRead(
         **{
             column.name: getattr(item, column.name)
@@ -962,9 +1117,10 @@ def _campaign_item_view(
         approved_version_count=len(approved_versions),
         publication_id=publication.id if publication_current else None,
         publication_count=len(publications),
-        supply_current=bool(
-            current_supply and latest and latest.supply_snapshot_id == current_supply.id
-        ),
+        supply_current=latest_availability["supply_current"],
+        farmer_evidence_current=latest_availability["farmer_evidence_current"],
+        content_current=latest_availability["content_current"],
+        stale_reasons=latest_availability["stale_reasons"],
     )
 
 
@@ -1883,36 +2039,35 @@ def create_publication(db: Session, actor: Actor, data: PublicationCreate) -> Pu
     )
     if version is None:
         raise HTTPException(status_code=404, detail="Content version not found")
-    if version.status != ReviewStatus.approved:
+    campaign = _campaign_for_project(db, project.id, actor.organization_id)
+    publication_blockers = _publication_blockers(
+        db,
+        actor.organization_id,
+        version,
+        campaign=campaign,
+    )
+    if publication_blockers:
+        blocker_details = {
+            "content_not_approved": "Only approved content versions can be recorded as published",
+            "supply_missing": "Campaign publication requires a current approved supply snapshot",
+            "supply_replaced_or_expired": (
+                "Content was approved against an older supply snapshot; "
+                "regenerate and review it before publication"
+            ),
+            "farmer_evidence_missing": (
+                "Farmer-impact content requires a current approved farmer evidence snapshot"
+            ),
+            "farmer_evidence_replaced_or_expired": (
+                "Farmer-impact content uses expired or replaced farmer evidence; regenerate it"
+            ),
+            "farmer_claims_unauthorized": (
+                "Farmer-impact claims exceed the approved wording or consent scope"
+            ),
+        }
         raise HTTPException(
             status_code=409,
-            detail="Only approved content versions can be recorded as published",
+            detail=blocker_details[publication_blockers[0]],
         )
-    try:
-        _validate_content_farmer_evidence_current(
-            db,
-            actor.organization_id,
-            version.content,
-            version.farmer_evidence_snapshot_id,
-        )
-    except FarmerClaimViolation as exc:
-        raise _farmer_claim_http_error(exc) from exc
-    campaign = _campaign_for_project(db, project.id, actor.organization_id)
-    if campaign is not None:
-        supply = _current_campaign_supply(db, campaign.id, actor.organization_id)
-        if supply is None:
-            raise HTTPException(
-                status_code=409,
-                detail="Campaign publication requires a current approved supply snapshot",
-            )
-        if version.supply_snapshot_id != supply.id:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    "Content was approved against an older supply snapshot; "
-                    "regenerate and review it before publication"
-                ),
-            )
     publication = Publication(
         organization_id=actor.organization_id,
         created_by=actor.user_id,
@@ -2616,7 +2771,7 @@ def list_generation_runs(db: Session, actor: Actor, project_id: str) -> list[Gen
     )
 
 
-def list_content_versions(db: Session, actor: Actor, project_id: str) -> list[ContentVersion]:
+def list_content_versions(db: Session, actor: Actor, project_id: str) -> list[dict]:
     project_exists = db.scalar(
         select(ContentProject.id).where(
             ContentProject.id == project_id,
@@ -2625,7 +2780,7 @@ def list_content_versions(db: Session, actor: Actor, project_id: str) -> list[Co
     )
     if project_exists is None:
         raise HTTPException(status_code=404, detail="Content project not found")
-    return list(
+    versions = list(
         db.scalars(
             select(ContentVersion)
             .where(
@@ -2635,6 +2790,7 @@ def list_content_versions(db: Session, actor: Actor, project_id: str) -> list[Co
             .order_by(ContentVersion.version_number.desc())
         )
     )
+    return [_content_version_view(db, actor.organization_id, version) for version in versions]
 
 
 def create_content_version(

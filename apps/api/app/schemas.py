@@ -392,6 +392,9 @@ class CampaignPackageItemRead(ORMModel):
     publication_id: str | None
     publication_count: int
     supply_current: bool
+    farmer_evidence_current: bool
+    content_current: bool
+    stale_reasons: list[str]
 
 
 class CampaignProgress(BaseModel):
@@ -449,6 +452,12 @@ class ContentVersionRead(ORMModel):
     created_by: str
     reviewed_by: str | None
     review_note: str
+    supply_current: bool | None = None
+    farmer_evidence_current: bool | None = None
+    content_current: bool | None = None
+    stale_reasons: list[str] = Field(default_factory=list)
+    publishable: bool | None = None
+    publication_blockers: list[str] = Field(default_factory=list)
 
 
 class ContentReview(BaseModel):

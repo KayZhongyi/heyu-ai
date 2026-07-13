@@ -536,6 +536,22 @@ def test_new_evidence_revision_and_expiry_block_review_and_publication(
 
     second_evidence = create_approved_farmer_evidence(client, auth, campaign, source)
     assert second_evidence["revision_number"] == first_evidence["revision_number"] + 1
+    refreshed_campaign = client.get(f"/v1/campaign-packages/{campaign['id']}", headers=auth)
+    assert refreshed_campaign.status_code == 200
+    stale_item = next(
+        item
+        for item in refreshed_campaign.json()["items"]
+        if item["content_project_id"] == project["id"]
+    )
+    assert stale_item["supply_current"] is True
+    assert stale_item["farmer_evidence_current"] is False
+    assert stale_item["content_current"] is False
+    assert stale_item["stale_reasons"] == ["farmer_evidence_replaced_or_expired"]
+    versions = client.get(f"/v1/content-projects/{project['id']}/versions", headers=auth)
+    assert versions.status_code == 200
+    stale_version = next(item for item in versions.json() if item["id"] == first_version["id"])
+    assert stale_version["publishable"] is False
+    assert "farmer_evidence_replaced_or_expired" in stale_version["publication_blockers"]
     stale_review = client.post(
         f"/v1/content-projects/{project['id']}/versions/{first_version['id']}/review",
         headers=auth,
@@ -564,11 +580,19 @@ def test_new_evidence_revision_and_expiry_block_review_and_publication(
         json={"status": "approved", "note": "内容与当前证据一致"},
     )
     assert approved.status_code == 200, approved.text
+    versions = client.get(f"/v1/content-projects/{project['id']}/versions", headers=auth)
+    current_version = next(item for item in versions.json() if item["id"] == second_version["id"])
+    assert current_version["publishable"] is True
+    assert current_version["publication_blockers"] == []
 
     stored_evidence = db.get(CampaignFarmerEvidenceSnapshot, second_evidence["id"])
     stored_evidence.active_until = datetime.now(UTC) - timedelta(minutes=1)
     db.commit()
 
+    versions = client.get(f"/v1/content-projects/{project['id']}/versions", headers=auth)
+    expired_version = next(item for item in versions.json() if item["id"] == second_version["id"])
+    assert expired_version["publishable"] is False
+    assert expired_version["publication_blockers"] == ["farmer_evidence_replaced_or_expired"]
     publication = client.post(
         "/v1/publications",
         headers=auth,

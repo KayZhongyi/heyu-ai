@@ -679,6 +679,35 @@ def test_supply_snapshot_gates_generation_and_new_revision_stales_old_content(
     assert generated.status_code == 201, generated.text
     version = generated.json()["version"]
     assert version["supply_snapshot_id"] == first_supply["id"]
+    submitted = client.post(
+        f"/v1/content-projects/{project['id']}/versions/{version['id']}/submit",
+        headers=auth,
+    )
+    assert submitted.status_code == 200, submitted.text
+    approved = client.post(
+        f"/v1/content-projects/{project['id']}/versions/{version['id']}/review",
+        headers=auth,
+        json={"status": "approved", "note": "Current supply verified"},
+    )
+    assert approved.status_code == 200, approved.text
+    versions = client.get(f"/v1/content-projects/{project['id']}/versions", headers=auth)
+    approved_version = next(item for item in versions.json() if item["id"] == version["id"])
+    assert approved_version["publishable"] is True
+    publication_payload = {
+        "project_id": project["id"],
+        "content_version_id": version["id"],
+        "platform": "douyin",
+        "external_url": "https://example.invalid/current-supply",
+        "external_content_id": f"current-{version['id']}",
+        "published_at": datetime.now(UTC).isoformat(),
+        "note": "Current supply publication",
+    }
+    publication = client.post(
+        "/v1/publications",
+        headers=auth,
+        json=publication_payload,
+    )
+    assert publication.status_code == 201, publication.text
     runs = client.get(
         f"/v1/content-projects/{project['id']}/generation-runs",
         headers=auth,
@@ -696,13 +725,21 @@ def test_supply_snapshot_gates_generation_and_new_revision_stales_old_content(
     )
     assert refreshed["current_supply_snapshot"]["id"] == second_supply["id"]
     assert stale_item["supply_current"] is False
-
-    stale_submit = client.post(
-        f"/v1/content-projects/{project['id']}/versions/{version['id']}/submit",
+    assert stale_item["farmer_evidence_current"] is True
+    assert stale_item["content_current"] is False
+    assert stale_item["stale_reasons"] == ["supply_replaced_or_expired"]
+    versions = client.get(f"/v1/content-projects/{project['id']}/versions", headers=auth)
+    stale_version = next(item for item in versions.json() if item["id"] == version["id"])
+    assert stale_version["publishable"] is False
+    assert stale_version["publication_blockers"] == ["supply_replaced_or_expired"]
+    publication_payload["external_content_id"] = f"stale-{version['id']}"
+    blocked_publication = client.post(
+        "/v1/publications",
         headers=auth,
+        json=publication_payload,
     )
-    assert stale_submit.status_code == 409
-    assert "regenerate" in stale_submit.json()["detail"].lower()
+    assert blocked_publication.status_code == 409
+    assert "regenerate" in blocked_publication.json()["detail"].lower()
 
 
 def test_out_of_stock_approved_snapshot_is_not_current(client: TestClient, auth: dict[str, str]):

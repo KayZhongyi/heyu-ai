@@ -155,10 +155,12 @@ function renderCampaigns(){
   $("#campaign-list").innerHTML=state.campaigns.map(campaign=>{
     const progress=campaign.progress;
     const items=campaign.items.map(item=>{
-      const stale=Boolean(item.latest_version_id&&!item.supply_current);
+      const stale=Boolean(item.latest_version_id&&!item.content_current);
+      const staleDetail=(item.stale_reasons||[]).map(reason=>t(`contentFreshness.${reason}`)).join(fieldSeparator());
       const status=item.publication_id?t("campaign.item.published"):item.approved_version_id?t("campaign.item.approved"):item.latest_version_id?t("campaign.item.draft"):t("campaign.item.notStarted");
-      const action=canManage&&(!item.latest_version_id||(stale&&campaign.current_supply_snapshot))?`<button data-generate-campaign-item="${item.content_project_id}">${escapeHtml(t(stale?"supply.regenerate":"campaign.generate"))}</button>`:"";
-      return `<li class="${stale?"supply-stale":""}"><span>${escapeHtml(t(`campaign.slot.${item.slot_key}`))}${stale?`<small>${escapeHtml(t("supply.contentStale"))}</small>`:""}</span><b>${escapeHtml(status)}</b>${action}</li>`;
+      const canRegenerate=campaign.current_supply_snapshot&&campaign.progress.farmer_evidence_ready;
+      const action=canManage&&(!item.latest_version_id||(stale&&canRegenerate))?`<button data-generate-campaign-item="${item.content_project_id}">${escapeHtml(t(stale?"supply.regenerate":"campaign.generate"))}</button>`:"";
+      return `<li class="${stale?"supply-stale":""}"><span>${escapeHtml(t(`campaign.slot.${item.slot_key}`))}${stale?`<small>${escapeHtml(staleDetail||t("contentFreshness.content_stale"))}</small>`:""}</span><b>${escapeHtml(status)}</b>${action}</li>`;
     }).join("");
     const readiness=`<div class="campaign-readiness"><span class="readiness-chip ${progress.supply_ready?"ready":""}">${escapeHtml(t(progress.supply_ready?"farmerEvidence.supplyReady":"farmerEvidence.supplyMissing"))}</span><span class="readiness-chip ${progress.farmer_evidence_ready?"ready":""}">${escapeHtml(t(progress.farmer_evidence_ready?"farmerEvidence.ready":"farmerEvidence.missing"))}</span></div>`;
     return `<article class="campaign-card"><div class="panel-heading"><div><span class="badge ${campaign.status==="completed"?"approved":"pending_review"}">${escapeHtml(campaignStatusLabel(campaign.status))}</span><h3>${escapeHtml(campaign.title)}</h3></div><strong>${progress.required_approved}/${progress.required}</strong></div><p>${escapeHtml(campaign.platform)} · ${escapeHtml(campaign.target_audience)}</p>${readiness}<div class="campaign-progress"><i style="width:${progress.required?Math.round(progress.required_approved/progress.required*100):0}%"></i></div><ul>${items}</ul></article>`;
@@ -423,7 +425,14 @@ $("#publication-project-select").addEventListener("change",event=>request(async(
   if(!event.target.value){select.innerHTML=`<option value="">${escapeHtml(t("publication.selectProjectFirst"))}</option>`;return}
   const versions=await api(`/v1/content-projects/${event.target.value}/versions`);
   const approved=versions.filter(item=>item.status==="approved");
-  select.innerHTML=approved.length?approved.map(item=>`<option value="${item.id}">${escapeHtml(t("publication.versionOption",{number:item.version_number,summary:item.change_summary||t("publication.approvedContent")}))}</option>`).join(""):`<option value="">${escapeHtml(t("publication.noApprovedVersion"))}</option>`;
+  const publishable=approved.filter(item=>item.publishable);
+  select.innerHTML=publishable.length?publishable.map(item=>`<option value="${item.id}">${escapeHtml(t("publication.versionOption",{number:item.version_number,summary:item.change_summary||t("publication.approvedContent")}))}</option>`).join(""):`<option value="">${escapeHtml(t(approved.length?"publication.noPublishableVersion":"publication.noApprovedVersion"))}</option>`;
+  const blockers=$("#publication-blockers");
+  if(blockers){
+    const blocked=approved.filter(item=>!item.publishable);
+    blockers.hidden=!blocked.length;
+    blockers.innerHTML=blocked.length?`<strong>${escapeHtml(t("publication.blockedHeading"))}</strong><ul>${blocked.map(item=>`<li>${escapeHtml(t("publication.blockedVersion",{number:item.version_number,reasons:(item.publication_blockers||[]).map(reason=>t(`contentFreshness.${reason}`)).join(fieldSeparator())}))}</li>`).join("")}</ul>`:"";
+  }
 }));
 $("#publication-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{
   const data=formData(event.target);
