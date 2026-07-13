@@ -1074,6 +1074,11 @@ def review_content_version(
 ) -> ContentVersion:
     if data.status not in {ReviewStatus.approved, ReviewStatus.rejected}:
         raise HTTPException(status_code=422, detail="Review must approve or reject")
+    if data.status == ReviewStatus.rejected and not data.note.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="A review note is required when rejecting content",
+        )
     version = db.scalar(
         select(ContentVersion).where(
             ContentVersion.id == version_id,

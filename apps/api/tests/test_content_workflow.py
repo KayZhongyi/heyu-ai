@@ -467,6 +467,13 @@ def test_content_version_requires_submission_before_review(client, auth):
         == 409
     )
 
+    missing_rejection_note = client.post(
+        f"/v1/content-projects/{project['id']}/versions/{version['id']}/review",
+        headers=auth,
+        json={"status": "rejected", "note": "   "},
+    )
+    assert missing_rejection_note.status_code == 422
+
     reviewed = client.post(
         f"/v1/content-projects/{project['id']}/versions/{version['id']}/review",
         headers=auth,

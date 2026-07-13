@@ -201,7 +201,7 @@ class ContentVersionRead(ORMModel):
 
 class ContentReview(BaseModel):
     status: ReviewStatus
-    note: str = ""
+    note: str = Field(default="", max_length=2000)
 
 
 class PublicationCreate(BaseModel):
