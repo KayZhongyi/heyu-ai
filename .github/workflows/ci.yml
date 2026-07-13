@@ -204,7 +204,7 @@ jobs:
           invitation=$(curl --fail --silent --show-error \
             -H "Authorization: Bearer $token" \
             -H 'Content-Type: application/json' \
-            -d '{"email":"docker-invitee@example.test","role":"creator","expires_in_hours":24}' \
+            -d '{"email":"docker-invitee@example.com","role":"creator","expires_in_hours":24}' \
             http://127.0.0.1:8000/v1/invitations)
           invitation_token=$(jq -r .token <<<"$invitation")
           test -n "$invitation_token" && test "$invitation_token" != "null"
@@ -235,7 +235,6 @@ jobs:
             --base-url http://127.0.0.1:8000 \
             --output "$RUNNER_TEMP/heyu-docker-acceptance.json"
       - name: Upload Docker acceptance report
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: heyu-docker-acceptance
@@ -274,7 +273,7 @@ jobs:
 
           invitee_token=$(curl --fail --silent --show-error \
             -H 'Content-Type: application/json' \
-            -d '{"organization_slug":"docker-farm","email":"docker-invitee@example.test","password":"correct-horse-battery-invitee"}' \
+            -d '{"organization_slug":"docker-farm","email":"docker-invitee@example.com","password":"correct-horse-battery-invitee"}' \
             http://127.0.0.1:8000/v1/auth/login | jq -r .access_token)
           test -n "$invitee_token" && test "$invitee_token" != "null"
       - name: Show container logs on failure
