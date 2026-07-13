@@ -19,6 +19,7 @@ from app.ai import (
 from app.models import (
     AuditEvent,
     Brand,
+    CampaignFarmerEvidenceSnapshot,
     CampaignPackage,
     CampaignPackageItem,
     CampaignStatus,
@@ -43,6 +44,7 @@ from app.schemas import (
     AssetReview,
     BrandCreate,
     BrandUpdate,
+    CampaignFarmerEvidenceSnapshotCreate,
     CampaignItemCreate,
     CampaignItemLink,
     CampaignItemUpdate,
@@ -67,6 +69,270 @@ from app.schemas import (
     PublicationCreate,
     VideoDiagnosisCreate,
 )
+
+FARMER_CLAIM_PATTERNS: dict[str, tuple[str, ...]] = {
+    "general_support": (
+        "助农",
+        "帮扶农户",
+        "帮助农户",
+        "支援農戶",
+        "協助農戶",
+        "support farmers",
+        "supporting farmers",
+        "farmer support",
+        "under review farmer support",
+    ),
+    "direct_sourcing": (
+        "直连农户",
+        "直連農戶",
+        "农户直供",
+        "農戶直供",
+        "源头直采",
+        "源頭直採",
+        "直接向农户采购",
+        "直接向農戶採購",
+        "direct from farmers",
+        "farm-direct",
+        "farm direct",
+    ),
+    "sourcing_relationship": (
+        "合作社直供",
+        "合作社供货",
+        "合作社供貨",
+        "合作农户",
+        "合作農戶",
+        "cooperative supply",
+        "partner farmers",
+    ),
+    "economic_benefit": (
+        "农户增收",
+        "農戶增收",
+        "增加农户收入",
+        "增加農戶收入",
+        "带动增收",
+        "帶動增收",
+        "收益返还农户",
+        "收益回饋農戶",
+        "农民受益",
+        "農民受益",
+        "farmer income",
+        "income uplift",
+        "farmer benefit",
+        "proceeds go to farmers",
+        "farmer livelihoods",
+    ),
+    "unsold_produce_support": (
+        "解决滞销",
+        "解決滯銷",
+        "滞销助农",
+        "滯銷支援",
+        "滞销农产品",
+        "滯銷農產品",
+        "unsold produce",
+    ),
+    "personal_story": (
+        "农户故事",
+        "農戶故事",
+        "这位农户",
+        "這位農戶",
+        "farmer story",
+        "farmer's story",
+    ),
+    "quotation": (
+        "农户说",
+        "農戶說",
+        "农户表示",
+        "農戶表示",
+        "farmer says",
+        "farmer said",
+    ),
+    "image": (
+        "农户照片",
+        "農戶照片",
+        "农户肖像",
+        "農戶肖像",
+        "farmer photo",
+        "farmer image",
+    ),
+    "voice": (
+        "农户原声",
+        "農戶原聲",
+        "农户声音",
+        "農戶聲音",
+        "farmer voice",
+        "farmer audio",
+    ),
+}
+FARMER_CLAIM_SKIP_KEYS = {
+    "risk_notes",
+    "citations",
+    "metadata",
+    "internal_notes",
+}
+QUANTIFIED_PATTERN = re.compile(
+    r"(?:\d+(?:\.\d+)?\s*(?:%|％|元|万元|萬元|户|戶|吨|噸|kg|公斤|元|美元|港元))",
+    re.IGNORECASE,
+)
+FARMER_CLAIM_TYPE_ALIASES = {
+    "farmer_support": "general_support",
+    "farmer_identity": "sourcing_relationship",
+}
+FARMER_CLAIM_TYPES = set(FARMER_CLAIM_PATTERNS) | {"quantified_benefit"}
+
+
+class FarmerClaimViolation(ValueError):
+    def __init__(self, message: str, claims: list[dict]) -> None:
+        super().__init__(message)
+        self.claims = claims
+
+
+def _normalize_farmer_claim_type(value: object) -> str:
+    normalized = str(value).strip().casefold()
+    return FARMER_CLAIM_TYPE_ALIASES.get(normalized, normalized)
+
+
+def detect_farmer_claims(content: object) -> list[dict]:
+    """Find farmer-impact claims in user-visible artifact strings.
+
+    This is a deterministic risk detector, not proof that a statement is true.
+    """
+
+    detected: list[dict] = []
+
+    def visit(value: object, path: str) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if str(key).lower() not in FARMER_CLAIM_SKIP_KEYS:
+                    visit(child, f"{path}.{key}")
+            return
+        if isinstance(value, list):
+            for index, child in enumerate(value):
+                visit(child, f"{path}[{index}]")
+            return
+        if not isinstance(value, str):
+            return
+        lowered = value.casefold()
+        matched_types: set[str] = set()
+        for claim_type, phrases in FARMER_CLAIM_PATTERNS.items():
+            if any(phrase.casefold() in lowered for phrase in phrases):
+                matched_types.add(claim_type)
+        if not matched_types:
+            return
+        if QUANTIFIED_PATTERN.search(value) and matched_types & {
+            "general_support",
+            "economic_benefit",
+            "unsold_produce_support",
+        }:
+            matched_types.add("quantified_benefit")
+        locale = (
+            "en"
+            if re.search(r"[a-z]", lowered) and not re.search(r"[\u3400-\u9fff]", value)
+            else "zh"
+        )
+        for claim_type in sorted(matched_types):
+            detected.append(
+                {
+                    "claim_type": claim_type,
+                    "text": value[:500],
+                    "path": path,
+                    "locale": locale,
+                    "quantified": claim_type == "quantified_benefit",
+                }
+            )
+
+    visit(content, "$")
+    return detected
+
+
+def _validate_farmer_claims(
+    content: object,
+    evidence: CampaignFarmerEvidenceSnapshot | None,
+) -> list[dict]:
+    claims = detect_farmer_claims(content)
+    if not claims:
+        return []
+    if evidence is None:
+        raise FarmerClaimViolation(
+            "Farmer-impact claims require a current approved farmer evidence snapshot",
+            claims,
+        )
+    allowed = {_normalize_farmer_claim_type(item) for item in evidence.allowed_claims}
+    prohibited = {_normalize_farmer_claim_type(item) for item in evidence.prohibited_claims}
+    unauthorized: list[dict] = []
+    for claim in claims:
+        claim_type = claim["claim_type"].casefold()
+        explicitly_allowed = claim_type in allowed
+        explicitly_prohibited = claim_type in prohibited
+        if not explicitly_allowed or explicitly_prohibited:
+            unauthorized.append(claim)
+    consent_requirements = {
+        "personal_story": "personal_story",
+        "quotation": "quotation",
+        "image": "image",
+        "voice": "voice",
+    }
+    consent = {str(item).strip().casefold() for item in evidence.consent_scope}
+    unauthorized.extend(
+        claim
+        for claim in claims
+        if claim["claim_type"] in consent_requirements
+        and consent_requirements[claim["claim_type"]] not in consent
+        and claim not in unauthorized
+    )
+    if unauthorized:
+        raise FarmerClaimViolation(
+            "Farmer-impact claims exceed the approved wording or consent scope",
+            unauthorized,
+        )
+    return claims
+
+
+def _validate_content_farmer_evidence_current(
+    db: Session,
+    organization_id: str,
+    content: object,
+    farmer_evidence_snapshot_id: str | None,
+) -> list[dict]:
+    claims = detect_farmer_claims(content)
+    evidence = (
+        db.scalar(
+            select(CampaignFarmerEvidenceSnapshot).where(
+                CampaignFarmerEvidenceSnapshot.id == farmer_evidence_snapshot_id,
+                CampaignFarmerEvidenceSnapshot.organization_id == organization_id,
+            )
+        )
+        if farmer_evidence_snapshot_id
+        else None
+    )
+    validated_claims = _validate_farmer_claims(content, evidence)
+    if not claims and evidence is None:
+        return []
+    if evidence is None:
+        raise FarmerClaimViolation(
+            "Farmer-impact content is missing its evidence snapshot",
+            claims,
+        )
+    current = _current_campaign_farmer_evidence(
+        db,
+        evidence.campaign_package_id,
+        organization_id,
+    )
+    if current is None or current.id != evidence.id:
+        raise FarmerClaimViolation(
+            "Farmer-impact content uses expired or replaced farmer evidence; regenerate it",
+            claims,
+        )
+    return validated_claims
+
+
+def _farmer_claim_http_error(exc: FarmerClaimViolation) -> HTTPException:
+    return HTTPException(
+        status_code=409,
+        detail=(
+            f"{exc}. Detected claim types: "
+            + ", ".join(sorted({claim["claim_type"] for claim in exc.claims}))
+        ),
+    )
 
 
 def audit(
@@ -540,6 +806,50 @@ def _current_campaign_supply(
     return None
 
 
+def _current_campaign_farmer_evidence(
+    db: Session,
+    campaign_id: str,
+    organization_id: str,
+    *,
+    now: datetime | None = None,
+) -> CampaignFarmerEvidenceSnapshot | None:
+    candidates = list(
+        db.scalars(
+            select(CampaignFarmerEvidenceSnapshot)
+            .where(
+                CampaignFarmerEvidenceSnapshot.campaign_package_id == campaign_id,
+                CampaignFarmerEvidenceSnapshot.organization_id == organization_id,
+                CampaignFarmerEvidenceSnapshot.status == ReviewStatus.approved,
+            )
+            .order_by(CampaignFarmerEvidenceSnapshot.revision_number.desc())
+        )
+    )
+
+    def comparable(value: datetime) -> datetime:
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+    moment = comparable(now or utc_now())
+    return next(
+        (
+            candidate
+            for candidate in candidates
+            if comparable(candidate.active_from) <= moment
+            and comparable(candidate.active_until) >= moment
+        ),
+        None,
+    )
+
+
+def _campaign_requested_farmer_claims(campaign: CampaignPackage) -> list[dict]:
+    return detect_farmer_claims(
+        {
+            "target_audience": campaign.target_audience,
+            "objective": campaign.objective,
+            "extra_requirements": campaign.extra_requirements,
+        }
+    )
+
+
 def _campaign_for_project(
     db: Session, project_id: str, organization_id: str
 ) -> CampaignPackage | None:
@@ -571,6 +881,7 @@ def _campaign_item_view(
     db: Session,
     item: CampaignPackageItem,
     current_supply: CampaignSupplySnapshot | None = None,
+    current_farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
 ) -> CampaignPackageItemRead:
     project = db.scalar(
         select(ContentProject).where(
@@ -604,21 +915,40 @@ def _campaign_item_view(
         )
     )
     publication = publications[0] if publications else None
+
+    def farmer_evidence_current(version: ContentVersion | None) -> bool:
+        if version is None:
+            return False
+        claims = detect_farmer_claims(version.content)
+        if not claims and version.farmer_evidence_snapshot_id is None:
+            return True
+        return bool(
+            current_farmer_evidence
+            and version.farmer_evidence_snapshot_id == current_farmer_evidence.id
+        )
+
     approved_current = bool(
-        approved and current_supply and approved.supply_snapshot_id == current_supply.id
+        approved
+        and current_supply
+        and approved.supply_snapshot_id == current_supply.id
+        and farmer_evidence_current(approved)
+    )
+    published_version = (
+        db.scalar(
+            select(ContentVersion).where(
+                ContentVersion.id == publication.content_version_id,
+                ContentVersion.organization_id == item.organization_id,
+            )
+        )
+        if publication
+        else None
     )
     publication_current = bool(
         publication
         and current_supply
-        and (
-            db.scalar(
-                select(ContentVersion.supply_snapshot_id).where(
-                    ContentVersion.id == publication.content_version_id,
-                    ContentVersion.organization_id == item.organization_id,
-                )
-            )
-            == current_supply.id
-        )
+        and published_version
+        and published_version.supply_snapshot_id == current_supply.id
+        and farmer_evidence_current(published_version)
     )
     return CampaignPackageItemRead(
         **{
@@ -640,6 +970,9 @@ def _campaign_item_view(
 
 def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRead:
     current_supply = _current_campaign_supply(db, campaign.id, campaign.organization_id)
+    current_farmer_evidence = _current_campaign_farmer_evidence(
+        db, campaign.id, campaign.organization_id
+    )
     item_models = list(
         db.scalars(
             select(CampaignPackageItem)
@@ -650,7 +983,68 @@ def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRea
             .order_by(CampaignPackageItem.position, CampaignPackageItem.created_at)
         )
     )
-    items = [_campaign_item_view(db, item, current_supply) for item in item_models]
+    project_briefs = list(
+        db.execute(
+            select(
+                ContentProject.target_audience,
+                ContentProject.objective,
+                ContentProject.extra_requirements,
+            ).where(
+                ContentProject.id.in_([item.content_project_id for item in item_models]),
+                ContentProject.organization_id == campaign.organization_id,
+            )
+        )
+    )
+    requested_farmer_claims = detect_farmer_claims(
+        {
+            "campaign": {
+                "target_audience": campaign.target_audience,
+                "objective": campaign.objective,
+                "extra_requirements": campaign.extra_requirements,
+            },
+            "content_projects": [
+                {
+                    "target_audience": target_audience,
+                    "objective": objective,
+                    "extra_requirements": extra_requirements,
+                }
+                for target_audience, objective, extra_requirements in project_briefs
+            ],
+        }
+    )
+    farmer_evidence_ready = not requested_farmer_claims
+    if requested_farmer_claims and current_farmer_evidence is not None:
+        try:
+            _validate_farmer_claims(
+                {
+                    "campaign": {
+                        "target_audience": campaign.target_audience,
+                        "objective": campaign.objective,
+                        "extra_requirements": campaign.extra_requirements,
+                    },
+                    "content_projects": [
+                        {
+                            "target_audience": target_audience,
+                            "objective": objective,
+                            "extra_requirements": extra_requirements,
+                        }
+                        for target_audience, objective, extra_requirements in project_briefs
+                    ],
+                },
+                current_farmer_evidence,
+            )
+            farmer_evidence_ready = True
+        except FarmerClaimViolation:
+            farmer_evidence_ready = False
+    items = [
+        _campaign_item_view(
+            db,
+            item,
+            current_supply,
+            current_farmer_evidence,
+        )
+        for item in item_models
+    ]
     required_items = [item for item in items if item.required]
     progress = CampaignProgress(
         total=len(items),
@@ -662,6 +1056,7 @@ def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRea
         required_complete=bool(required_items)
         and all(item.approved_version_id is not None for item in required_items),
         supply_ready=current_supply is not None,
+        farmer_evidence_ready=farmer_evidence_ready,
     )
     return CampaignPackageRead(
         **{
@@ -669,6 +1064,7 @@ def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRea
             for column in CampaignPackage.__table__.columns
         },
         current_supply_snapshot=current_supply,
+        current_farmer_evidence_snapshot=current_farmer_evidence,
         items=items,
         progress=progress,
     )
@@ -886,6 +1282,205 @@ def list_campaign_supply_snapshots(
     )
 
 
+def create_campaign_farmer_evidence_snapshot(
+    db: Session,
+    actor: Actor,
+    campaign_id: str,
+    data: CampaignFarmerEvidenceSnapshotCreate,
+) -> CampaignFarmerEvidenceSnapshot:
+    campaign = _campaign_for_update(db, actor, campaign_id)
+    _ensure_campaign_editable(campaign)
+    if data.active_from >= data.active_until:
+        raise HTTPException(
+            status_code=422,
+            detail="Farmer evidence active_until must be after active_from",
+        )
+    source_ids = list(dict.fromkeys(data.evidence_source_ids))
+    approved_source_ids = set(
+        db.scalars(
+            select(KnowledgeSource.id).where(
+                KnowledgeSource.id.in_(source_ids),
+                KnowledgeSource.organization_id == actor.organization_id,
+                KnowledgeSource.status == ReviewStatus.approved,
+                (KnowledgeSource.product_id == campaign.product_id)
+                | (KnowledgeSource.brand_id == campaign.brand_id),
+            )
+        )
+    )
+    if approved_source_ids != set(source_ids):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Farmer evidence must use approved knowledge sources linked to "
+                "the campaign brand or product"
+            ),
+        )
+    allowed_claims = [
+        str(item).strip() for item in dict.fromkeys(data.allowed_claims) if str(item).strip()
+    ]
+    prohibited_claims = [
+        str(item).strip() for item in dict.fromkeys(data.prohibited_claims) if str(item).strip()
+    ]
+    if not allowed_claims:
+        raise HTTPException(
+            status_code=422,
+            detail="Farmer evidence needs at least one explicitly allowed claim",
+        )
+    if {item.casefold() for item in allowed_claims} & {
+        item.casefold() for item in prohibited_claims
+    }:
+        raise HTTPException(
+            status_code=422,
+            detail="The same farmer claim cannot be both allowed and prohibited",
+        )
+    max_revision = db.scalar(
+        select(func.max(CampaignFarmerEvidenceSnapshot.revision_number)).where(
+            CampaignFarmerEvidenceSnapshot.campaign_package_id == campaign.id,
+            CampaignFarmerEvidenceSnapshot.organization_id == actor.organization_id,
+        )
+    )
+    snapshot = CampaignFarmerEvidenceSnapshot(
+        organization_id=actor.organization_id,
+        campaign_package_id=campaign.id,
+        revision_number=(max_revision or 0) + 1,
+        evidence_source_ids=source_ids,
+        allowed_claims=allowed_claims,
+        prohibited_claims=prohibited_claims,
+        consent_scope=[
+            str(item).strip() for item in dict.fromkeys(data.consent_scope) if str(item).strip()
+        ],
+        confirmed_by=actor.user_id,
+        confirmed_at=utc_now(),
+        **data.model_dump(
+            exclude={
+                "evidence_source_ids",
+                "allowed_claims",
+                "prohibited_claims",
+                "consent_scope",
+            }
+        ),
+    )
+    db.add(snapshot)
+    flush_or_conflict(
+        db,
+        "A farmer evidence snapshot was created concurrently; refresh and try again",
+    )
+    campaign.updated_at = utc_now()
+    audit(
+        db,
+        actor,
+        "campaign_farmer_evidence_snapshot.created",
+        "campaign_farmer_evidence_snapshot",
+        snapshot.id,
+        {
+            "campaign_package_id": campaign.id,
+            "revision_number": snapshot.revision_number,
+            "allowed_claims": snapshot.allowed_claims,
+        },
+    )
+    db.commit()
+    db.refresh(snapshot)
+    return snapshot
+
+
+def list_campaign_farmer_evidence_snapshots(
+    db: Session, actor: Actor, campaign_id: str
+) -> list[CampaignFarmerEvidenceSnapshot]:
+    _tenant_campaign(db, actor, campaign_id)
+    return list(
+        db.scalars(
+            select(CampaignFarmerEvidenceSnapshot)
+            .where(
+                CampaignFarmerEvidenceSnapshot.campaign_package_id == campaign_id,
+                CampaignFarmerEvidenceSnapshot.organization_id == actor.organization_id,
+            )
+            .order_by(CampaignFarmerEvidenceSnapshot.revision_number.desc())
+        )
+    )
+
+
+def submit_campaign_farmer_evidence_snapshot(
+    db: Session, actor: Actor, campaign_id: str, snapshot_id: str
+) -> CampaignFarmerEvidenceSnapshot:
+    _tenant_campaign(db, actor, campaign_id)
+    snapshot = db.scalar(
+        select(CampaignFarmerEvidenceSnapshot).where(
+            CampaignFarmerEvidenceSnapshot.id == snapshot_id,
+            CampaignFarmerEvidenceSnapshot.campaign_package_id == campaign_id,
+            CampaignFarmerEvidenceSnapshot.organization_id == actor.organization_id,
+        )
+    )
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Farmer evidence snapshot not found")
+    if snapshot.status != ReviewStatus.draft:
+        raise HTTPException(
+            status_code=409,
+            detail="Only draft farmer evidence snapshots can be submitted for review",
+        )
+    snapshot.status = ReviewStatus.pending_review
+    audit(
+        db,
+        actor,
+        "campaign_farmer_evidence_snapshot.submitted",
+        "campaign_farmer_evidence_snapshot",
+        snapshot.id,
+        {"campaign_package_id": campaign_id},
+    )
+    db.commit()
+    db.refresh(snapshot)
+    return snapshot
+
+
+def review_campaign_farmer_evidence_snapshot(
+    db: Session,
+    actor: Actor,
+    campaign_id: str,
+    snapshot_id: str,
+    data: ContentReview,
+) -> CampaignFarmerEvidenceSnapshot:
+    if data.status not in {ReviewStatus.approved, ReviewStatus.rejected}:
+        raise HTTPException(status_code=422, detail="Review must approve or reject")
+    if data.status == ReviewStatus.rejected and not data.note.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="A review note is required when rejecting farmer evidence",
+        )
+    _campaign_for_update(db, actor, campaign_id)
+    snapshot = db.scalar(
+        select(CampaignFarmerEvidenceSnapshot).where(
+            CampaignFarmerEvidenceSnapshot.id == snapshot_id,
+            CampaignFarmerEvidenceSnapshot.campaign_package_id == campaign_id,
+            CampaignFarmerEvidenceSnapshot.organization_id == actor.organization_id,
+        )
+    )
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Farmer evidence snapshot not found")
+    if snapshot.status != ReviewStatus.pending_review:
+        raise HTTPException(
+            status_code=409,
+            detail="Only pending farmer evidence snapshots can be reviewed",
+        )
+    snapshot.status = data.status
+    snapshot.reviewed_by = actor.user_id
+    snapshot.review_note = data.note
+    snapshot.reviewed_at = utc_now()
+    audit(
+        db,
+        actor,
+        f"campaign_farmer_evidence_snapshot.{data.status.value}",
+        "campaign_farmer_evidence_snapshot",
+        snapshot.id,
+        {
+            "campaign_package_id": campaign_id,
+            "revision_number": snapshot.revision_number,
+            "note": data.note,
+        },
+    )
+    db.commit()
+    db.refresh(snapshot)
+    return snapshot
+
+
 def submit_campaign_supply_snapshot(
     db: Session, actor: Actor, campaign_id: str, snapshot_id: str
 ) -> CampaignSupplySnapshot:
@@ -1003,6 +1598,14 @@ def update_campaign_status(
             raise HTTPException(
                 status_code=409,
                 detail="Campaign activation requires a current approved supply snapshot",
+            )
+        if not view.progress.farmer_evidence_ready:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Campaign activation requires current approved farmer evidence "
+                    "for the requested farmer-impact claims"
+                ),
             )
     if new_status == CampaignStatus.completed:
         view = _campaign_view(db, campaign)
@@ -1285,6 +1888,15 @@ def create_publication(db: Session, actor: Actor, data: PublicationCreate) -> Pu
             status_code=409,
             detail="Only approved content versions can be recorded as published",
         )
+    try:
+        _validate_content_farmer_evidence_current(
+            db,
+            actor.organization_id,
+            version.content,
+            version.farmer_evidence_snapshot_id,
+        )
+    except FarmerClaimViolation as exc:
+        raise _farmer_claim_http_error(exc) from exc
     campaign = _campaign_for_project(db, project.id, actor.organization_id)
     if campaign is not None:
         supply = _current_campaign_supply(db, campaign.id, actor.organization_id)
@@ -1617,6 +2229,12 @@ def create_draft_from_improvement_brief(
                 ContentVersion.organization_id == actor.organization_id,
             )
         ),
+        farmer_evidence_snapshot_id=db.scalar(
+            select(ContentVersion.farmer_evidence_snapshot_id).where(
+                ContentVersion.id == brief.source_content_version_id,
+                ContentVersion.organization_id == actor.organization_id,
+            )
+        ),
         parent_version_id=brief.source_content_version_id,
         improvement_brief_id=brief.id,
         version_number=(max_version or 0) + 1,
@@ -1665,10 +2283,37 @@ def generate_content(
         if campaign is not None
         else None
     )
+    farmer_evidence = (
+        _current_campaign_farmer_evidence(db, campaign.id, actor.organization_id)
+        if campaign is not None
+        else None
+    )
     if campaign is not None and supply is None:
         raise HTTPException(
             status_code=409,
             detail="Campaign generation requires a current approved supply snapshot",
+        )
+    requested_farmer_claims = detect_farmer_claims(
+        {
+            "campaign": {
+                "target_audience": campaign.target_audience if campaign else "",
+                "objective": campaign.objective if campaign else "",
+                "extra_requirements": campaign.extra_requirements if campaign else "",
+            },
+            "project": {
+                "target_audience": project.target_audience,
+                "objective": project.objective,
+                "extra_requirements": project.extra_requirements,
+            },
+        }
+    )
+    if requested_farmer_claims and farmer_evidence is None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Farmer-impact claims in the campaign brief require a current "
+                "approved farmer evidence snapshot"
+            ),
         )
     unapproved_assets = [
         name
@@ -1727,21 +2372,73 @@ def generate_content(
         "campaign_package_id": campaign.id if campaign else None,
         "supply_snapshot_id": supply.id if supply else None,
         "supply_revision_number": supply.revision_number if supply else None,
+        "farmer_evidence_snapshot_id": farmer_evidence.id if farmer_evidence else None,
+        "farmer_evidence_revision_number": farmer_evidence.revision_number
+        if farmer_evidence
+        else None,
     }
     started = time.perf_counter()
     try:
-        result = provider.generate_script(project, brand, product, sources, supply)
+        result = provider.generate_script(
+            project,
+            brand,
+            product,
+            sources,
+            supply,
+            farmer_evidence,
+        )
         validated_content = validate_generation_output(
             result.content,
             project.content_type,
             {source.id: source.citation_label or source.title for source in sources},
         )
+        _validate_farmer_claims(validated_content, farmer_evidence)
+    except FarmerClaimViolation as exc:
+        latency_ms = max(1, int((time.perf_counter() - started) * 1000))
+        failed_run = GenerationRun(
+            organization_id=actor.organization_id,
+            project_id=project.id,
+            supply_snapshot_id=supply.id if supply else None,
+            farmer_evidence_snapshot_id=farmer_evidence.id if farmer_evidence else None,
+            provider=provider.name,
+            model=provider.model,
+            prompt_name=PROMPT_NAME,
+            prompt_version=PROMPT_VERSION,
+            source_ids=source_ids,
+            normalized_input=normalized_input,
+            output={
+                "error": {
+                    "code": "unauthorized_farmer_claim",
+                    "message": str(exc),
+                    "claim_types": sorted({claim["claim_type"] for claim in exc.claims}),
+                }
+            },
+            status=GenerationStatus.failed,
+            latency_ms=latency_ms,
+            created_by=actor.user_id,
+        )
+        db.add(failed_run)
+        db.flush()
+        audit(
+            db,
+            actor,
+            "farmer_claim.blocked",
+            "generation_run",
+            failed_run.id,
+            {
+                "project_id": project.id,
+                "claim_types": sorted({claim["claim_type"] for claim in exc.claims}),
+            },
+        )
+        db.commit()
+        raise _farmer_claim_http_error(exc) from exc
     except AIProviderError as exc:
         latency_ms = max(1, int((time.perf_counter() - started) * 1000))
         failed_run = GenerationRun(
             organization_id=actor.organization_id,
             project_id=project.id,
             supply_snapshot_id=supply.id if supply else None,
+            farmer_evidence_snapshot_id=farmer_evidence.id if farmer_evidence else None,
             provider=provider.name,
             model=provider.model,
             prompt_name=PROMPT_NAME,
@@ -1779,6 +2476,7 @@ def generate_content(
         organization_id=actor.organization_id,
         project_id=project.id,
         supply_snapshot_id=supply.id if supply else None,
+        farmer_evidence_snapshot_id=farmer_evidence.id if farmer_evidence else None,
         provider=provider.name,
         model=provider.model,
         prompt_name=PROMPT_NAME,
@@ -1801,6 +2499,7 @@ def generate_content(
         organization_id=actor.organization_id,
         project_id=project.id,
         supply_snapshot_id=supply.id if supply else None,
+        farmer_evidence_snapshot_id=farmer_evidence.id if farmer_evidence else None,
         generation_run_id=run.id,
         version_number=(max_version or 0) + 1,
         content=validated_content,
@@ -1960,6 +2659,7 @@ def create_content_version(
         organization_id=actor.organization_id,
         project_id=project_id,
         supply_snapshot_id=parent.supply_snapshot_id,
+        farmer_evidence_snapshot_id=parent.farmer_evidence_snapshot_id,
         parent_version_id=parent.id,
         version_number=(max_version or 0) + 1,
         content=data.content,
@@ -1997,6 +2697,15 @@ def submit_content_version(
             status_code=409,
             detail="Only draft content versions can be submitted for review",
         )
+    try:
+        _validate_content_farmer_evidence_current(
+            db,
+            actor.organization_id,
+            version.content,
+            version.farmer_evidence_snapshot_id,
+        )
+    except FarmerClaimViolation as exc:
+        raise _farmer_claim_http_error(exc) from exc
     campaign = _campaign_for_project(db, project_id, actor.organization_id)
     if campaign is not None:
         supply = _current_campaign_supply(db, campaign.id, actor.organization_id)
@@ -2049,6 +2758,15 @@ def review_content_version(
             status_code=409,
             detail="Only pending content versions can be reviewed",
         )
+    try:
+        _validate_content_farmer_evidence_current(
+            db,
+            actor.organization_id,
+            version.content,
+            version.farmer_evidence_snapshot_id,
+        )
+    except FarmerClaimViolation as exc:
+        raise _farmer_claim_http_error(exc) from exc
     campaign = _campaign_for_project(db, project_id, actor.organization_id)
     if campaign is not None:
         supply = _current_campaign_supply(db, campaign.id, actor.organization_id)

@@ -159,7 +159,9 @@ def test_provider_failure_is_persisted_without_creating_a_content_version(
         name = "external-test"
         model = "failure-model"
 
-        def generate_script(self, project, brand, product, sources, supply=None):
+        def generate_script(
+            self, project, brand, product, sources, supply=None, farmer_evidence=None
+        ):
             raise AIProviderError(
                 "The configured AI provider timed out",
                 code="provider_timeout",
@@ -238,7 +240,9 @@ def test_invalid_provider_output_is_failed_and_never_becomes_content(client, aut
         name = "external-test"
         model = "invalid-model"
 
-        def generate_script(self, project, brand, product, sources, supply=None):
+        def generate_script(
+            self, project, brand, product, sources, supply=None, farmer_evidence=None
+        ):
             assert project.content_type == ContentType.social_post
             return GenerationResult(
                 content={
@@ -313,7 +317,9 @@ def test_missing_citation_is_failed_when_reviewed_sources_were_selected(client, 
         name = "external-test"
         model = "missing-citation-model"
 
-        def generate_script(self, project, brand, product, sources, supply=None):
+        def generate_script(
+            self, project, brand, product, sources, supply=None, farmer_evidence=None
+        ):
             assert [item.id for item in sources] == [source["id"]]
             return GenerationResult(
                 content={
@@ -389,7 +395,9 @@ def test_successful_generation_replaces_provider_labels_and_deduplicates(client,
         name = "external-test"
         model = "mislabeling-model"
 
-        def generate_script(self, project, brand, product, sources, supply=None):
+        def generate_script(
+            self, project, brand, product, sources, supply=None, farmer_evidence=None
+        ):
             return GenerationResult(
                 content={
                     "format": "social_post",

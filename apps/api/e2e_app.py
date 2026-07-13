@@ -17,7 +17,15 @@ class BrowserE2EProvider:
     def __init__(self) -> None:
         self._fallback = DeterministicProvider()
 
-    def generate_script(self, project, brand, product, sources, supply=None):
+    def generate_script(
+        self,
+        project,
+        brand,
+        product,
+        sources,
+        supply=None,
+        farmer_evidence=None,
+    ):
         if project.title.startswith("[E2E invalid citation]"):
             return GenerationResult(
                 content={
@@ -31,7 +39,14 @@ class BrowserE2EProvider:
                 },
                 latency_ms=1,
             )
-        return self._fallback.generate_script(project, brand, product, sources, supply)
+        return self._fallback.generate_script(
+            project,
+            brand,
+            product,
+            sources,
+            supply,
+            farmer_evidence,
+        )
 
 
 services.get_ai_provider = lambda: BrowserE2EProvider()

@@ -7,7 +7,14 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.config import Settings, get_settings
-from app.models import Brand, CampaignSupplySnapshot, ContentProject, ContentType, Product
+from app.models import (
+    Brand,
+    CampaignFarmerEvidenceSnapshot,
+    CampaignSupplySnapshot,
+    ContentProject,
+    ContentType,
+    Product,
+)
 
 PROMPT_NAME = "agricultural-content-script"
 PROMPT_VERSION = "1.2.0"
@@ -39,6 +46,7 @@ class AIProvider(Protocol):
         product: Product,
         sources: list[ContextSource],
         supply: CampaignSupplySnapshot | None = None,
+        farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
     ) -> GenerationResult: ...
 
 
@@ -244,6 +252,7 @@ class DeterministicProvider:
         product: Product,
         sources: list[ContextSource],
         supply: CampaignSupplySnapshot | None = None,
+        farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
     ) -> GenerationResult:
         started = time.perf_counter()
         fact_text, selling_points, citations, risk_notes = self._common_context(
@@ -267,6 +276,8 @@ class DeterministicProvider:
         else:
             content = self._text_content(project, brand, product, fact_text, selling_points, supply)
         content["risk_notes"] = risk_notes
+        if farmer_evidence:
+            content["risk_notes"].append("助农与合作关系声明只能使用已审核且在授权范围内的表述。")
         content["citations"] = citations
         return GenerationResult(
             content=content,
@@ -465,6 +476,7 @@ class OpenAICompatibleProvider:
         product: Product,
         sources: list[ContextSource],
         supply: CampaignSupplySnapshot | None = None,
+        farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
     ) -> dict:
         verified_sources = [
             {
@@ -519,6 +531,23 @@ class OpenAICompatibleProvider:
                 if supply
                 else None
             ),
+            "verified_farmer_evidence": (
+                {
+                    "snapshot_id": farmer_evidence.id,
+                    "revision_number": farmer_evidence.revision_number,
+                    "party_display_name": farmer_evidence.party_display_name,
+                    "relationship_type": farmer_evidence.relationship_type,
+                    "relationship_summary": farmer_evidence.relationship_summary,
+                    "benefit_mechanism": farmer_evidence.benefit_mechanism,
+                    "allowed_claims": farmer_evidence.allowed_claims,
+                    "prohibited_claims": farmer_evidence.prohibited_claims,
+                    "consent_scope": farmer_evidence.consent_scope,
+                    "active_from": farmer_evidence.active_from.isoformat(),
+                    "active_until": farmer_evidence.active_until.isoformat(),
+                }
+                if farmer_evidence
+                else None
+            ),
         }
         return {
             "model": "",
@@ -534,6 +563,12 @@ class OpenAICompatibleProvider:
                         "or customer outcomes. Treat verified_supply as the only allowed source "
                         "for campaign price, stock, specification, harvest, and logistics "
                         "claims. Preserve "
+                        "Treat verified_farmer_evidence as the only allowed source for claims "
+                        "about farmer/cooperative relationships, direct sourcing, farmer "
+                        "benefits, unsold produce, proceeds, personal stories, quotations, "
+                        "images, voices, or quantified impact. Do not make any such claim when "
+                        "verified_farmer_evidence is null, outside consent_scope, listed in "
+                        "prohibited_claims, or absent from allowed_claims. "
                         "source provenance in a citations array containing source_id and label. "
                         "Include a risk_notes array. Match the requested content_type."
                     ),
@@ -552,9 +587,17 @@ class OpenAICompatibleProvider:
         product: Product,
         sources: list[ContextSource],
         supply: CampaignSupplySnapshot | None = None,
+        farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
     ) -> GenerationResult:
         started = time.perf_counter()
-        payload = self._payload(project, brand, product, sources, supply)
+        payload = self._payload(
+            project,
+            brand,
+            product,
+            sources,
+            supply,
+            farmer_evidence,
+        )
         payload["model"] = self.model
         try:
             with httpx.Client(

@@ -32,6 +32,8 @@ from app.schemas import (
     BrandCreate,
     BrandRead,
     BrandUpdate,
+    CampaignFarmerEvidenceSnapshotCreate,
+    CampaignFarmerEvidenceSnapshotRead,
     CampaignItemCreate,
     CampaignItemLink,
     CampaignItemUpdate,
@@ -87,6 +89,7 @@ from app.security import (
 from app.services import (
     audit,
     create_brand,
+    create_campaign_farmer_evidence_snapshot,
     create_campaign_item,
     create_campaign_package,
     create_campaign_supply_snapshot,
@@ -104,6 +107,7 @@ from app.services import (
     get_publication_detail,
     link_campaign_item,
     list_brands,
+    list_campaign_farmer_evidence_snapshots,
     list_campaign_packages,
     list_campaign_supply_snapshots,
     list_content_projects,
@@ -116,12 +120,14 @@ from app.services import (
     list_publications,
     list_video_diagnoses,
     review_brand,
+    review_campaign_farmer_evidence_snapshot,
     review_campaign_supply_snapshot,
     review_content_version,
     review_knowledge_source,
     review_product,
     revise_knowledge_source,
     submit_brand,
+    submit_campaign_farmer_evidence_snapshot,
     submit_campaign_supply_snapshot,
     submit_content_version,
     submit_knowledge_source,
@@ -1028,6 +1034,59 @@ def post_campaign_supply_snapshot_review(
 
 
 @app.post(
+    "/v1/campaign-packages/{campaign_id}/farmer-evidence-snapshots",
+    response_model=CampaignFarmerEvidenceSnapshotRead,
+    status_code=201,
+)
+def post_campaign_farmer_evidence_snapshot(
+    campaign_id: str,
+    data: CampaignFarmerEvidenceSnapshotCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.product_manager)),
+) -> CampaignFarmerEvidenceSnapshotRead:
+    return create_campaign_farmer_evidence_snapshot(db, actor, campaign_id, data)
+
+
+@app.get(
+    "/v1/campaign-packages/{campaign_id}/farmer-evidence-snapshots",
+    response_model=list[CampaignFarmerEvidenceSnapshotRead],
+)
+def get_campaign_farmer_evidence_snapshots(
+    campaign_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> list[CampaignFarmerEvidenceSnapshotRead]:
+    return list_campaign_farmer_evidence_snapshots(db, actor, campaign_id)
+
+
+@app.post(
+    "/v1/campaign-packages/{campaign_id}/farmer-evidence-snapshots/{snapshot_id}/submit",
+    response_model=CampaignFarmerEvidenceSnapshotRead,
+)
+def post_campaign_farmer_evidence_snapshot_submit(
+    campaign_id: str,
+    snapshot_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.product_manager)),
+) -> CampaignFarmerEvidenceSnapshotRead:
+    return submit_campaign_farmer_evidence_snapshot(db, actor, campaign_id, snapshot_id)
+
+
+@app.post(
+    "/v1/campaign-packages/{campaign_id}/farmer-evidence-snapshots/{snapshot_id}/review",
+    response_model=CampaignFarmerEvidenceSnapshotRead,
+)
+def post_campaign_farmer_evidence_snapshot_review(
+    campaign_id: str,
+    snapshot_id: str,
+    data: ContentReview,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.reviewer)),
+) -> CampaignFarmerEvidenceSnapshotRead:
+    return review_campaign_farmer_evidence_snapshot(db, actor, campaign_id, snapshot_id, data)
+
+
+@app.post(
     "/v1/campaign-packages/{campaign_id}/items",
     response_model=CampaignPackageRead,
     status_code=201,
@@ -1253,6 +1312,7 @@ def generate_project_content(
     return GenerationRead(
         run_id=run.id,
         version=ContentVersionRead.model_validate(version),
+        farmer_evidence_snapshot_id=run.farmer_evidence_snapshot_id,
         provider=run.provider,
         model=run.model,
         prompt_name=run.prompt_name,
@@ -1303,6 +1363,7 @@ def get_generation_runs(
             output=run.output,
             status=run.status,
             supply_snapshot_id=run.supply_snapshot_id,
+            farmer_evidence_snapshot_id=run.farmer_evidence_snapshot_id,
             latency_ms=run.latency_ms,
             created_by=run.created_by,
             created_at=run.created_at,

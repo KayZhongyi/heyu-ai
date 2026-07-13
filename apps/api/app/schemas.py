@@ -333,6 +333,47 @@ class CampaignSupplySnapshotRead(ORMModel):
     created_at: datetime
 
 
+class CampaignFarmerEvidenceSnapshotCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    party_display_name: str = Field(min_length=1, max_length=160)
+    relationship_type: str = Field(min_length=1, max_length=80)
+    relationship_summary: str = Field(min_length=1)
+    benefit_mechanism: str = Field(min_length=1)
+    allowed_claims: list[str] = Field(default_factory=list, max_length=100)
+    prohibited_claims: list[str] = Field(default_factory=list, max_length=100)
+    consent_scope: list[str] = Field(default_factory=list, max_length=100)
+    active_from: datetime
+    active_until: datetime
+    evidence_source_ids: list[str] = Field(min_length=1, max_length=50)
+    note: str = ""
+
+
+class CampaignFarmerEvidenceSnapshotRead(ORMModel):
+    id: str
+    organization_id: str
+    campaign_package_id: str
+    revision_number: int
+    party_display_name: str
+    relationship_type: str
+    relationship_summary: str
+    benefit_mechanism: str
+    allowed_claims: list[str]
+    prohibited_claims: list[str]
+    consent_scope: list[str]
+    active_from: datetime
+    active_until: datetime
+    evidence_source_ids: list[str]
+    note: str
+    status: ReviewStatus
+    confirmed_by: str
+    confirmed_at: datetime
+    reviewed_by: str | None
+    review_note: str
+    reviewed_at: datetime | None
+    created_at: datetime
+
+
 class CampaignPackageItemRead(ORMModel):
     id: str
     organization_id: str
@@ -362,6 +403,7 @@ class CampaignProgress(BaseModel):
     required_approved: int
     required_complete: bool
     supply_ready: bool
+    farmer_evidence_ready: bool
 
 
 class CampaignPackageRead(ORMModel):
@@ -380,6 +422,7 @@ class CampaignPackageRead(ORMModel):
     created_at: datetime
     updated_at: datetime
     current_supply_snapshot: CampaignSupplySnapshotRead | None
+    current_farmer_evidence_snapshot: CampaignFarmerEvidenceSnapshotRead | None
     items: list[CampaignPackageItemRead]
     progress: CampaignProgress
 
@@ -395,6 +438,7 @@ class ContentVersionRead(ORMModel):
     organization_id: str
     project_id: str
     supply_snapshot_id: str | None
+    farmer_evidence_snapshot_id: str | None
     generation_run_id: str | None
     parent_version_id: str | None
     improvement_brief_id: str | None
@@ -540,6 +584,7 @@ class PublicationDetailRead(BaseModel):
 class GenerationRead(BaseModel):
     run_id: str
     version: ContentVersionRead
+    farmer_evidence_snapshot_id: str | None
     provider: str
     model: str
     prompt_name: str
@@ -558,6 +603,7 @@ class GenerationRunRead(ORMModel):
     id: str
     project_id: str
     supply_snapshot_id: str | None
+    farmer_evidence_snapshot_id: str | None
     provider: str
     model: str
     prompt_name: str

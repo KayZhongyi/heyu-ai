@@ -285,6 +285,40 @@ class CampaignSupplySnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class CampaignFarmerEvidenceSnapshot(Base):
+    __tablename__ = "campaign_farmer_evidence_snapshots"
+    __table_args__ = (
+        UniqueConstraint("campaign_package_id", "revision_number"),
+        Index(
+            "ix_campaign_farmer_evidence_snapshots_campaign_status",
+            "campaign_package_id",
+            "status",
+        ),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    campaign_package_id: Mapped[str] = mapped_column(ForeignKey("campaign_packages.id"), index=True)
+    revision_number: Mapped[int] = mapped_column()
+    party_display_name: Mapped[str] = mapped_column(String(160))
+    relationship_type: Mapped[str] = mapped_column(String(80))
+    relationship_summary: Mapped[str] = mapped_column(Text)
+    benefit_mechanism: Mapped[str] = mapped_column(Text)
+    allowed_claims: Mapped[list] = mapped_column(JSON, default=list)
+    prohibited_claims: Mapped[list] = mapped_column(JSON, default=list)
+    consent_scope: Mapped[list] = mapped_column(JSON, default=list)
+    active_from: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    active_until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    evidence_source_ids: Mapped[list] = mapped_column(JSON, default=list)
+    note: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[ReviewStatus] = mapped_column(Enum(ReviewStatus), default=ReviewStatus.draft)
+    confirmed_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    confirmed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    reviewed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    review_note: Mapped[str] = mapped_column(Text, default="")
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class GenerationRun(Base):
     __tablename__ = "generation_runs"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -292,6 +326,9 @@ class GenerationRun(Base):
     project_id: Mapped[str] = mapped_column(ForeignKey("content_projects.id"), index=True)
     supply_snapshot_id: Mapped[str | None] = mapped_column(
         ForeignKey("campaign_supply_snapshots.id"), index=True
+    )
+    farmer_evidence_snapshot_id: Mapped[str | None] = mapped_column(
+        ForeignKey("campaign_farmer_evidence_snapshots.id"), index=True
     )
     provider: Mapped[str] = mapped_column(String(80))
     model: Mapped[str] = mapped_column(String(120))
@@ -314,6 +351,9 @@ class ContentVersion(Base):
     project_id: Mapped[str] = mapped_column(ForeignKey("content_projects.id"), index=True)
     supply_snapshot_id: Mapped[str | None] = mapped_column(
         ForeignKey("campaign_supply_snapshots.id"), index=True
+    )
+    farmer_evidence_snapshot_id: Mapped[str | None] = mapped_column(
+        ForeignKey("campaign_farmer_evidence_snapshots.id"), index=True
     )
     generation_run_id: Mapped[str | None] = mapped_column(
         ForeignKey("generation_runs.id"), index=True
