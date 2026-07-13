@@ -7,8 +7,8 @@ Evidence must refer to the exact commit being evaluated.
 
 The verified release-candidate baseline is:
 
-- Commit: `50ba2088a22491458ecefa46f219da7cfa822cca`
-- GitHub Actions run: `29244970544`
+- Commit: `907b505d1535790edf03137c093978d0443e4c99`
+- GitHub Actions run: `29249010400`
 - Result: `SUCCESS`
 - Jobs: `api`, `repository-audit`, `browser-e2e`, `windows-package`, and
   `docker-build` all passed.
@@ -19,17 +19,20 @@ baseline.
 
 Local and remote evidence for the baseline:
 
-- 45 Python tests passed.
+- 54 Python tests passed.
 - Ruff lint and format checks passed.
 - i18n dictionary and content-renderer checks passed.
 - Playwright E2E passed for `zh-CN`, `zh-HK`, `en`, invitations, and
   390/700/1440-pixel layouts.
 - SQLite Alembic upgrade/check/downgrade/upgrade passed through migration
-  `c4e9a8b7d6f5`.
+  `d8f4a1c2b3e6`.
 - PostgreSQL was migrated from an empty database, restarted, backed up, and
   restored into a fresh volume.
 - The PostgreSQL workflow created and accepted an invitation, then verified
   both owner and invited-user access after restart and restore.
+- Provider failure and output-validation tests prove that failed runs remain
+  auditable and cannot create content versions or persist unavailable
+  citations.
 
 ## Competition/local demo gate
 
