@@ -5,12 +5,19 @@ Evidence must refer to the exact commit being evaluated.
 
 ## Current evidence status
 
-The current worktree includes secure invitations, three-language UI, and
-browser E2E changes that still require a remote GitHub Actions result. Older
-successful runs prove only their recorded commits and are historical evidence,
-not approval for this worktree.
+The verified release-candidate baseline is:
 
-Local evidence recorded before the next release candidate:
+- Commit: `50ba2088a22491458ecefa46f219da7cfa822cca`
+- GitHub Actions run: `29244970544`
+- Result: `SUCCESS`
+- Jobs: `api`, `repository-audit`, `browser-e2e`, `windows-package`, and
+  `docker-build` all passed.
+
+This evidence applies to that exact commit. Later commits require their own
+checks; documentation-only changes do not retroactively change the verified
+baseline.
+
+Local and remote evidence for the baseline:
 
 - 45 Python tests passed.
 - Ruff lint and format checks passed.
@@ -19,9 +26,10 @@ Local evidence recorded before the next release candidate:
   390/700/1440-pixel layouts.
 - SQLite Alembic upgrade/check/downgrade/upgrade passed through migration
   `c4e9a8b7d6f5`.
-
-These checks must be rerun after final edits. Record a commit SHA and Actions
-URL only after a real run; never invent or reuse an unrelated run ID.
+- PostgreSQL was migrated from an empty database, restarted, backed up, and
+  restored into a fresh volume.
+- The PostgreSQL workflow created and accepted an invitation, then verified
+  both owner and invited-user access after restart and restore.
 
 ## Competition/local demo gate
 
@@ -48,9 +56,9 @@ approval to expose the service publicly.
 - [x] Limits avoid claims of semantic RAG, automatic video understanding,
       automatic publishing, or automatic analytics.
 - [x] Browser E2E covers locale preservation, invitations, and layout.
-- [ ] Exact-commit CI passes `api`, `repository-audit`, `browser-e2e`,
+- [x] Exact-commit CI passes `api`, `repository-audit`, `browser-e2e`,
       `windows-package`, and `docker-build`.
-- [ ] Empty PostgreSQL migration, restart persistence, and backup/restore pass
+- [x] Empty PostgreSQL migration, restart persistence, and backup/restore pass
       with the invitation migration.
 - [ ] A human acceptance record is retained.
 - [ ] An independent reviewer closes all P0/P1 findings.
