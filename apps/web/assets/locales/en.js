@@ -62,6 +62,11 @@
       "content_renderer.structured": "Structured Content",
       "content_renderer.risks": "Risk Notes",
       "content_renderer.citations": "Sources",
+      "auth.sessionExpired": "Your session is no longer valid, possibly because your access level changed. Sign in again to continue.",
+      "access.viewer.title": "Read-only workspace",
+      "access.viewer.copy": "You can view brands, sources, content versions, and operations history, but you cannot create, edit, generate, or review.",
+      "access.reviewer.title": "Review workspace",
+      "access.reviewer.copy": "You can view all business records and review pending assets, sources, and content versions. Editing and generation controls are hidden.",
 
       ...Object.fromEntries([
         ["role.owner", "Owner"],

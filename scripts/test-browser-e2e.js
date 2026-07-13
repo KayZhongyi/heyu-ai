@@ -36,6 +36,56 @@ async function selectLocale(page, locale) {
   await page.waitForFunction((expected) => document.documentElement.lang === expected, locale);
 }
 
+async function openWorkspacePage(page, name) {
+  await page.locator(`[data-page="${name}"]`).click();
+  await page.locator(`[data-page-panel="${name}"]`).waitFor({ state: "visible" });
+}
+
+async function expectHiddenOrAbsent(page, selector, label) {
+  const locator = page.locator(selector);
+  for (let index = 0; index < await locator.count(); index += 1) {
+    assert.equal(
+      await locator.nth(index).isVisible(),
+      false,
+      `${label} remained visible to a viewer`,
+    );
+  }
+}
+
+async function expectReadOnlyNotice(page, locale) {
+  const candidates = page.locator(
+    [
+      "[data-readonly-notice]",
+      "[data-read-only-notice]",
+      "#readonly-notice",
+      "#read-only-notice",
+      ".readonly-notice",
+      ".read-only-notice",
+      "[data-role-notice]",
+      "#role-notice",
+      ".role-notice",
+      '[data-access-mode="readonly"]',
+      '[data-access-mode="viewer"]',
+    ].join(","),
+  );
+  let noticeText = "";
+  for (let index = 0; index < await candidates.count(); index += 1) {
+    const candidate = candidates.nth(index);
+    if (await candidate.isVisible()) {
+      noticeText = (await candidate.textContent()).trim();
+      if (noticeText) break;
+    }
+  }
+  assert.ok(noticeText, `${locale} did not show a visible read-only notice`);
+  const localePatterns = {
+    "zh-CN": /只读/,
+    "zh-HK": /唯讀|只讀/,
+    en: /read[\s-]?only|view[\s-]?only/i,
+  };
+  assert.match(noticeText, localePatterns[locale], `${locale} read-only notice was not localized`);
+  return noticeText;
+}
+
 async function main() {
   const browser = await chromium.launch({
     ...(executablePath ? { executablePath } : {}),
@@ -336,6 +386,8 @@ async function main() {
     await invitePage.locator('#invite-accept-form [name="password"]').fill(password);
     await invitePage.locator('#invite-accept-form button[type="submit"]').click();
     await invitePage.locator("#workspace").waitFor({ state: "visible" });
+    const creatorToken = await invitePage.evaluate(() => localStorage.getItem("heyu_token"));
+    assert.ok(creatorToken, "creator token missing after invitation acceptance");
 
     const repeatedInspect = await inviteContext.request.post(`${baseUrl}/v1/invitations/inspect`, {
       data: { token: invitation.token },
@@ -348,6 +400,108 @@ async function main() {
     });
     assert.ok([400, 404, 409, 410, 422].includes(repeatedAccept.status()));
     assert.equal(repeatedAccept.headers()["cache-control"], "no-store");
+
+    const membersResponse = await context.request.get(`${baseUrl}/v1/members`, {
+      headers: { Authorization: `Bearer ${ownerToken}` },
+    });
+    assert.equal(membersResponse.status(), 200);
+    const creatorMembership = (await membersResponse.json()).find(
+      (member) => member.email === invitedEmail,
+    );
+    assert.ok(creatorMembership, "accepted creator was not returned in the member list");
+    assert.equal(creatorMembership.role, "creator");
+
+    const demotionResponse = await context.request.patch(
+      `${baseUrl}/v1/members/${creatorMembership.membership_id}`,
+      {
+        headers: { Authorization: `Bearer ${ownerToken}` },
+        data: { role: "viewer" },
+      },
+    );
+    assert.equal(demotionResponse.status(), 200);
+    assert.equal((await demotionResponse.json()).role, "viewer");
+
+    const staleTokenStatus = await invitePage.evaluate(async () => {
+      const token = localStorage.getItem("heyu_token");
+      return (
+        await fetch("/v1/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      ).status;
+    });
+    assert.equal(staleTokenStatus, 401, "creator token remained valid after viewer demotion");
+
+    await invitePage.evaluate(() => localStorage.removeItem("heyu_token"));
+    await invitePage.reload({ waitUntil: "networkidle" });
+    await invitePage.locator("#auth-view").waitFor({ state: "visible" });
+    await invitePage.locator('[data-auth-mode="login"]').click();
+    const loginForm = invitePage.locator("#login-form");
+    await loginForm.locator('[name="organization_slug"]').fill(organizationSlug);
+    await loginForm.locator('[name="email"]').fill(invitedEmail);
+    await loginForm.locator('[name="password"]').fill(password);
+    await loginForm.locator('button[type="submit"]').click();
+    await invitePage.locator("#workspace").waitFor({ state: "visible" });
+    await openWorkspacePage(invitePage, "assets");
+    await invitePage.locator("#asset-list", { hasText: businessName }).waitFor();
+
+    const viewerToken = await invitePage.evaluate(() => localStorage.getItem("heyu_token"));
+    assert.ok(viewerToken, "viewer token missing after signing in again");
+    assert.notEqual(viewerToken, creatorToken, "viewer login unexpectedly reused the creator token");
+    const viewerResponse = await inviteContext.request.get(`${baseUrl}/v1/me`, {
+      headers: { Authorization: `Bearer ${viewerToken}` },
+    });
+    assert.equal(viewerResponse.status(), 200);
+    assert.equal((await viewerResponse.json()).role, "viewer");
+
+    const readOnlyNotices = {};
+    for (const [locale, filename] of [
+      ["zh-CN", "viewer-readonly-zh-CN.png"],
+      ["zh-HK", "viewer-readonly-zh-HK.png"],
+      ["en", "viewer-readonly-en.png"],
+    ]) {
+      await selectLocale(invitePage, locale);
+      readOnlyNotices[locale] = await expectReadOnlyNotice(invitePage, locale);
+      await screenshot(invitePage, filename);
+    }
+    assert.ok(
+      new Set(Object.values(readOnlyNotices)).size > 1,
+      "read-only notice did not change across the three locales",
+    );
+
+    await openWorkspacePage(invitePage, "assets");
+    await expectHiddenOrAbsent(invitePage, "#brand-form", "brand write form");
+    await expectHiddenOrAbsent(invitePage, "#product-form", "product write form");
+    await invitePage.locator("#asset-list", { hasText: businessName }).waitFor();
+    await invitePage.locator("#asset-list", { hasText: productName }).waitFor();
+
+    await openWorkspacePage(invitePage, "knowledge");
+    await expectHiddenOrAbsent(invitePage, "#knowledge-form", "knowledge write form");
+    await invitePage.locator("#knowledge-list", { hasText: source.title }).waitFor();
+
+    await openWorkspacePage(invitePage, "studio");
+    await expectHiddenOrAbsent(invitePage, "#project-form", "content project write form");
+    await expectHiddenOrAbsent(invitePage, "#generate-button", "AI generation control");
+    await expectHiddenOrAbsent(invitePage, "#edit-version", "content version editor");
+    await expectHiddenOrAbsent(invitePage, "#save-version-button", "content version save control");
+    await invitePage.locator("#project-list", { hasText: project.title }).waitFor();
+    await invitePage.locator("#project-select").selectOption(project.id);
+    await invitePage.locator("#generation-history-list article").first().waitFor();
+
+    await openWorkspacePage(invitePage, "operations");
+    await expectHiddenOrAbsent(invitePage, "#publication-form", "publication write form");
+    await invitePage.locator("#publication-list").waitFor({ state: "visible" });
+
+    await openWorkspacePage(invitePage, "review");
+    await invitePage.locator("#review-list").waitFor({ state: "visible" });
+    await expectHiddenOrAbsent(
+      invitePage,
+      "[data-submit-version], [data-review-version]",
+      "content review write control",
+    );
+
+    await openWorkspacePage(invitePage, "audit");
+    await invitePage.locator("#audit-list article").first().waitFor();
+    await expectHiddenOrAbsent(invitePage, ".member-nav", "member management navigation");
 
     await invitePage.setViewportSize({ width: 700, height: 900 });
     await invitePage.reload({ waitUntil: "networkidle" });

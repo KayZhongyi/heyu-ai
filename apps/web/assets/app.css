@@ -58,3 +58,8 @@ form label,.result-panel>label{display:grid;gap:7px;margin:17px 0;color:var(--mu
 /* Trilingual locale control */
 .language-switcher{display:inline-flex;padding:3px;border:1px solid var(--line);border-radius:999px;background:#ffffff9c}.language-switcher button{min-width:30px;height:27px;padding:0 8px;border:0;border-radius:999px;background:transparent;color:var(--muted);font:700 9px var(--mono);cursor:pointer}.language-switcher button:hover{color:var(--ink)}.language-switcher button.active{background:var(--ink);color:#fff}
 @media(max-width:700px){.status-dot{display:none}.header-actions{gap:6px}}
+:where([hidden]){display:none!important}
+.access-mode-banner{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 20px;padding:15px 18px;border:1px solid rgba(54,91,80,.2);border-radius:16px;background:linear-gradient(110deg,rgba(230,242,239,.92),rgba(239,244,249,.94));color:#173d37}
+.access-mode-banner div{display:grid;gap:4px}
+.access-mode-banner strong{font-size:.96rem;letter-spacing:.01em}
+.access-mode-banner span:not(.pill){font-size:.86rem;color:#526964;line-height:1.5}

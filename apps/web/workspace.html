@@ -96,6 +96,13 @@
       </section>
 
       <div id="workspace" hidden>
+        <div id="access-mode-banner" class="access-mode-banner" data-role-notice data-access-mode="readonly" data-business-data hidden>
+          <div>
+            <strong id="access-mode-title"></strong>
+            <span id="access-mode-copy"></span>
+          </div>
+          <span id="access-mode-role" class="pill"></span>
+        </div>
         <section class="page active" data-page-panel="overview">
           <div class="hero">
             <div class="hero-copy"><span class="pill">工作台概览</span><h2>今天，从哪里开始？</h2><p>查看内容资产与待办状态，然后进入对应模块继续工作。</p></div>
@@ -128,15 +135,15 @@
 
         <section class="page" data-page-panel="assets">
           <div class="two-col">
-            <form class="panel" id="brand-form"><input name="id" type="hidden"><h2 id="brand-form-title">新建品牌</h2><label>品牌名称<input name="name" placeholder="例如：田埂播播菜" required></label><label>品牌故事<textarea name="story" placeholder="为什么开始、服务谁、坚持什么"></textarea></label><label>表达风格<textarea name="voice" placeholder="真诚、朴实、有知识感"></textarea></label><button class="primary" id="brand-save-button">保存品牌</button><button class="ghost wide" id="brand-edit-cancel" type="button" hidden>取消编辑</button></form>
-            <form class="panel" id="product-form"><input name="id" type="hidden"><h2 id="product-form-title">新建农产品</h2><label>所属品牌<select name="brand_id" class="brand-select" required></select></label><label>产品名称<input name="name" placeholder="例如：当季有机番茄" required></label><div class="form-grid"><label>产地<input name="origin"></label><label>规格<input name="specification"></label><label>展示价格<input name="price_display"></label><label>保质期<input name="shelf_life"></label></div><label>储存方式<textarea name="storage_method"></textarea></label><label>核心卖点（每行一条）<textarea name="selling_points"></textarea></label><label>禁止表述（每行一条）<textarea name="prohibited_claims"></textarea></label><button class="primary" id="product-save-button">保存产品</button><button class="ghost wide" id="product-edit-cancel" type="button" hidden>取消编辑</button></form>
+            <form class="panel" id="brand-form" data-write-scope="assets"><input name="id" type="hidden"><h2 id="brand-form-title">新建品牌</h2><label>品牌名称<input name="name" placeholder="例如：田埂播播菜" required></label><label>品牌故事<textarea name="story" placeholder="为什么开始、服务谁、坚持什么"></textarea></label><label>表达风格<textarea name="voice" placeholder="真诚、朴实、有知识感"></textarea></label><button class="primary" id="brand-save-button">保存品牌</button><button class="ghost wide" id="brand-edit-cancel" type="button" hidden>取消编辑</button></form>
+            <form class="panel" id="product-form" data-write-scope="assets"><input name="id" type="hidden"><h2 id="product-form-title">新建农产品</h2><label>所属品牌<select name="brand_id" class="brand-select" required></select></label><label>产品名称<input name="name" placeholder="例如：当季有机番茄" required></label><div class="form-grid"><label>产地<input name="origin"></label><label>规格<input name="specification"></label><label>展示价格<input name="price_display"></label><label>保质期<input name="shelf_life"></label></div><label>储存方式<textarea name="storage_method"></textarea></label><label>核心卖点（每行一条）<textarea name="selling_points"></textarea></label><label>禁止表述（每行一条）<textarea name="prohibited_claims"></textarea></label><button class="primary" id="product-save-button">保存产品</button><button class="ghost wide" id="product-edit-cancel" type="button" hidden>取消编辑</button></form>
           </div>
 <div class="section-head"><div><p class="eyebrow">ASSET LIBRARY</p><h2>已有资产</h2></div></div><div id="asset-list" class="card-list empty" data-business-data>暂无品牌与产品</div>
         </section>
 
         <section class="page" data-page-panel="knowledge">
           <div class="two-col">
-            <form class="panel" id="knowledge-form">
+            <form class="panel" id="knowledge-form" data-write-scope="content">
               <h2>录入可信资料</h2>
               <div class="file-import">
                 <div>
@@ -166,8 +173,8 @@
 
         <section class="page" data-page-panel="studio">
           <div class="two-col studio-grid">
-            <form class="panel" id="project-form"><input name="id" type="hidden"><h2 id="project-form-title">创建内容任务</h2><label>任务名称<input name="title" placeholder="番茄采摘季首发视频" required></label><label>品牌<select name="brand_id" class="brand-select" required></select></label><label>产品<select name="product_id" class="product-select" required></select></label><label>内容类型<select name="content_type"><option value="short_video_30s">30 秒短视频</option><option value="short_video_60s">60 秒短视频</option><option value="livestream_opening">直播开场</option><option value="livestream_product_pitch">直播产品讲解</option><option value="livestream_interaction">直播互动</option><option value="comment_reply">评论回复</option><option value="social_post">社交媒体文案</option><option value="title_and_cover">标题与封面文案</option></select></label><div class="form-grid"><label>发布平台<input name="platform" value="抖音"></label><label>内容语气<input name="tone" value="真诚、有烟火气"></label></div><label>目标受众<textarea name="target_audience"></textarea></label><label>传播目标<textarea name="objective"></textarea></label><label>额外要求<textarea name="extra_requirements"></textarea></label><button class="primary" id="project-save-button">创建任务</button><button class="ghost wide" id="project-edit-cancel" type="button" hidden>取消编辑</button></form>
-            <div class="panel result-panel"><div class="panel-heading"><div><p class="eyebrow">AI STUDIO</p><h2>生成结果</h2></div><span class="pill">可信来源限定</span></div><label>选择任务<select id="project-select"></select></label><button class="primary wide" id="generate-button">生成内容脚本</button><div class="content-toolbar" id="content-toolbar" hidden><button type="button" data-result-mode="preview" class="active">阅读稿</button><button type="button" data-result-mode="json">结构化 JSON</button><button type="button" id="copy-content">复制阅读稿</button><button type="button" id="download-content">下载 TXT</button><button type="button" id="download-json">下载 JSON</button></div><div id="generation-preview" data-business-data class="generation-preview">请先建立品牌、产品和至少一条审核通过的知识资料。</div><pre id="generation-output" data-business-data hidden></pre><div id="edit-version" hidden><label>人工修改版本<textarea id="version-editor" rows="12"></textarea></label><label>修改说明<input id="change-summary" value="人工优化脚本表达"></label><button class="primary wide" id="save-version-button" type="button">保存为新版本</button></div><div class="generation-history"><div class="panel-heading"><div><p class="eyebrow">PROVENANCE HISTORY</p><h2>生成记录</h2></div><span class="quiet-meta">持久化记录</span></div><div id="generation-history-list" data-business-data class="stack empty">选择任务后查看生成历史</div></div></div>
+            <form class="panel" id="project-form" data-write-scope="content"><input name="id" type="hidden"><h2 id="project-form-title">创建内容任务</h2><label>任务名称<input name="title" placeholder="番茄采摘季首发视频" required></label><label>品牌<select name="brand_id" class="brand-select" required></select></label><label>产品<select name="product_id" class="product-select" required></select></label><label>内容类型<select name="content_type"><option value="short_video_30s">30 秒短视频</option><option value="short_video_60s">60 秒短视频</option><option value="livestream_opening">直播开场</option><option value="livestream_product_pitch">直播产品讲解</option><option value="livestream_interaction">直播互动</option><option value="comment_reply">评论回复</option><option value="social_post">社交媒体文案</option><option value="title_and_cover">标题与封面文案</option></select></label><div class="form-grid"><label>发布平台<input name="platform" value="抖音"></label><label>内容语气<input name="tone" value="真诚、有烟火气"></label></div><label>目标受众<textarea name="target_audience"></textarea></label><label>传播目标<textarea name="objective"></textarea></label><label>额外要求<textarea name="extra_requirements"></textarea></label><button class="primary" id="project-save-button">创建任务</button><button class="ghost wide" id="project-edit-cancel" type="button" hidden>取消编辑</button></form>
+            <div class="panel result-panel"><div class="panel-heading"><div><p class="eyebrow">AI STUDIO</p><h2>生成结果</h2></div><span class="pill">可信来源限定</span></div><label>选择任务<select id="project-select"></select></label><button class="primary wide" id="generate-button" data-write-scope="content">生成内容脚本</button><div class="content-toolbar" id="content-toolbar" hidden><button type="button" data-result-mode="preview" class="active">阅读稿</button><button type="button" data-result-mode="json">结构化 JSON</button><button type="button" id="copy-content">复制阅读稿</button><button type="button" id="download-content">下载 TXT</button><button type="button" id="download-json">下载 JSON</button></div><div id="generation-preview" data-business-data class="generation-preview">请先建立品牌、产品和至少一条审核通过的知识资料。</div><pre id="generation-output" data-business-data hidden></pre><div id="edit-version" data-write-scope="content" hidden><label>人工修改版本<textarea id="version-editor" rows="12"></textarea></label><label>修改说明<input id="change-summary" value="人工优化脚本表达"></label><button class="primary wide" id="save-version-button" type="button">保存为新版本</button></div><div class="generation-history"><div class="panel-heading"><div><p class="eyebrow">PROVENANCE HISTORY</p><h2>生成记录</h2></div><span class="quiet-meta">持久化记录</span></div><div id="generation-history-list" data-business-data class="stack empty">选择任务后查看生成历史</div></div></div>
           </div>
           <div class="section-head"><div><p class="eyebrow">CONTENT BRIEFS</p><h2>已有内容任务</h2></div><span class="quiet-meta">修改只影响后续生成</span></div>
 <div id="project-list" class="card-list empty" data-business-data>暂无内容任务</div>
@@ -179,7 +186,7 @@
 
         <section class="page" data-page-panel="operations">
           <div class="two-col">
-            <form id="publication-form" class="panel">
+            <form id="publication-form" class="panel" data-write-scope="content">
               <div class="panel-heading"><div><p class="eyebrow">PUBLISH</p><h2>登记发布内容</h2></div><span class="pill">仅限已审核版本</span></div>
               <label>内容项目<select name="project_id" id="publication-project-select" required></select></label>
               <label>已审核版本<select name="content_version_id" id="publication-version-select" required><option value="">请先选择项目</option></select></label>
