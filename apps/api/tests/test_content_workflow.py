@@ -252,6 +252,156 @@ def test_invalid_provider_output_is_failed_and_never_becomes_content(client, aut
     assert "invented-source" not in str(run["output"])
 
 
+def test_missing_citation_is_failed_when_reviewed_sources_were_selected(client, auth, monkeypatch):
+    brand, product = create_brand_and_product(client, auth)
+    source = client.post(
+        "/v1/knowledge",
+        headers=auth,
+        json={
+            "title": "Required evidence",
+            "kind": "product_fact",
+            "content": "The product is harvested by hand.",
+            "citation_label": "Trusted fact card",
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+        },
+    ).json()
+    client.post(f"/v1/knowledge/{source['id']}/submit", headers=auth)
+    client.post(
+        f"/v1/knowledge/{source['id']}/review",
+        headers=auth,
+        json={"status": "approved"},
+    )
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "title": "Missing citation",
+            "content_type": "social_post",
+        },
+    ).json()
+
+    class MissingCitationProvider:
+        name = "external-test"
+        model = "missing-citation-model"
+
+        def generate_script(self, project, brand, product, sources):
+            assert [item.id for item in sources] == [source["id"]]
+            return GenerationResult(
+                content={
+                    "format": "social_post",
+                    "headline": "Headline",
+                    "body": "Body",
+                    "cta": "CTA",
+                    "hashtags": [],
+                    "citations": [],
+                    "risk_notes": [],
+                },
+                latency_ms=4,
+            )
+
+    monkeypatch.setattr(
+        "app.services.get_ai_provider",
+        lambda: MissingCitationProvider(),
+    )
+    response = client.post(
+        f"/v1/content-projects/{project['id']}/generate",
+        headers=auth,
+    )
+
+    assert response.status_code == 502
+    assert (
+        client.get(
+            f"/v1/content-projects/{project['id']}/versions",
+            headers=auth,
+        ).json()
+        == []
+    )
+    run = client.get(
+        f"/v1/content-projects/{project['id']}/generation-runs",
+        headers=auth,
+    ).json()[0]
+    assert run["status"] == "failed"
+    assert run["output"]["error"]["code"] == "provider_missing_citation"
+    assert "Trusted fact card" not in str(run["output"])
+
+
+def test_successful_generation_replaces_provider_labels_and_deduplicates(client, auth, monkeypatch):
+    brand, product = create_brand_and_product(client, auth)
+    source = client.post(
+        "/v1/knowledge",
+        headers=auth,
+        json={
+            "title": "Server title",
+            "kind": "product_fact",
+            "content": "The product is harvested by hand.",
+            "citation_label": "Server-owned citation label",
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+        },
+    ).json()
+    client.post(f"/v1/knowledge/{source['id']}/submit", headers=auth)
+    client.post(
+        f"/v1/knowledge/{source['id']}/review",
+        headers=auth,
+        json={"status": "approved"},
+    )
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "title": "Normalize citations",
+            "content_type": "social_post",
+        },
+    ).json()
+
+    class MislabelingProvider:
+        name = "external-test"
+        model = "mislabeling-model"
+
+        def generate_script(self, project, brand, product, sources):
+            return GenerationResult(
+                content={
+                    "format": "social_post",
+                    "headline": "Headline",
+                    "body": "Body",
+                    "cta": "CTA",
+                    "hashtags": [],
+                    "citations": [
+                        {"source_id": source["id"], "label": "Fabricated label"},
+                        {"source_id": source["id"], "label": "Second fabricated label"},
+                    ],
+                    "risk_notes": [],
+                },
+                latency_ms=4,
+            )
+
+    monkeypatch.setattr("app.services.get_ai_provider", lambda: MislabelingProvider())
+    response = client.post(
+        f"/v1/content-projects/{project['id']}/generate",
+        headers=auth,
+    )
+
+    assert response.status_code == 201, response.text
+    expected = [
+        {
+            "source_id": source["id"],
+            "label": "Server-owned citation label",
+        }
+    ]
+    assert response.json()["version"]["content"]["citations"] == expected
+    run = client.get(
+        f"/v1/content-projects/{project['id']}/generation-runs",
+        headers=auth,
+    ).json()[0]
+    assert run["output"]["citations"] == expected
+    assert "Fabricated label" not in str(run["output"])
+
+
 def test_editing_a_brief_only_changes_future_generations(client, auth):
     brand, product = create_brand_and_product(client, auth)
     source = client.post(

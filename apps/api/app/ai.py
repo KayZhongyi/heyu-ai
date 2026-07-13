@@ -344,7 +344,7 @@ _EXPECTED_FORMATS = {
 def validate_generation_output(
     content: object,
     content_type: ContentType,
-    allowed_source_ids: set[str],
+    trusted_source_labels: dict[str, str],
 ) -> dict:
     """Validate provider output before it can become a durable content version."""
 
@@ -378,12 +378,31 @@ def validate_generation_output(
             code="provider_invalid_output",
         )
 
-    cited_source_ids = {citation["source_id"] for citation in normalized["citations"]}
-    if not cited_source_ids.issubset(allowed_source_ids):
+    if trusted_source_labels and not normalized["citations"]:
         raise AIProviderError(
-            "The configured AI provider cited an unavailable knowledge source",
-            code="provider_unknown_citation",
+            "The configured AI provider omitted required source citations",
+            code="provider_missing_citation",
         )
+
+    normalized_citations: list[dict[str, str]] = []
+    seen_source_ids: set[str] = set()
+    for citation in normalized["citations"]:
+        source_id = citation["source_id"]
+        if source_id not in trusted_source_labels:
+            raise AIProviderError(
+                "The configured AI provider cited an unavailable knowledge source",
+                code="provider_unknown_citation",
+            )
+        if source_id in seen_source_ids:
+            continue
+        seen_source_ids.add(source_id)
+        normalized_citations.append(
+            {
+                "source_id": source_id,
+                "label": trusted_source_labels[source_id],
+            }
+        )
+    normalized["citations"] = normalized_citations
     return normalized
 
 

@@ -47,6 +47,8 @@ async function main() {
     const context = await browser.newContext({ viewport: { width: 1440, height: 960 } });
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     const page = await context.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
 
     for (const [locale, expected, filename] of [
       ["zh-CN", "进入工作台", "landing-zh-CN.png"],
@@ -187,6 +189,78 @@ async function main() {
     await page.locator("#toast.error").waitFor({ state: "visible" });
     assert.match(await page.locator("#toast").textContent(), /pending: product/i);
 
+    assert.equal(
+      (
+        await context.request.post(`${baseUrl}/v1/products/${product.id}/submit`, {
+          headers: { Authorization: `Bearer ${ownerToken}` },
+        })
+      ).status(),
+      200,
+    );
+    assert.equal(
+      (
+        await context.request.post(`${baseUrl}/v1/products/${product.id}/review`, {
+          headers: { Authorization: `Bearer ${ownerToken}` },
+          data: { status: "approved", note: "Approved for failure-path E2E" },
+        })
+      ).status(),
+      200,
+    );
+    const failureProjectResponse = await context.request.post(
+      `${baseUrl}/v1/content-projects`,
+      {
+        headers: { Authorization: `Bearer ${ownerToken}` },
+        data: {
+          brand_id: brand.id,
+          product_id: product.id,
+          title: `[E2E invalid citation] ${unique}`,
+          content_type: "social_post",
+        },
+      },
+    );
+    assert.equal(failureProjectResponse.status(), 201);
+    const failureProject = await failureProjectResponse.json();
+
+    await page.reload({ waitUntil: "networkidle" });
+    await page.locator("#workspace").waitFor({ state: "visible" });
+    await page.locator('[data-page="studio"]').click();
+    await page.locator("#project-select").selectOption(failureProject.id);
+    await page.locator("#generate-button").click();
+    await page.locator("#toast.error").waitFor({ state: "visible" });
+    assert.match(await page.locator("#toast").textContent(), /omitted required source citations/i);
+    const failedHistory = page.locator("#generation-history-list article", {
+      hasText: "Incomplete generation",
+    });
+    await failedHistory.waitFor();
+    await failedHistory.getByText("Failed", { exact: true }).waitFor();
+    assert.match(await failedHistory.textContent(), /browser-e2e/);
+
+    const failureVersionsResponse = await context.request.get(
+      `${baseUrl}/v1/content-projects/${failureProject.id}/versions`,
+      { headers: { Authorization: `Bearer ${ownerToken}` } },
+    );
+    assert.equal(failureVersionsResponse.status(), 200);
+    assert.deepEqual(await failureVersionsResponse.json(), []);
+
+    await page.reload({ waitUntil: "networkidle" });
+    await page.locator("#workspace").waitFor({ state: "visible" });
+    await page.locator('[data-page="studio"]').click();
+    await page.locator("#project-select").selectOption(failureProject.id);
+    for (const locale of ["zh-CN", "zh-HK", "en"]) {
+      await selectLocale(page, locale);
+      const expected = await page.evaluate(() => ({
+        heading: HeyuI18n.t("generation.failedRecord"),
+        status: HeyuI18n.t("generationStatus.failed"),
+      }));
+      const localizedFailure = page.locator("#generation-history-list article", {
+        hasText: "browser-e2e",
+      });
+      await localizedFailure.waitFor();
+      await localizedFailure.getByText(expected.heading, { exact: true }).waitFor();
+      await localizedFailure.getByText(expected.status, { exact: true }).waitFor();
+    }
+    await screenshot(page, "generation-failure-persisted.png");
+
     for (const [locale, filename] of [
       ["zh-CN", "workspace-zh-CN.png"],
       ["zh-HK", "workspace-zh-HK.png"],
@@ -244,6 +318,7 @@ async function main() {
     await expectNoHorizontalOverflow(invitePage, "workspace 390px");
     await screenshot(invitePage, "workspace-390px.png");
     await inviteContext.close();
+    assert.deepEqual(pageErrors, [], `browser page errors: ${pageErrors.join("\n")}`);
     await context.tracing.stop({ path: path.join(outputDir, "trace.zip") });
     await context.close();
 

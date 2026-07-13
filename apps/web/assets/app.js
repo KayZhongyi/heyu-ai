@@ -193,7 +193,34 @@ $("#project-form").addEventListener("submit",event=>{event.preventDefault();requ
 $("#project-edit-cancel").addEventListener("click",resetProjectForm);
 $("#member-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{const data=formData(event.target);data.expires_in_hours=Number(data.expires_in_hours);const invite=await api("/v1/invitations",{method:"POST",body:JSON.stringify(data)});const link=`${location.origin}/workspace/#invite=${encodeURIComponent(invite.token)}`;$("#invite-link").value=link;$("#invite-result").hidden=false;event.target.reset();renderMembers()},t("toast.member.invited"))});
 $("#copy-invite-link").addEventListener("click",()=>request(async()=>{await navigator.clipboard.writeText($("#invite-link").value)},t("invite.copied")));
-$("#generate-button").addEventListener("click",()=>request(async()=>{const id=$("#project-select").value;if(!id)throw new Error(t("generation.selectProjectFirst"));const result=await api(`/v1/content-projects/${id}/generate`,{method:"POST"});state.currentVersion=result.version;const content=JSON.stringify(result.version.content,null,2);renderGenerationResult(result.version.content);$("#version-editor").value=content;$("#edit-version").hidden=false;let provenance=$("#generation-provenance");if(!provenance){provenance=document.createElement("div");provenance.id="generation-provenance";provenance.className="provenance";$("#content-toolbar").before(provenance)}provenance.innerHTML=`<span>${escapeHtml(t("generation.provider"))}: ${escapeHtml(result.provider)}</span><span>${escapeHtml(t("generation.model"))}: ${escapeHtml(result.model)}</span><span>${escapeHtml(t("generation.prompt"))}: ${escapeHtml(result.prompt_name)} v${escapeHtml(result.prompt_version)}</span><span>${escapeHtml(t("generation.sources"))}: ${HeyuI18n.formatNumber(result.source_ids.length)}</span><span>${escapeHtml(t("generation.latency",{milliseconds:HeyuI18n.formatNumber(result.latency_ms)}))}</span>`;state.versions=await api(`/v1/content-projects/${id}/versions`);state.audit=await api("/v1/audit-events");await loadGenerationRuns(id);renderReviews(id)},t("toast.generation.completed")));
+$("#generate-button").addEventListener("click",()=>request(async()=>{
+  const id=$("#project-select").value;
+  if(!id)throw new Error(t("generation.selectProjectFirst"));
+  let result;
+  try{
+    result=await api(`/v1/content-projects/${id}/generate`,{method:"POST"});
+  }catch(error){
+    await loadGenerationRuns(id);
+    throw error;
+  }
+  state.currentVersion=result.version;
+  const content=JSON.stringify(result.version.content,null,2);
+  renderGenerationResult(result.version.content);
+  $("#version-editor").value=content;
+  $("#edit-version").hidden=false;
+  let provenance=$("#generation-provenance");
+  if(!provenance){
+    provenance=document.createElement("div");
+    provenance.id="generation-provenance";
+    provenance.className="provenance";
+    $("#content-toolbar").before(provenance);
+  }
+  provenance.innerHTML=`<span>${escapeHtml(t("generation.provider"))}: ${escapeHtml(result.provider)}</span><span>${escapeHtml(t("generation.model"))}: ${escapeHtml(result.model)}</span><span>${escapeHtml(t("generation.prompt"))}: ${escapeHtml(result.prompt_name)} v${escapeHtml(result.prompt_version)}</span><span>${escapeHtml(t("generation.sources"))}: ${HeyuI18n.formatNumber(result.source_ids.length)}</span><span>${escapeHtml(t("generation.latency",{milliseconds:HeyuI18n.formatNumber(result.latency_ms)}))}</span>`;
+  state.versions=await api(`/v1/content-projects/${id}/versions`);
+  state.audit=await api("/v1/audit-events");
+  await loadGenerationRuns(id);
+  renderReviews(id);
+},t("toast.generation.completed")));
 $("#save-version-button").addEventListener("click",()=>request(async()=>{if(!state.currentVersion)throw new Error(t("content.generateFirst"));let content;try{content=JSON.parse($("#version-editor").value)}catch{throw new Error(t("content.invalidJson"))}const projectId=state.currentVersion.project_id;const version=await api(`/v1/content-projects/${projectId}/versions`,{method:"POST",body:JSON.stringify({parent_version_id:state.currentVersion.id,content,change_summary:$("#change-summary").value})});state.currentVersion=version;renderGenerationResult(version.content);state.versions=await api(`/v1/content-projects/${projectId}/versions`);renderReviews(projectId)},t("toast.contentVersion.saved")));
 $$("[data-result-mode]").forEach(button=>button.addEventListener("click",()=>{$$("[data-result-mode]").forEach(item=>item.classList.toggle("active",item===button));const preview=button.dataset.resultMode==="preview";$("#generation-preview").hidden=!preview;$("#generation-output").hidden=preview}));
 $("#copy-content").addEventListener("click",()=>request(async()=>{if(!resultContent())throw new Error(t("content.generateFirst"));await navigator.clipboard.writeText(resultText())},t("content.copied")));
@@ -284,10 +311,13 @@ async function loadGenerationRuns(projectId){
 $("#logout").addEventListener("click",()=>{localStorage.removeItem("heyu_token");state.token="";location.href="/workspace/"});
 $$(".jump").forEach(x=>x.addEventListener("click",()=>navigate(x.dataset.target)));
 window.addEventListener("popstate",()=>navigate(pageFromLocation(),false));
-document.addEventListener("heyu:localechange",()=>{
+document.addEventListener("heyu:localechange",async()=>{
+  const projectId=$("#project-select")?.value;
   navigate(pageFromLocation(),false);
   if(state.actor)render();
+  if(projectId)$("#project-select").value=projectId;
   if(state.currentVersion)renderGenerationResult(state.currentVersion.content);
+  if(projectId)await loadGenerationRuns(projectId);
 });
 
 showWorkspace();

@@ -78,7 +78,7 @@ jobs:
         run: |
           set -euo pipefail
           export DATABASE_URL=sqlite:////tmp/heyu-browser-e2e.db
-          nohup python -m uvicorn app.main:app \
+          nohup python -m uvicorn e2e_app:app \
             --app-dir apps/api \
             --host 127.0.0.1 \
             --port 8765 \

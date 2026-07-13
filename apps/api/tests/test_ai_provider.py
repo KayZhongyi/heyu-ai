@@ -126,7 +126,7 @@ def test_generation_output_validation_rejects_missing_fields_and_wrong_format():
         validate_generation_output(
             missing_script,
             ContentType.short_video_30s,
-            {"source-1"},
+            {"source-1": "Trusted source"},
         )
     assert missing.value.code == "provider_invalid_output"
 
@@ -136,7 +136,7 @@ def test_generation_output_validation_rejects_missing_fields_and_wrong_format():
         validate_generation_output(
             wrong_format,
             ContentType.short_video_30s,
-            {"source-1"},
+            {"source-1": "Trusted source"},
         )
     assert wrong.value.code == "provider_invalid_output"
 
@@ -146,7 +146,7 @@ def test_generation_output_validation_rejects_unknown_citation_and_wrong_duratio
         validate_generation_output(
             valid_short_video_output("invented-source"),
             ContentType.short_video_30s,
-            {"source-1"},
+            {"source-1": "Trusted source"},
         )
     assert citation.value.code == "provider_unknown_citation"
 
@@ -156,9 +156,52 @@ def test_generation_output_validation_rejects_unknown_citation_and_wrong_duratio
         validate_generation_output(
             wrong_duration,
             ContentType.short_video_30s,
-            {"source-1"},
+            {"source-1": "Trusted source"},
         )
     assert duration.value.code == "provider_invalid_output"
+
+
+def test_generation_output_requires_citation_when_sources_were_selected():
+    output = valid_short_video_output()
+    output["citations"] = []
+
+    with pytest.raises(AIProviderError) as exc:
+        validate_generation_output(
+            output,
+            ContentType.short_video_30s,
+            {"source-1": "Trusted source"},
+        )
+
+    assert exc.value.code == "provider_missing_citation"
+
+
+def test_generation_output_rebuilds_labels_and_deduplicates_citations():
+    output = valid_short_video_output()
+    output["citations"] = [
+        {"source_id": "source-1", "label": "Fabricated label"},
+        {"source_id": "source-1", "label": "A second fabricated label"},
+    ]
+
+    normalized = validate_generation_output(
+        output,
+        ContentType.short_video_30s,
+        {"source-1": "Server-owned label"},
+    )
+
+    assert normalized["citations"] == [{"source_id": "source-1", "label": "Server-owned label"}]
+
+
+def test_generation_output_allows_empty_citations_when_no_sources_exist():
+    output = valid_short_video_output()
+    output["citations"] = []
+
+    normalized = validate_generation_output(
+        output,
+        ContentType.short_video_30s,
+        {},
+    )
+
+    assert normalized["citations"] == []
 
 
 def test_openai_compatible_provider_does_not_fill_missing_provenance_arrays():

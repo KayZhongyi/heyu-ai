@@ -937,7 +937,7 @@ def generate_content(
         validated_content = validate_generation_output(
             result.content,
             project.content_type,
-            set(source_ids),
+            {source.id: source.citation_label or source.title for source in sources},
         )
     except AIProviderError as exc:
         latency_ms = max(1, int((time.perf_counter() - started) * 1000))
