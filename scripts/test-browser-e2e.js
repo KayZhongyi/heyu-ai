@@ -49,6 +49,15 @@ async function main() {
     const page = await context.newPage();
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
+    await page.addInitScript(() => {
+      window.__heyuUnhandledRejections = [];
+      window.addEventListener("unhandledrejection", (event) => {
+        const reason = event.reason;
+        window.__heyuUnhandledRejections.push(
+          reason instanceof Error ? reason.message : String(reason),
+        );
+      });
+    });
 
     for (const [locale, expected, filename] of [
       ["zh-CN", "进入工作台", "landing-zh-CN.png"],
@@ -225,7 +234,16 @@ async function main() {
     await page.locator("#workspace").waitFor({ state: "visible" });
     await page.locator('[data-page="studio"]').click();
     await page.locator("#project-select").selectOption(failureProject.id);
-    await page.locator("#generate-button").click();
+    const [failedGenerationResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url() ===
+            `${baseUrl}/v1/content-projects/${failureProject.id}/generate` &&
+          response.request().method() === "POST",
+      ),
+      page.locator("#generate-button").click(),
+    ]);
+    assert.equal(failedGenerationResponse.status(), 502);
     await page.locator("#toast.error").waitFor({ state: "visible" });
     assert.match(await page.locator("#toast").textContent(), /omitted required source citations/i);
     const failedHistory = page.locator("#generation-history-list article", {
@@ -234,6 +252,21 @@ async function main() {
     await failedHistory.waitFor();
     await failedHistory.getByText("Failed", { exact: true }).waitFor();
     assert.match(await failedHistory.textContent(), /browser-e2e/);
+
+    const failureRunsResponse = await context.request.get(
+      `${baseUrl}/v1/content-projects/${failureProject.id}/generation-runs`,
+      { headers: { Authorization: `Bearer ${ownerToken}` } },
+    );
+    assert.equal(failureRunsResponse.status(), 200);
+    const failureRuns = await failureRunsResponse.json();
+    assert.equal(failureRuns.length, 1, "failure project should have exactly one generation run");
+    assert.equal(failureRuns[0].status, "failed");
+    assert.equal(failureRuns[0].output?.error?.code, "provider_missing_citation");
+    assert.equal(
+      failureRuns.some((run) => run.status === "completed"),
+      false,
+      "failure project unexpectedly persisted a successful run",
+    );
 
     const failureVersionsResponse = await context.request.get(
       `${baseUrl}/v1/content-projects/${failureProject.id}/versions`,
@@ -248,6 +281,11 @@ async function main() {
     await page.locator("#project-select").selectOption(failureProject.id);
     for (const locale of ["zh-CN", "zh-HK", "en"]) {
       await selectLocale(page, locale);
+      assert.equal(
+        await page.locator("#project-select").inputValue(),
+        failureProject.id,
+        `locale switch to ${locale} changed the selected failure project`,
+      );
       const expected = await page.evaluate(() => ({
         heading: HeyuI18n.t("generation.failedRecord"),
         status: HeyuI18n.t("generationStatus.failed"),
@@ -259,6 +297,11 @@ async function main() {
       await localizedFailure.getByText(expected.heading, { exact: true }).waitFor();
       await localizedFailure.getByText(expected.status, { exact: true }).waitFor();
     }
+    assert.deepEqual(
+      await page.evaluate(() => window.__heyuUnhandledRejections),
+      [],
+      "workspace emitted an unhandled promise rejection",
+    );
     await screenshot(page, "generation-failure-persisted.png");
 
     for (const [locale, filename] of [
