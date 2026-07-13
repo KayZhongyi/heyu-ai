@@ -1,0 +1,57 @@
+name: 功能任务
+description: 提交或认领一个范围明确、可以验收的产品或工程任务
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请尽量让一个 Issue 对应一个清晰目标。涉及核心业务口径、真实资料、付费服务或公开发布时，请先等待负责人确认。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题与目标
+      description: 当前遇到了什么问题，希望最终达到什么结果？
+      placeholder: 描述用户、场景和预期价值。
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 本次范围
+      description: 请列出本次要做和明确不做的内容。
+      placeholder: |
+        要做：
+        -
+        不做：
+        -
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收条件
+      description: 使用可以观察或测试的条件描述完成标准。
+      placeholder: |
+        - [ ] 
+        - [ ]
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 主要方向
+      options:
+        - 产品 / 内容
+        - Web
+        - API / AI
+        - 测试 / 工程
+        - 文档
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: 补充信息
+      description: 可附原型、截图、接口、相关文档或风险。

@@ -10,6 +10,8 @@
 ![License](https://img.shields.io/badge/License-Apache--2.0-5B7083)
 ![Status](https://img.shields.io/badge/Status-Engineering%20MVP-EA6A5A)
 
+[快速启动](#3-分钟本地启动windows) · [当前能力](#当前能力) · [团队协作](#团队协作) · [产品边界](#必须守住的产品边界) · [贡献指南](CONTRIBUTING.md)
+
 禾语 AI 是一个可本地运行、可持续扩展的农产品内容与运营平台。它把品牌档案、农产品事实和审核通过的知识资料组织成可信上下文，生成短视频脚本、直播话术及其他营销内容，并保留完整的来源、版本、审核与运营记录。
 
 仓库目前处于**私有协作与发布前审查阶段**。代码按未来开源标准建设，但在负责人明确批准前，不得公开仓库、业务资料或部署地址。
@@ -97,6 +99,21 @@ scripts/
 ## 团队协作
 
 加入项目后请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [docs/product.md](docs/product.md)。
+
+### 新成员第一天
+
+1. 接受 GitHub 私有仓库邀请并 Clone 项目；
+2. 按[本地启动步骤](#3-分钟本地启动windows)运行平台，确认首页、工作台和 API 文档可以访问；
+3. 阅读 [docs/product.md](docs/product.md) 了解产品范围，阅读 [docs/architecture.md](docs/architecture.md) 了解系统边界；
+4. 在 Issue 或团队沟通渠道中确认任务负责人，避免多人重复修改同一模块；
+5. 从最新 `main` 创建个人分支，通过 Pull Request 提交，不直接向 `main` 推送。
+
+可以从以下方向参与：
+
+- **产品与内容**：梳理真实业务流程、验收标准和三语营销文案；
+- **前端体验**：工作台交互、响应式布局、无障碍与浏览器测试；
+- **后端与 AI**：权限、知识库、生成链路、审核流和模型 Provider；
+- **质量与工程**：测试、CI、Docker / PostgreSQL、文档和发布审计。
 
 推荐流程：
 

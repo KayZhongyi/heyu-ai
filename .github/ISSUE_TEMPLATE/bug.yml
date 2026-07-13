@@ -1,0 +1,48 @@
+name: 缺陷报告
+description: 报告可复现的问题、异常行为或回归
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题摘要
+      description: 简洁说明实际行为与预期行为的差异。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境
+      placeholder: Windows 版本、浏览器、分支或 commit、启动方式等。
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 日志或截图
+      description: 请先删除令牌、密钥、邮箱、真实客户资料等敏感信息。
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 隐私检查
+      options:
+        - label: 我已确认附件中不包含密钥、数据库、真实业务原件或其他隐私数据。
+          required: true
