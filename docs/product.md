@@ -66,8 +66,23 @@ its SHA-256 hash, normalized email, role, expiry, and state are stored.
 Existing users authenticate with their existing password. New users choose a
 password during acceptance.
 
-The local MVP exposes the link for manual sharing. Email delivery, invitation
-revocation, and public-network rate limiting are not current capabilities.
+Owner and Admin can list organization-scoped invitation records without
+revealing tokens. A pending, unexpired invitation can be revoked explicitly;
+the original link becomes unusable immediately and a replacement invitation
+can then be created for the same normalized email. Admin cannot create or
+revoke an Owner invitation.
+
+The invitation state transitions are:
+
+```text
+Pending → Accepted
+Pending → Revoked
+Pending → Expired
+```
+
+The local MVP exposes the link for manual sharing. Email delivery and
+public-network authentication/invitation rate limiting are not current
+capabilities.
 
 ## Product principles
 

@@ -321,6 +321,7 @@ def invitation_view(
         role=invitation.role,
         expires_at=invitation.expires_at,
         accepted_at=invitation.accepted_at,
+        revoked_at=invitation.revoked_at,
         created_at=invitation.created_at,
     )
 
@@ -348,9 +349,11 @@ def invitation_by_token(
 @app.post("/v1/invitations", response_model=InvitationCreated, status_code=201)
 def create_invitation(
     data: InvitationCreate,
+    response: Response,
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
 ) -> InvitationCreated:
+    response.headers["Cache-Control"] = "no-store"
     email = str(data.email).strip().lower()
     if data.role == Role.owner and actor.role != Role.owner:
         raise HTTPException(status_code=403, detail="Only an owner can invite another owner")
@@ -380,6 +383,7 @@ def create_invitation(
             OrganizationInvitation.email == email,
             OrganizationInvitation.accepted_at.is_(None),
             OrganizationInvitation.expires_at > now,
+            OrganizationInvitation.active_key.is_not(None),
         )
     )
     if active is not None:
@@ -419,6 +423,65 @@ def create_invitation(
     )
 
 
+@app.get("/v1/invitations", response_model=list[InvitationRead])
+def get_invitations(
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
+) -> list[InvitationRead]:
+    organization = db.get(Organization, actor.organization_id)
+    invitations = db.scalars(
+        select(OrganizationInvitation)
+        .where(OrganizationInvitation.organization_id == actor.organization_id)
+        .order_by(OrganizationInvitation.created_at.desc())
+        .limit(100)
+    ).all()
+    return [invitation_view(invitation, organization) for invitation in invitations]
+
+
+@app.post("/v1/invitations/{invitation_id}/revoke", response_model=InvitationRead)
+def revoke_invitation(
+    invitation_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
+) -> InvitationRead:
+    invitation = db.scalar(
+        select(OrganizationInvitation)
+        .where(
+            OrganizationInvitation.id == invitation_id,
+            OrganizationInvitation.organization_id == actor.organization_id,
+        )
+        .with_for_update()
+    )
+    if invitation is None:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    if invitation.role == Role.owner and actor.role != Role.owner:
+        raise HTTPException(status_code=403, detail="Only an owner can revoke an owner invitation")
+    if invitation.accepted_at is not None:
+        raise HTTPException(status_code=409, detail="Accepted invitation cannot be revoked")
+    if invitation.revoked_at is not None:
+        raise HTTPException(status_code=409, detail="Invitation has already been revoked")
+    now = datetime.now(UTC)
+    expires_at = invitation.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    if expires_at <= now:
+        raise HTTPException(status_code=409, detail="Expired invitation cannot be revoked")
+    invitation.revoked_at = now
+    invitation.revoked_by = actor.user_id
+    invitation.active_key = None
+    audit(
+        db,
+        actor,
+        "invitation.revoked",
+        "organization_invitation",
+        invitation.id,
+        {"role": invitation.role.value},
+    )
+    db.commit()
+    organization = db.get(Organization, actor.organization_id)
+    return invitation_view(invitation, organization)
+
+
 @app.post("/v1/invitations/inspect", response_model=InvitationRead)
 def inspect_invitation(
     data: InvitationInspect,
@@ -444,6 +507,8 @@ def accept_invitation(
         expires_at = expires_at.replace(tzinfo=UTC)
     if invitation.accepted_at is not None:
         raise HTTPException(status_code=409, detail="Invitation has already been accepted")
+    if invitation.revoked_at is not None:
+        raise HTTPException(status_code=410, detail="Invitation has been revoked")
     if expires_at <= now:
         raise HTTPException(status_code=410, detail="Invitation has expired")
     user = db.scalar(select(User).where(User.email == invitation.email))

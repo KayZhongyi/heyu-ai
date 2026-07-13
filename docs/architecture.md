@@ -104,21 +104,38 @@ sequenceDiagram
 
   Admin->>API: POST /v1/invitations
   API->>DB: Store token hash, email, role, expiry
-  API-->>Admin: Return plaintext token once
+  API-->>Admin: Return plaintext token once + no-store
+  Admin->>API: GET /v1/invitations
+  API-->>Admin: Organization-scoped history without tokens
   Admin-->>Invitee: Share /workspace/#invite=TOKEN
   Invitee->>Invitee: Read fragment and clear address bar
   Invitee->>API: POST /v1/invitations/inspect
   API-->>Invitee: Summary + Cache-Control no-store
   Invitee->>API: POST /v1/invitations/accept
-  API->>DB: Lock, create membership, mark invitation used
+  API->>DB: Lock invitation row, create membership, mark accepted
   API-->>Invitee: Session + Cache-Control no-store
+
+  alt Pending and unexpired invitation is no longer needed
+    Admin->>API: POST /v1/invitations/{id}/revoke
+    API->>DB: Lock row, set revoked state, clear active key
+    API->>DB: Append invitation.revoked audit event
+    API-->>Admin: Revoked invitation without token
+  end
 ```
 
 Fragments keep tokens out of ordinary request paths and server access logs, but
 do not prevent browser extensions, screen capture, or recipient disclosure.
 Tokens therefore remain expiring and single-use. A conditional uniqueness key
 prevents duplicate active invitations for one organization and normalized
-email.
+email. Clearing that key on acceptance, revocation, or expiry permits a
+replacement invitation while preserving the original record.
+
+The invitation state machine permits only `Pending → Accepted`,
+`Pending → Revoked`, or `Pending → Expired`. List, revoke, and audit responses
+never include the plaintext token or its hash. Creation, inspection, and
+acceptance responses use `Cache-Control: no-store`. Owner and Admin can list and
+revoke invitations within their organization, but Admin cannot create or revoke
+an Owner invitation.
 
 ## Verification architecture
 

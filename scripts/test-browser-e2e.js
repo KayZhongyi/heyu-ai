@@ -11,6 +11,7 @@ const unique = Date.now().toString(36);
 const organizationSlug = `e2e-${unique}`;
 const ownerEmail = `owner-${unique}@heyu.example`;
 const invitedEmail = `creator-${unique}@heyu.example`;
+const revokedEmail = `revoked-${unique}@heyu.example`;
 const password = "HeyuE2E2026!";
 const businessName = `青禾 Orchard ${unique}`;
 
@@ -364,6 +365,69 @@ async function main() {
       await expectNoHorizontalOverflow(page, `workspace ${locale}`);
       await screenshot(page, filename);
     }
+
+    const revocationResponse = await context.request.post(`${baseUrl}/v1/invitations`, {
+      headers: { Authorization: `Bearer ${ownerToken}` },
+      data: { email: revokedEmail, role: "viewer", expires_in_hours: 24 },
+    });
+    assert.equal(revocationResponse.status(), 201);
+    assert.equal(revocationResponse.headers()["cache-control"], "no-store");
+    const revocableInvitation = await revocationResponse.json();
+    await openWorkspacePage(page, "members");
+    await page.reload({ waitUntil: "networkidle" });
+    await openWorkspacePage(page, "members");
+    const revocableRow = page.locator("#invitation-list article", { hasText: revokedEmail });
+    await revocableRow.waitFor();
+    assert.ok(
+      !(await page.locator("#invitation-list").innerText()).includes(revocableInvitation.token),
+      "invitation list exposed a plaintext token",
+    );
+    for (const [locale, expectedStatus] of [
+      ["zh-CN", "待接受"],
+      ["zh-HK", "待接受"],
+      ["en", "Pending"],
+    ]) {
+      await selectLocale(page, locale);
+      await revocableRow.getByText(expectedStatus, { exact: true }).waitFor();
+    }
+    await selectLocale(page, "zh-CN");
+    page.once("dialog", (dialog) => dialog.accept());
+    await revocableRow.locator("[data-revoke-invitation]").click();
+    await revocableRow.getByText("已撤销", { exact: true }).waitFor();
+    assert.equal(
+      await revocableRow.locator("[data-revoke-invitation]").count(),
+      0,
+      "revoked invitation still showed a revoke control",
+    );
+    const revokedInspect = await context.request.post(`${baseUrl}/v1/invitations/inspect`, {
+      data: { token: revocableInvitation.token },
+    });
+    assert.equal(revokedInspect.status(), 200);
+    assert.ok((await revokedInspect.json()).revoked_at, "revoked invitation had no revoked_at");
+    const revokedAccept = await context.request.post(`${baseUrl}/v1/invitations/accept`, {
+      data: {
+        token: revocableInvitation.token,
+        display_name: "Revoked member",
+        password,
+      },
+    });
+    assert.equal(revokedAccept.status(), 410);
+
+    const revokedContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const revokedPage = await revokedContext.newPage();
+    await revokedPage.goto(
+      `${baseUrl}/workspace/#invite=${encodeURIComponent(revocableInvitation.token)}`,
+      { waitUntil: "networkidle" },
+    );
+    await revokedPage.locator("#invite-accept-form").waitFor({ state: "visible" });
+    assert.equal(
+      await revokedPage.locator('#invite-accept-form button[type="submit"]').isDisabled(),
+      true,
+      "revoked invitation remained actionable",
+    );
+    await expectNoHorizontalOverflow(revokedPage, "revoked invitation 390px");
+    await screenshot(revokedPage, "invitation-revoked-390px.png");
+    await revokedContext.close();
 
     const invitationResponse = await context.request.post(`${baseUrl}/v1/invitations`, {
       headers: { Authorization: `Bearer ${ownerToken}` },

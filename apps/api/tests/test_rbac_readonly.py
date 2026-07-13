@@ -9,6 +9,7 @@ from app.models import (
     GenerationRun,
     ImprovementBrief,
     KnowledgeSource,
+    OrganizationInvitation,
     PerformanceSnapshot,
     Publication,
     VideoDiagnosis,
@@ -168,6 +169,18 @@ def test_creator_downgrade_revokes_old_token_and_viewer_writes_have_no_side_effe
     )
     viewer_auth = {"Authorization": f"Bearer {viewer_login.json()['access_token']}"}
     assert client.get("/v1/me", headers=viewer_auth).json()["role"] == "viewer"
+    pending_invitation = client.post(
+        "/v1/invitations",
+        headers=auth,
+        json={
+            "email": "readonly-pending@example.com",
+            "role": "creator",
+            "expires_in_hours": 24,
+        },
+    ).json()
+    invitation_list = client.get("/v1/invitations", headers=viewer_auth)
+    assert invitation_list.status_code == 403
+    assert invitation_list.json()["detail"] == "Insufficient role"
 
     for path in (
         "/v1/brands",
@@ -193,6 +206,7 @@ def test_creator_downgrade_revokes_old_token_and_viewer_writes_have_no_side_effe
         PerformanceSnapshot,
         VideoDiagnosis,
         ImprovementBrief,
+        OrganizationInvitation,
         AuditEvent,
     )
     before = {model: _count(db, model) for model in tracked_models}
@@ -287,6 +301,10 @@ def test_creator_downgrade_revokes_old_token_and_viewer_writes_have_no_side_effe
                 "role": "creator",
                 "expires_in_hours": 24,
             },
+        ),
+        (
+            f"/v1/invitations/{pending_invitation['id']}/revoke",
+            None,
         ),
     ]
     for path, payload in forbidden_requests:

@@ -1,6 +1,6 @@
 const inviteFragment=new URLSearchParams(location.hash.replace(/^#/,"")).get("invite")||"";
 if(inviteFragment)history.replaceState(null,"","/workspace/");
-const state={token:localStorage.getItem("heyu_token")||"",actor:null,members:[],brands:[],products:[],knowledge:[],projects:[],versions:[],generationRuns:[],publications:[],audit:[],currentVersion:null,inviteToken:inviteFragment};
+const state={token:localStorage.getItem("heyu_token")||"",actor:null,members:[],invitations:[],brands:[],products:[],knowledge:[],projects:[],versions:[],generationRuns:[],publications:[],audit:[],currentVersion:null,inviteToken:inviteFragment};
 const t=(key,variables={})=>HeyuI18n.t(key,variables);
 const roleLabel=role=>t(`role.${role}`)===`role.${role}`?role:t(`role.${role}`);
 const enumLabel=(prefix,value)=>{const key=`${prefix}.${value}`;const label=t(key);return label===key?value:label};
@@ -68,9 +68,10 @@ async function showInvitation(){
   try{
     const invite=await api("/v1/invitations/inspect",{method:"POST",body:JSON.stringify({token:state.inviteToken})});
     const expired=new Date(invite.expires_at)<=new Date();
-    $("#invite-summary").textContent=invite.accepted_at?t("invite.invalid"):expired?t("invite.invalid"):t("invite.summary",{organization:invite.organization_name,email:invite.email,role:roleLabel(invite.role)});
-    $("#invite-summary").classList.toggle("error",Boolean(invite.accepted_at||expired));
-    form.querySelector("button").disabled=Boolean(invite.accepted_at||expired);
+    const invalid=Boolean(invite.accepted_at||invite.revoked_at||expired);
+    $("#invite-summary").textContent=invalid?t("invite.invalid"):t("invite.summary",{organization:invite.organization_name,email:invite.email,role:roleLabel(invite.role)});
+    $("#invite-summary").classList.toggle("error",invalid);
+    form.querySelector("button").disabled=invalid;
   }catch(error){$("#invite-summary").textContent=error.message;$("#invite-summary").classList.add("error");form.querySelector("button").disabled=true}
 }
 function navigate(page,push=true){
@@ -85,7 +86,7 @@ async function refresh(){
   state.actor=await api("/v1/me");
   const canManageMembers=["owner","admin"].includes(state.actor.role);
   [state.brands,state.products,state.knowledge,state.projects,state.publications,state.audit]=await Promise.all([api("/v1/brands"),api("/v1/products"),api("/v1/knowledge"),api("/v1/content-projects"),api("/v1/publications"),api("/v1/audit-events")]);
-  state.members=canManageMembers?await api("/v1/members"):[];
+  [state.members,state.invitations]=canManageMembers?await Promise.all([api("/v1/members"),api("/v1/invitations")]):[[],[]];
   $$(".member-nav").forEach(x=>x.hidden=!canManageMembers);
   if(!canManageMembers&&$(".nav.active")?.dataset.page==="members")navigate("overview");
   render();
@@ -175,6 +176,13 @@ function renderMembers(){
   $(".role-select").innerHTML=roleOptions("creator",allowOwner);
   $("#member-count").textContent=t("member.count",{count:HeyuI18n.formatNumber(state.members.length)});
   $("#member-list").innerHTML=state.members.map(member=>`<article class="member-row"><div><h3>${escapeHtml(member.display_name)}${member.user_id===state.actor.user_id?` <span class="badge approved">${escapeHtml(t("member.currentAccount"))}</span>`:""}</h3><p>${escapeHtml(member.email)}</p></div><label>${escapeHtml(t("member.roleLabel"))}<select data-member-role="${member.membership_id}" ${member.user_id===state.actor.user_id&&member.role==="owner"?"disabled":""}>${roleOptions(member.role,allowOwner)}</select></label></article>`).join("")||t("member.empty");
+  const now=Date.now();
+  $("#invitation-count").textContent=t("invitation.count",{count:HeyuI18n.formatNumber(state.invitations.length)});
+  $("#invitation-list").innerHTML=state.invitations.map(invitation=>{
+    const expired=new Date(invitation.expires_at).getTime()<=now;
+    const status=invitation.accepted_at?"accepted":invitation.revoked_at?"revoked":expired?"expired":"pending";
+    return `<article class="invitation-row"><div><h3>${escapeHtml(invitation.email)}</h3><p>${escapeHtml(roleLabel(invitation.role))} · ${escapeHtml(t("invitation.expires",{date:HeyuI18n.formatDate(invitation.expires_at)}))}</p></div><div class="invitation-actions"><span class="badge ${status==="accepted"?"approved":status==="pending"?"pending_review":"rejected"}">${escapeHtml(t(`invitation.status.${status}`))}</span>${status==="pending"?`<button class="reject" data-revoke-invitation="${invitation.id}">${escapeHtml(t("invitation.revoke"))}</button>`:""}</div></article>`;
+  }).join("")||t("invitation.empty");
 }
 function renderFocus(approvedKnowledge,pendingKnowledge){
   let prefix="focus.initial",target="assets",variables={};
@@ -228,8 +236,9 @@ $("#knowledge-file").addEventListener("change",async event=>{
 const resetProjectForm=()=>{const form=$("#project-form");form.reset();form.elements.platform.value=t("form.project.defaultPlatform");form.elements.tone.value=t("form.project.defaultTone");$("#project-form-title").textContent=t("form.project.new");$("#project-save-button").textContent=t("content.saveProject");$("#project-edit-cancel").hidden=true};
 $("#project-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{const data=formData(event.target);const id=data.id;delete data.id;await api(id?`/v1/content-projects/${id}`:"/v1/content-projects",{method:id?"PUT":"POST",body:JSON.stringify(data)});resetProjectForm();await refresh()},t("toast.project.saved"))});
 $("#project-edit-cancel").addEventListener("click",resetProjectForm);
-$("#member-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{const data=formData(event.target);data.expires_in_hours=Number(data.expires_in_hours);const invite=await api("/v1/invitations",{method:"POST",body:JSON.stringify(data)});const link=`${location.origin}/workspace/#invite=${encodeURIComponent(invite.token)}`;$("#invite-link").value=link;$("#invite-result").hidden=false;event.target.reset();renderMembers()},t("toast.member.invited"))});
+$("#member-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{const data=formData(event.target);data.expires_in_hours=Number(data.expires_in_hours);const invite=await api("/v1/invitations",{method:"POST",body:JSON.stringify(data)});const link=`${location.origin}/workspace/#invite=${encodeURIComponent(invite.token)}`;$("#invite-link").value=link;$("#invite-result").hidden=false;event.target.reset();state.invitations=await api("/v1/invitations");renderMembers()},t("toast.member.invited"))});
 $("#copy-invite-link").addEventListener("click",()=>request(async()=>{await navigator.clipboard.writeText($("#invite-link").value)},t("invite.copied")));
+document.addEventListener("click",event=>{const button=event.target.closest("[data-revoke-invitation]");if(!button)return;request(async()=>{if(!confirm(t("invitation.revokeConfirm")))return;await api(`/v1/invitations/${button.dataset.revokeInvitation}/revoke`,{method:"POST"});state.invitations=await api("/v1/invitations");renderMembers()},t("toast.invitation.revoked"))});
 $("#generate-button").addEventListener("click",()=>request(async()=>{
   const id=$("#project-select").value;
   if(!id)throw new Error(t("generation.selectProjectFirst"));

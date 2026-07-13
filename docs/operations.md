@@ -30,10 +30,15 @@ copies the generated link. Share it through a trusted channel. The recipient
 reviews the organization and role, then uses an existing password or chooses a
 new-user password.
 
-The plaintext token is shown once. Losing a link currently means waiting for
-expiry before creating another active invitation for the same normalized
-email. There is no invitation email, explicit revocation, or internet-facing
-rate limiting. Do not expose the local demo directly to the internet.
+The plaintext token is shown once and never appears in the invitation history.
+Owner and Admin can review organization-scoped invitation records in the team
+module. A pending, unexpired invitation can be revoked there; its original link
+becomes unusable immediately, and a replacement can then be created for the
+same normalized email. Admin cannot create or revoke an Owner invitation.
+Accepted, already revoked, and expired invitations cannot be revoked again.
+
+There is no invitation email or internet-facing authentication/invitation rate
+limiting. Do not expose the local demo directly to the internet.
 
 ### SQLite backup and restore
 

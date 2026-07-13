@@ -433,3 +433,182 @@ def test_invitation_requires_privileged_role_and_records_audit(client, auth, db)
     }
     user = db.scalar(select(User).where(User.email == "audited@example.com"))
     assert user is not None
+
+
+def test_invitation_listing_and_revocation_are_tenant_scoped_and_audited(client, auth, db):
+    pending = client.post(
+        "/v1/invitations",
+        headers=auth,
+        json={"email": "revoked@example.com", "role": "creator"},
+    )
+    assert pending.status_code == 201
+    assert pending.headers["cache-control"] == "no-store"
+    pending_payload = pending.json()
+
+    listed = client.get("/v1/invitations", headers=auth)
+    assert listed.status_code == 200
+    listed_item = next(item for item in listed.json() if item["id"] == pending_payload["id"])
+    assert listed_item["email"] == "revoked@example.com"
+    assert listed_item["revoked_at"] is None
+    assert "token" not in listed_item
+
+    second = bootstrap(client, "revocation-second-team", "revocation-owner@example.com")
+    second_auth = {"Authorization": f"Bearer {second['access_token']}"}
+    assert client.get("/v1/invitations", headers=second_auth).json() == []
+    assert (
+        client.post(
+            f"/v1/invitations/{pending_payload['id']}/revoke",
+            headers=second_auth,
+        ).status_code
+        == 404
+    )
+
+    revoked = client.post(
+        f"/v1/invitations/{pending_payload['id']}/revoke",
+        headers=auth,
+    )
+    assert revoked.status_code == 200
+    assert revoked.json()["revoked_at"] is not None
+    invitation = db.get(OrganizationInvitation, pending_payload["id"])
+    assert invitation.active_key is None
+    assert invitation.revoked_by is not None
+
+    inspect = client.post(
+        "/v1/invitations/inspect",
+        json={"token": pending_payload["token"]},
+    )
+    assert inspect.status_code == 200
+    assert inspect.json()["revoked_at"] is not None
+    assert inspect.headers["cache-control"] == "no-store"
+    accept = client.post(
+        "/v1/invitations/accept",
+        json={
+            "token": pending_payload["token"],
+            "display_name": "Revoked Invitee",
+            "password": "revoked-invitation-password",
+        },
+    )
+    assert accept.status_code == 410
+    assert accept.json()["detail"] == "Invitation has been revoked"
+
+    replacement = client.post(
+        "/v1/invitations",
+        headers=auth,
+        json={"email": "revoked@example.com", "role": "viewer"},
+    )
+    assert replacement.status_code == 201
+    assert replacement.json()["id"] != pending_payload["id"]
+    assert (
+        client.post(
+            f"/v1/invitations/{pending_payload['id']}/revoke",
+            headers=auth,
+        ).status_code
+        == 409
+    )
+    event = db.scalar(
+        select(AuditEvent).where(
+            AuditEvent.action == "invitation.revoked",
+            AuditEvent.entity_id == pending_payload["id"],
+        )
+    )
+    assert event is not None
+    assert event.organization_id == pending_payload["organization_id"]
+
+
+def test_invitation_listing_and_revocation_require_privileged_role(client, auth):
+    pending = client.post(
+        "/v1/invitations",
+        headers=auth,
+        json={"email": "privileged-only@example.com", "role": "viewer"},
+    ).json()
+    _, creator = invite_and_accept(
+        client,
+        auth,
+        "invitation-reader@example.com",
+        "creator",
+        "creator-invitation-password",
+    )
+    creator_auth = {"Authorization": f"Bearer {creator['access_token']}"}
+    assert client.get("/v1/invitations", headers=creator_auth).status_code == 403
+    assert (
+        client.post(
+            f"/v1/invitations/{pending['id']}/revoke",
+            headers=creator_auth,
+        ).status_code
+        == 403
+    )
+
+
+def test_admin_cannot_revoke_owner_invitation(client, auth, db):
+    _, admin = invite_and_accept(
+        client,
+        auth,
+        "invitation-admin@example.com",
+        "admin",
+        "admin-invitation-password",
+    )
+    admin_auth = {"Authorization": f"Bearer {admin['access_token']}"}
+    owner_invitation = client.post(
+        "/v1/invitations",
+        headers=auth,
+        json={"email": "next-owner@example.com", "role": "owner"},
+    ).json()
+
+    response = client.post(
+        f"/v1/invitations/{owner_invitation['id']}/revoke",
+        headers=admin_auth,
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Only an owner can revoke an owner invitation"
+    db.expire_all()
+    invitation = db.get(OrganizationInvitation, owner_invitation["id"])
+    assert invitation.revoked_at is None
+    assert invitation.active_key is not None
+    assert (
+        db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.action == "invitation.revoked",
+                AuditEvent.entity_id == owner_invitation["id"],
+            )
+        )
+        is None
+    )
+
+
+def test_accepted_and_expired_invitations_cannot_be_revoked(client, auth, db):
+    accepted_invitation, _ = invite_and_accept(
+        client,
+        auth,
+        "accepted-revoke@example.com",
+        "viewer",
+        "accepted-revoke-password",
+    )
+    accepted_response = client.post(
+        f"/v1/invitations/{accepted_invitation['id']}/revoke",
+        headers=auth,
+    )
+    assert accepted_response.status_code == 409
+    assert accepted_response.json()["detail"] == "Accepted invitation cannot be revoked"
+
+    expired = client.post(
+        "/v1/invitations",
+        headers=auth,
+        json={"email": "expired-revoke@example.com", "role": "viewer"},
+    ).json()
+    expired_record = db.get(OrganizationInvitation, expired["id"])
+    expired_record.expires_at = datetime.now(UTC) - timedelta(minutes=1)
+    db.commit()
+    expired_response = client.post(
+        f"/v1/invitations/{expired['id']}/revoke",
+        headers=auth,
+    )
+    assert expired_response.status_code == 409
+    assert expired_response.json()["detail"] == "Expired invitation cannot be revoked"
+
+    revoked_events = db.scalars(
+        select(AuditEvent).where(
+            AuditEvent.action == "invitation.revoked",
+            AuditEvent.entity_id.in_([accepted_invitation["id"], expired["id"]]),
+        )
+    ).all()
+    assert revoked_events == []

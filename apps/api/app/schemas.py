@@ -55,6 +55,7 @@ class InvitationRead(BaseModel):
     role: Role
     expires_at: datetime
     accepted_at: datetime | None
+    revoked_at: datetime | None
     created_at: datetime
 
 

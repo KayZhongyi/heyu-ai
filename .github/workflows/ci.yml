@@ -209,6 +209,39 @@ jobs:
           invitation_token=$(jq -r .token <<<"$invitation")
           test -n "$invitation_token" && test "$invitation_token" != "null"
 
+          revoked_invitation=$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $token" \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"docker-revoked@example.com","role":"viewer","expires_in_hours":24}' \
+            http://127.0.0.1:8000/v1/invitations)
+          revoked_invitation_id=$(jq -r .id <<<"$revoked_invitation")
+          revoked_invitation_token=$(jq -r .token <<<"$revoked_invitation")
+          invitations=$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $token" \
+            http://127.0.0.1:8000/v1/invitations)
+          test "$(jq --arg id "$revoked_invitation_id" \
+            '[.[] | select(.id == $id and .revoked_at == null)] | length' <<<"$invitations")" = "1"
+          test "$(jq '[.[] | has("token")] | any' <<<"$invitations")" = "false"
+
+          revoked=$(curl --fail --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $token" \
+            http://127.0.0.1:8000/v1/invitations/"$revoked_invitation_id"/revoke)
+          test "$(jq -r .id <<<"$revoked")" = "$revoked_invitation_id"
+          test "$(jq -r .revoked_at <<<"$revoked")" != "null"
+          revoked_accept_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -nc --arg token "$revoked_invitation_token" \
+              '{token:$token,display_name:"Revoked Invitee",password:"correct-horse-battery-revoked"}')" \
+            http://127.0.0.1:8000/v1/invitations/accept)
+          test "$revoked_accept_status" = "410"
+          replacement_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            -H "Authorization: Bearer $token" \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"docker-revoked@example.com","role":"viewer","expires_in_hours":24}' \
+            http://127.0.0.1:8000/v1/invitations)
+          test "$replacement_status" = "201"
+
           invitee_token=$(curl --fail --silent --show-error \
             -H 'Content-Type: application/json' \
             -d "$(jq -nc --arg token "$invitation_token" \

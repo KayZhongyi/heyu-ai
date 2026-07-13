@@ -74,9 +74,19 @@ Git.
 - [ ] Confirm a second accept fails and concurrent acceptance cannot create
       duplicate membership.
 - [ ] Confirm expired and duplicate-active invitations are rejected.
-- [ ] Confirm `invitation.created` and `invitation.accepted` audit events.
-- [ ] Record that email, revocation, and internet-facing rate limiting are not
-      current capabilities.
+- [ ] List organization invitations and confirm no plaintext token, hash, or
+      invitation link is returned.
+- [ ] Revoke a pending invitation and confirm its original link immediately
+      fails inspection/acceptance.
+- [ ] Confirm a replacement invitation can be created for the same normalized
+      email after revocation.
+- [ ] Confirm Admin cannot revoke an Owner invitation.
+- [ ] Confirm accepted, already revoked, and expired invitations cannot be
+      revoked again.
+- [ ] Confirm `invitation.created`, `invitation.accepted`, and
+      `invitation.revoked` audit events without token or email leakage.
+- [ ] Record that email delivery and internet-facing authentication/invitation
+      rate limiting are not current capabilities.
 
 ## 3. Brand and product assets
 
