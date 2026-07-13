@@ -1,10 +1,22 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import ContentProject, ContentVersion, Publication, ReviewStatus, utc_now
+from app.models import (
+    CampaignPackage,
+    CampaignPackageItem,
+    CampaignSupplySnapshot,
+    ContentProject,
+    ContentVersion,
+    Publication,
+    ReviewStatus,
+    utc_now,
+)
+from app.services import _campaign_for_project, _current_campaign_supply
 from tests.conftest import bootstrap, invite_and_accept
 
 
@@ -135,6 +147,106 @@ def approve_campaign_assets(
             json={"status": "approved", "note": "Asset facts checked"},
         )
         assert reviewed.status_code == 200, reviewed.text
+
+
+def test_current_supply_uses_highest_revision_that_is_effective_now(
+    db: Session,
+):
+    now = datetime.now(UTC)
+    organization_id = "org-current-supply"
+    campaign_id = "campaign-current-supply"
+    common = {
+        "organization_id": organization_id,
+        "campaign_package_id": campaign_id,
+        "specification": "2.5 kg per box",
+        "price_minor": 3980,
+        "currency": "CNY",
+        "price_valid_until": now + timedelta(days=14),
+        "available_quantity": 100,
+        "quantity_unit": "boxes",
+        "inventory_confirmed_at": now,
+        "harvest_status": "Harvesting",
+        "shipping_regions": ["Mainland China"],
+        "ship_within_hours": 48,
+        "freight_policy": "Quoted at checkout",
+        "storage_and_freshness": "Keep refrigerated",
+        "shortage_policy": "Stop orders when sold out",
+        "evidence_source_ids": [],
+        "status": ReviewStatus.approved,
+        "confirmed_by": "user-current-supply",
+    }
+    current = CampaignSupplySnapshot(
+        id="supply-current",
+        revision_number=1,
+        active_from=now - timedelta(days=1),
+        active_until=now + timedelta(days=2),
+        **common,
+    )
+    future = CampaignSupplySnapshot(
+        id="supply-future",
+        revision_number=2,
+        active_from=now + timedelta(days=3),
+        active_until=now + timedelta(days=10),
+        **common,
+    )
+    db.add_all([current, future])
+    db.commit()
+
+    selected = _current_campaign_supply(
+        db,
+        campaign_id,
+        organization_id,
+        now=now,
+    )
+
+    assert selected is not None
+    assert selected.id == current.id
+
+
+def test_project_linked_to_multiple_campaigns_is_rejected(db: Session):
+    organization_id = "org-ambiguous-campaign"
+    project_id = "project-ambiguous-campaign"
+    db.add_all(
+        [
+            CampaignPackage(
+                id="campaign-one",
+                organization_id=organization_id,
+                brand_id="brand-one",
+                product_id="product-one",
+                title="Campaign one",
+                created_by="user-one",
+            ),
+            CampaignPackage(
+                id="campaign-two",
+                organization_id=organization_id,
+                brand_id="brand-one",
+                product_id="product-one",
+                title="Campaign two",
+                created_by="user-one",
+            ),
+            CampaignPackageItem(
+                organization_id=organization_id,
+                campaign_package_id="campaign-one",
+                content_project_id=project_id,
+                slot_key="one",
+                created_by="user-one",
+            ),
+            CampaignPackageItem(
+                organization_id=organization_id,
+                campaign_package_id="campaign-two",
+                content_project_id=project_id,
+                slot_key="two",
+                created_by="user-one",
+            ),
+        ]
+    )
+    db.commit()
+
+    with pytest.raises(HTTPException) as error:
+        _campaign_for_project(db, project_id, organization_id)
+
+    assert error.value.status_code == 409
+    assert "multiple campaign packages" in error.value.detail
 
 
 def test_campaign_creates_project_atomically_and_uses_defaults(

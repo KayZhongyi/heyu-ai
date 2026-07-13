@@ -529,33 +529,42 @@ def _current_campaign_supply(
         return value if value.tzinfo else value.replace(tzinfo=UTC)
 
     moment = comparable(now or utc_now())
-    latest = candidates[0]
-    if (
-        latest.available_quantity <= 0
-        or comparable(latest.active_from) > moment
-        or comparable(latest.active_until) < moment
-        or comparable(latest.price_valid_until) < moment
-    ):
-        return None
-    return latest
+    for candidate in candidates:
+        if (
+            candidate.available_quantity > 0
+            and comparable(candidate.active_from) <= moment
+            and comparable(candidate.active_until) >= moment
+            and comparable(candidate.price_valid_until) >= moment
+        ):
+            return candidate
+    return None
 
 
 def _campaign_for_project(
     db: Session, project_id: str, organization_id: str
 ) -> CampaignPackage | None:
-    return db.scalar(
-        select(CampaignPackage)
-        .join(
-            CampaignPackageItem,
-            CampaignPackageItem.campaign_package_id == CampaignPackage.id,
+    campaigns = list(
+        db.scalars(
+            select(CampaignPackage)
+            .join(
+                CampaignPackageItem,
+                CampaignPackageItem.campaign_package_id == CampaignPackage.id,
+            )
+            .where(
+                CampaignPackageItem.content_project_id == project_id,
+                CampaignPackageItem.organization_id == organization_id,
+                CampaignPackage.organization_id == organization_id,
+            )
+            .order_by(CampaignPackage.updated_at.desc())
+            .limit(2)
         )
-        .where(
-            CampaignPackageItem.content_project_id == project_id,
-            CampaignPackageItem.organization_id == organization_id,
-            CampaignPackage.organization_id == organization_id,
-        )
-        .order_by(CampaignPackage.updated_at.desc())
     )
+    if len(campaigns) > 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Content project is linked to multiple campaign packages",
+        )
+    return campaigns[0] if campaigns else None
 
 
 def _campaign_item_view(
