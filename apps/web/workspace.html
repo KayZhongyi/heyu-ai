@@ -255,6 +255,67 @@
               </div>
             </div>
           </section>
+          <section class="panel farmer-evidence-workbench">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">FARMER PARTNERSHIP EVIDENCE</p>
+                <h2 data-i18n="farmerEvidence.heading">合作与助农证据</h2>
+                <p class="form-note" data-i18n="farmerEvidence.intro">在生成助农、直采、增收或农户故事前，先确认合作关系、利益机制和公开授权。</p>
+              </div>
+              <span class="pill" id="farmer-evidence-revision-count">0</span>
+            </div>
+            <label><span data-i18n="farmerEvidence.campaign">选择营销活动</span><select id="farmer-evidence-campaign-select"></select></label>
+            <div class="farmer-evidence-layout">
+              <form id="farmer-evidence-form" class="farmer-evidence-form" data-write-scope="content">
+                <div class="form-grid">
+                  <label><span data-i18n="farmerEvidence.partyDisplayName">农户或合作社公开名称</span><input name="party_display_name" required data-i18n-placeholder="farmerEvidence.placeholder.partyDisplayName"></label>
+                  <label><span data-i18n="farmerEvidence.relationshipType">合作关系类型</span><select name="relationship_type" required>
+                    <option value="direct_purchase" data-i18n="farmerEvidence.relationship.directPurchase">直接采购</option>
+                    <option value="cooperative_supply" data-i18n="farmerEvidence.relationship.cooperativeSupply">合作社供货</option>
+                    <option value="consignment" data-i18n="farmerEvidence.relationship.consignment">代销</option>
+                    <option value="service_partnership" data-i18n="farmerEvidence.relationship.servicePartnership">服务合作</option>
+                    <option value="other" data-i18n="farmerEvidence.relationship.other">其他</option>
+                  </select></label>
+                </div>
+                <label><span data-i18n="farmerEvidence.relationshipSummary">合作关系说明</span><textarea name="relationship_summary" required data-i18n-placeholder="farmerEvidence.placeholder.relationshipSummary"></textarea></label>
+                <label><span data-i18n="farmerEvidence.benefitMechanism">利益或结算机制</span><textarea name="benefit_mechanism" required data-i18n-placeholder="farmerEvidence.placeholder.benefitMechanism"></textarea></label>
+                <div class="form-grid">
+                  <label><span data-i18n="farmerEvidence.activeFrom">授权生效时间</span><input name="active_from" type="datetime-local" required></label>
+                  <label><span data-i18n="farmerEvidence.activeUntil">授权失效时间</span><input name="active_until" type="datetime-local" required></label>
+                </div>
+                <div class="farmer-claim-grid">
+                  <fieldset class="supply-evidence">
+                    <legend data-i18n="farmerEvidence.allowedClaims">允许使用的助农声明</legend>
+                    <p class="form-note" data-i18n="farmerEvidence.allowedHelp">至少明确允许一类；生成内容只能在核准范围内表达。</p>
+                    <div id="farmer-allowed-claims" class="check-list claim-check-list"></div>
+                  </fieldset>
+                  <fieldset class="supply-evidence">
+                    <legend data-i18n="farmerEvidence.prohibitedClaims">明确禁止的助农声明</legend>
+                    <p class="form-note" data-i18n="farmerEvidence.prohibitedHelp">用于阻断容易夸大、未经确认或不适用于本次合作的说法。</p>
+                    <div id="farmer-prohibited-claims" class="check-list claim-check-list"></div>
+                  </fieldset>
+                </div>
+                <fieldset class="supply-evidence">
+                  <legend data-i18n="farmerEvidence.consentScope">公开授权范围</legend>
+                  <p class="form-note" data-i18n="farmerEvidence.consentHelp">人物故事、引语、照片和声音必须分别取得授权。</p>
+                  <div id="farmer-consent-scope" class="check-list consent-check-list"></div>
+                </fieldset>
+                <fieldset class="supply-evidence">
+                  <legend data-i18n="farmerEvidence.evidence">已审核知识证据</legend>
+                  <p class="form-note" data-i18n="farmerEvidence.evidenceHelp">选择能够证明合作关系、利益机制或授权范围的已审核资料。</p>
+                  <div id="farmer-evidence-source-list" class="check-list"></div>
+                </fieldset>
+                <label><span data-i18n="farmerEvidence.note">内部备注（可选）</span><textarea name="note"></textarea></label>
+                <button class="primary wide" type="submit" data-i18n="farmerEvidence.create">创建证据快照草稿</button>
+              </form>
+              <div>
+                <div class="section-head supply-history-head">
+                  <div><p class="eyebrow">REVISION HISTORY</p><h3 data-i18n="farmerEvidence.history">证据版本与审核</h3></div>
+                </div>
+                <div id="farmer-evidence-history" class="stack empty" data-business-data></div>
+              </div>
+            </div>
+          </section>
         </section>
 
         <section class="page" data-page-panel="studio">

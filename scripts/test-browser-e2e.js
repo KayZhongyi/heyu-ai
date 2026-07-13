@@ -266,6 +266,72 @@ async function main() {
       ).status(),
       200,
     );
+    const campaignResponse = await context.request.post(`${baseUrl}/v1/campaign-packages`, {
+      headers: { Authorization: `Bearer ${ownerToken}` },
+      data: {
+        brand_id: brand.id,
+        product_id: product.id,
+        title: `Verified farmer campaign ${unique}`,
+        platform: "Instagram",
+        target_audience: "Customers who value transparent sourcing",
+        objective: "Support farmers through a verified direct-purchase campaign.",
+        tone: "Clear and factual",
+        extra_requirements: "Only use approved farmer-support claims.",
+        create_default_items: true,
+      },
+    });
+    assert.equal(campaignResponse.status(), 201);
+    const campaign = await campaignResponse.json();
+
+    await page.goto(`${baseUrl}/workspace/?lang=en`, { waitUntil: "networkidle" });
+    await page.locator("#workspace").waitFor({ state: "visible" });
+    await openWorkspacePage(page, "campaigns");
+    await page.locator("#farmer-evidence-campaign-select").selectOption(campaign.id);
+    const farmerEvidenceForm = page.locator("#farmer-evidence-form");
+    await farmerEvidenceForm.locator('[name="party_display_name"]').fill("Browser E2E Cooperative");
+    await farmerEvidenceForm.locator('[name="relationship_type"]').selectOption("direct_purchase");
+    await farmerEvidenceForm
+      .locator('[name="relationship_summary"]')
+      .fill("The campaign purchases the listed product directly from the cooperative.");
+    await farmerEvidenceForm
+      .locator('[name="benefit_mechanism"]')
+      .fill("The cooperative receives the agreed purchase price for accepted deliveries.");
+    const activeFrom = new Date(Date.now() - 60 * 60 * 1000).toISOString().slice(0, 16);
+    const activeUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 16);
+    await farmerEvidenceForm.locator('[name="active_from"]').fill(activeFrom);
+    await farmerEvidenceForm.locator('[name="active_until"]').fill(activeUntil);
+    await farmerEvidenceForm
+      .locator('[name="allowed_claims"][value="general_support"]')
+      .check();
+    await farmerEvidenceForm
+      .locator('[name="allowed_claims"][value="direct_sourcing"]')
+      .check();
+    await farmerEvidenceForm.locator('[name="consent_scope"][value="party_name"]').check();
+    await farmerEvidenceForm.locator('[name="consent_scope"][value="relationship"]').check();
+    await farmerEvidenceForm
+      .locator(`[name="evidence_source_ids"][value="${source.id}"]`)
+      .check();
+    await farmerEvidenceForm.locator('button[type="submit"]').click();
+    const farmerEvidenceCard = page
+      .locator("#farmer-evidence-history article", { hasText: "Browser E2E Cooperative" })
+      .first();
+    await farmerEvidenceCard.waitFor();
+    await farmerEvidenceCard.locator("[data-submit-farmer-evidence]").click();
+    await farmerEvidenceCard.locator('[data-review-farmer-evidence][data-status="approved"]').waitFor();
+    page.once("dialog", (dialog) => dialog.accept("Relationship evidence reviewed"));
+    await farmerEvidenceCard
+      .locator('[data-review-farmer-evidence][data-status="approved"]')
+      .click();
+    await farmerEvidenceCard.locator(".badge.approved").first().waitFor();
+    await page
+      .locator("#campaign-list article", { hasText: campaign.title })
+      .locator(".readiness-chip.ready", { hasText: /Farmer evidence ready/i })
+      .waitFor();
+    await page.goto(`${baseUrl}/workspace/?lang=en`, { waitUntil: "networkidle" });
+    await page.locator("#workspace").waitFor({ state: "visible" });
+
     const failureProjectResponse = await context.request.post(
       `${baseUrl}/v1/content-projects`,
       {

@@ -24,6 +24,10 @@ const requiredMessages = [
   "meta.workspace.title",
   "content_renderer.draft",
   "content_renderer.citations",
+  "farmerEvidence.heading",
+  "farmerEvidence.claim.general_support",
+  "farmerEvidence.consent.relationship",
+  "farmerEvidence.ready",
 ];
 for (const locale of Object.keys(locales)) {
   for (const key of requiredMessages) {
@@ -58,6 +62,7 @@ for (const id of [
   "generation-preview",
   "generation-output",
   "generation-history-list",
+  "farmer-evidence-history",
 ]) {
   assert.match(
     workspace,
@@ -71,5 +76,13 @@ assert.equal(appSource.includes("location.search).get(\"invite\")"), false, "inv
 assert.equal(appSource.includes("/workspace/?invite="), false, "invite links must not use query parameters");
 assert.ok(appSource.includes("/workspace/#invite="), "invite links must use a URL fragment");
 assert.ok(appSource.includes("/v1/invitations/inspect"), "invitation inspection must use the POST endpoint");
+assert.ok(
+  appSource.includes("/farmer-evidence-snapshots"),
+  "workspace must expose the farmer evidence workflow",
+);
+assert.ok(
+  appSource.includes('name="allowed_claims"'),
+  "farmer evidence claims must use explicit multi-select controls",
+);
 
 console.log("i18n dictionaries: PASS");
