@@ -30,13 +30,16 @@
         <div class="trust-row"><span>本地零成本运行</span><span>多租户权限隔离</span><span>生成来源可追溯</span></div>
       </div>
       <div class="hero-stage" aria-label="真实农业场景与可信内容能力">
-        <img class="hero-photo" src="/assets/hero-field-local.png" alt="现代农业园区田野场景" onerror="this.onerror=null;this.src='/assets/hero-field-fallback.svg'">
+        <picture>
+          <source srcset="/assets/hero-field-treated-local.webp" type="image/webp">
+          <img class="hero-photo" src="/assets/hero-field-local.png" alt="现代农业园区田野场景" onerror="this.parentElement.querySelector('source')?.remove();this.onerror=null;this.src='/assets/hero-field-fallback.svg'">
+        </picture>
         <div class="hero-photo-glow" aria-hidden="true"></div>
         <div class="stage-index" aria-hidden="true"><span>01</span><i></i><span>04</span></div>
-        <span class="stage-label"><i></i> FIELD NOTE · TRUSTED CONTENT</span>
+        <span class="stage-label"><i></i> FIELD NOTE · VERIFIED SOURCE</span>
         <div class="hero-stage-story">
-          <p>从一块真实的田野开始</p>
-          <strong>让事实进入知识，<br>让知识成为内容。</strong>
+          <p>从一份真实资料开始</p>
+          <strong>事实进入知识，<br>知识成为内容。</strong>
         </div>
         <div class="hero-proof-rail" aria-label="平台可信机制">
           <span><b>01</b> 来源留痕</span>
