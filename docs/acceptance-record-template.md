@@ -14,6 +14,22 @@ section.
 | Profile | Windows/SQLite or Docker/PostgreSQL |
 | Result | PASS or FAIL |
 | Evidence folder | |
+| Automated report | |
+| GitHub Actions run | |
+
+## Automated deployment report
+
+| Field | Value |
+| --- | --- |
+| Report file | |
+| Report status | PASS or FAIL |
+| Base URL/profile | |
+| Organization slug | |
+| Passed steps | |
+| Failed step or error | |
+
+The report proves deployment and API workflow behavior only. It does not count
+as a human visual or usability sign-off.
 
 ## Evidence checklist
 
@@ -35,9 +51,13 @@ section.
 | Backup and isolated restore | | |
 | Exact-commit GitHub Actions run | | |
 | Repository secret/private-file audit | | |
+| Automated Windows/SQLite acceptance report | | |
+| Automated Docker/PostgreSQL acceptance report | | |
 
 ## Required screenshots
 
+- [ ] Homepage Hero and primary entry point
+- [ ] Homepage at mobile width
 - [ ] Overview after login
 - [ ] Owner/Admin team and permissions page
 - [ ] Restricted member view without team-management entry
@@ -48,6 +68,20 @@ section.
 - [ ] Version and review history
 - [ ] Audit events
 - [ ] Successful GitHub Actions run for the recorded commit
+
+## Human-only review
+
+| Area | Result | Evidence or finding |
+| --- | --- | --- |
+| Homepage hierarchy and image treatment | | |
+| Motion quality and reduced-motion behavior | | |
+| Desktop and mobile responsive layout | | |
+| Chinese typography, line height, and readable helper text | | |
+| Independent workspace routes and browser Back/Forward | | |
+| Knowledge import and review usability | | |
+| Human-readable content draft and JSON disclosure | | |
+| Reviewer note workflow and error messages | | |
+| No planned capability presented as already available | | |
 
 ## Open findings
 

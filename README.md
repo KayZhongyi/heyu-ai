@@ -127,6 +127,17 @@ For backups, upgrades, and recovery, see
 [docs/operations.md](docs/operations.md). For manual release verification, see
 [docs/acceptance-test.md](docs/acceptance-test.md).
 
+Run the zero-dependency deployment smoke against a started instance:
+
+```bash
+python scripts/acceptance-smoke.py \
+  --base-url http://127.0.0.1:8000 \
+  --output outputs/acceptance/local.json
+```
+
+The JSON report proves the deployed API workflow and tenant boundary. Human
+visual and usability review remains a separate release requirement.
+
 ## Security posture
 
 - Every tenant-owned row carries an `organization_id`.

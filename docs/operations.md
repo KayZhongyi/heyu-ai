@@ -120,5 +120,7 @@ Application rollback and database rollback are separate decisions.
 The Windows/SQLite profile has been exercised locally. CI validates a clean
 Windows install, Docker image construction, empty PostgreSQL migration,
 container restart persistence, and backup restoration into a newly created
-PostgreSQL volume. A human still needs to complete the full acceptance script
-before a release is approved.
+PostgreSQL volume. Both deployment jobs also run
+`scripts/acceptance-smoke.py` and upload the resulting JSON report as a CI
+artifact. A human still needs to complete the visual, responsive, wording, and
+usability portions of `docs/acceptance-test.md` before a release is approved.

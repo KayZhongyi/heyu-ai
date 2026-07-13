@@ -3,6 +3,27 @@
 Use a fresh local database or isolated test organization. Record the date,
 commit SHA, deployment profile, reviewer, and pass/fail evidence.
 
+## Automated deployment evidence
+
+Run the deployment-level smoke test before the manual checklist:
+
+```powershell
+python scripts/acceptance-smoke.py `
+  --base-url http://127.0.0.1:8000 `
+  --output outputs/acceptance/local.json
+```
+
+The script uses only the Python standard library and creates randomly named
+test organizations. It verifies the deployed homepage and workspace plus the
+core API path from bootstrap through trusted knowledge, generation provenance,
+human review, publication, append-only metrics, structured diagnosis,
+improvement brief, successor draft, tenant isolation, and audit events.
+
+A `PASS` report is deployment evidence, **not** a substitute for human visual,
+responsive, wording, accessibility, or usability review. Keep the generated
+JSON report with the release evidence. The `outputs/` directory is ignored by
+Git.
+
 ## 1. Startup
 
 - [ ] Install from a fresh source ZIP or clone using the documented procedure.
@@ -167,6 +188,7 @@ Commit:
 Date:
 Reviewer:
 Profile: Windows/SQLite | Docker/PostgreSQL
+Automated report:
 Result: PASS | FAIL
 Open findings:
 Evidence location:

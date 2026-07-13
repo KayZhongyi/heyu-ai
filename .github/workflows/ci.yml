@@ -87,6 +87,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Distributable hero fallback is missing from the Windows package."
           }
+      - name: Run deployment-level MVP acceptance smoke
+        shell: powershell
+        run: |
+          python scripts/acceptance-smoke.py `
+            --base-url http://127.0.0.1:8765 `
+            --output "$env:RUNNER_TEMP\heyu-windows-acceptance.json"
+      - name: Upload Windows acceptance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: heyu-windows-acceptance
+          path: ${{ runner.temp }}/heyu-windows-acceptance.json
+          if-no-files-found: error
       - name: Upload Windows source package
         shell: powershell
         run: |
@@ -144,6 +157,18 @@ jobs:
           test "$(jq -r 'length' <<<"$brands")" = "1"
           test "$(jq -r '.[0].id' <<<"$brands")" = "$brand_id"
           echo "$brand_id" > "$RUNNER_TEMP/heyu-brand-id"
+      - name: Run deployment-level MVP acceptance smoke
+        run: |
+          python scripts/acceptance-smoke.py \
+            --base-url http://127.0.0.1:8000 \
+            --output "$RUNNER_TEMP/heyu-docker-acceptance.json"
+      - name: Upload Docker acceptance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: heyu-docker-acceptance
+          path: ${{ runner.temp }}/heyu-docker-acceptance.json
+          if-no-files-found: error
       - name: Back up and restore PostgreSQL into a fresh volume
         shell: bash
         run: |
