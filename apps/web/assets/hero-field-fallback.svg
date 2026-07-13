@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1100" role="img" aria-labelledby="title desc">
+  <title id="title">日光下的现代农业田野</title>
+  <desc id="desc">由远山、温室与层叠田垄构成的抽象农业景观。</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cce8da"/>
+      <stop offset=".48" stop-color="#e6e7bd"/>
+      <stop offset="1" stop-color="#678d69"/>
+    </linearGradient>
+    <radialGradient id="sun" cx=".78" cy=".12" r=".48">
+      <stop offset="0" stop-color="#fff7bf" stop-opacity=".95"/>
+      <stop offset=".28" stop-color="#ffe58b" stop-opacity=".42"/>
+      <stop offset="1" stop-color="#ffe58b" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="field" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#52795d"/>
+      <stop offset=".5" stop-color="#244f3d"/>
+      <stop offset="1" stop-color="#102f28"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f8f1cf" stop-opacity=".84"/>
+      <stop offset="1" stop-color="#8fbd9b" stop-opacity=".42"/>
+    </linearGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="18"/></filter>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="2" seed="7"/>
+      <feColorMatrix values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 .055 0"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="1100" fill="url(#sky)"/>
+  <rect width="1600" height="1100" fill="url(#sun)"/>
+  <circle cx="1260" cy="165" r="94" fill="#fff4b4" opacity=".72" filter="url(#soft)"/>
+
+  <path d="M0 430 210 335 365 410 570 286 785 398 1010 270 1220 384 1410 300 1600 380V610H0Z" fill="#5e8168" opacity=".66"/>
+  <path d="M0 510 280 390 520 500 760 360 970 480 1230 344 1600 505V690H0Z" fill="#345f4c" opacity=".9"/>
+
+  <g opacity=".92">
+    <path d="M710 490h530l122 196H590Z" fill="url(#glass)" stroke="#dce5c8" stroke-width="7"/>
+    <path d="M710 490 590 686M842 490 770 686M974 490l0 196M1106 490l72 196M1240 490l122 196" fill="none" stroke="#eaf0d6" stroke-opacity=".64" stroke-width="5"/>
+    <path d="M590 686h772" stroke="#e7edd7" stroke-width="8"/>
+    <path d="M735 520h480M675 572h575M635 628h664" stroke="#f8f2d4" stroke-opacity=".4" stroke-width="4"/>
+  </g>
+
+  <path d="M0 672c245-75 445-58 650 18 196 72 420 71 950-36v446H0Z" fill="url(#field)"/>
+
+  <g fill="none" stroke-linecap="round">
+    <path d="M-130 1110Q190 760 785 694" stroke="#a7c76e" stroke-width="74" opacity=".84"/>
+    <path d="M60 1140Q330 805 850 716" stroke="#183e32" stroke-width="72"/>
+    <path d="M285 1150Q510 830 922 735" stroke="#91bd66" stroke-width="68" opacity=".8"/>
+    <path d="M505 1150Q690 868 1010 752" stroke="#173d31" stroke-width="65"/>
+    <path d="M730 1150Q865 900 1100 770" stroke="#83ad60" stroke-width="62" opacity=".76"/>
+    <path d="M950 1150Q1040 935 1195 785" stroke="#173c30" stroke-width="60"/>
+    <path d="M1160 1150Q1212 950 1295 793" stroke="#759e59" stroke-width="56" opacity=".74"/>
+    <path d="M1370 1150Q1390 968 1410 804" stroke="#17392e" stroke-width="54"/>
+  </g>
+
+  <g fill="#b2d177" opacity=".74">
+    <circle cx="315" cy="872" r="10"/><circle cx="372" cy="818" r="8"/><circle cx="445" cy="798" r="9"/>
+    <circle cx="650" cy="860" r="9"/><circle cx="722" cy="819" r="8"/><circle cx="1010" cy="882" r="9"/>
+    <circle cx="1120" cy="835" r="7"/><circle cx="1290" cy="900" r="9"/><circle cx="1460" cy="855" r="8"/>
+  </g>
+  <rect width="1600" height="1100" filter="url(#grain)" opacity=".42"/>
+</svg>

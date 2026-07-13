@@ -58,6 +58,21 @@ jobs:
           if ($curlExitCode -ne 0 -or $workspace -notmatch 'id="bootstrap-form"') {
             throw "Workspace did not load from the Windows package."
           }
+          $landingPath = Join-Path $env:RUNNER_TEMP "heyu-landing.html"
+          & curl.exe --fail --silent --show-error --output $landingPath http://127.0.0.1:8765/
+          if ($LASTEXITCODE -ne 0) {
+            throw "Landing page did not load from the Windows package."
+          }
+          $landing = Get-Content -LiteralPath $landingPath -Raw -Encoding UTF8
+          if ($landing -notmatch 'hero-field-fallback.svg') {
+            throw "Landing page does not declare the distributable hero fallback."
+          }
+          & curl.exe --fail --silent --show-error `
+            --output (Join-Path $env:RUNNER_TEMP "hero-field-fallback.svg") `
+            http://127.0.0.1:8765/assets/hero-field-fallback.svg
+          if ($LASTEXITCODE -ne 0) {
+            throw "Distributable hero fallback is missing from the Windows package."
+          }
       - name: Upload Windows source package
         shell: powershell
         run: |
