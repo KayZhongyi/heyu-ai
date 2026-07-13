@@ -38,9 +38,7 @@ def main() -> None:
         )
         expect_finding(
             "server.pem",
-            "-----BEGIN "
-            + "PRIVATE KEY-----\nsecret\n-----END "
-            + "PRIVATE KEY-----",
+            "-----BEGIN " + "PRIVATE KEY-----\nsecret\n-----END " + "PRIVATE KEY-----",
             root,
         )
         expect_finding(
