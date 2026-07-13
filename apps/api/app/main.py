@@ -131,19 +131,46 @@ def find_web_dir(module_file: Path = Path(__file__)) -> Path:
 
 web_dir = find_web_dir()
 web_index = web_dir / "index.html"
+web_workspace = web_dir / "workspace.html"
 web_assets = web_dir / "assets"
+workspace_pages = {
+    "overview",
+    "assets",
+    "knowledge",
+    "studio",
+    "operations",
+    "review",
+    "audit",
+    "members",
+}
 if web_assets.is_dir():
     app.mount("/assets", StaticFiles(directory=web_assets), name="assets")
 
 
-@app.get("/", include_in_schema=False)
-def workspace() -> FileResponse:
-    if not web_index.is_file():
+def web_file(path: Path) -> FileResponse:
+    """Serve a required web entry point with a consistent failure mode."""
+    if not path.is_file():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Web workspace is not installed.",
         )
-    return FileResponse(web_index)
+    return FileResponse(path)
+
+
+@app.get("/", include_in_schema=False)
+def landing_page() -> FileResponse:
+    return web_file(web_index)
+
+
+@app.get("/workspace", include_in_schema=False)
+@app.get("/workspace/", include_in_schema=False)
+@app.get("/workspace/{page}", include_in_schema=False)
+def workspace(page: str | None = None) -> FileResponse:
+    if page is not None and page not in workspace_pages:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Workspace page not found."
+        )
+    return web_file(web_workspace)
 
 
 @app.get("/health")

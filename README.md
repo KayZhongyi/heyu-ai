@@ -106,8 +106,11 @@ cp .env.example .env
 docker compose up --build
 ```
 
-The workspace is then available at `http://localhost:8000/`. Developer API
-documentation is available at `http://localhost:8000/docs`.
+The product homepage is available at `http://localhost:8000/`, and the
+authenticated workspace is available at `http://localhost:8000/workspace/`.
+Each workspace module has a stable URL such as `/workspace/knowledge` or
+`/workspace/studio`. Developer API documentation is available at
+`http://localhost:8000/docs`.
 
 `/health` is the process liveness endpoint. `/ready` additionally verifies
 database connectivity. Production mode fails closed when it detects a default

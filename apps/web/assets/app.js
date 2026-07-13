@@ -10,16 +10,21 @@ const escapeHtml=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<
 const fileBaseName=name=>name.replace(/\.(txt|md|markdown|csv)$/i,"");
 const knowledgeMediaType=file=>file.type||({txt:"text/plain",md:"text/markdown",markdown:"text/markdown",csv:"text/csv"}[file.name.split(".").pop().toLowerCase()]||"text/plain");
 const request=async(fn,success)=>{try{await fn();if(success)toast(success)}catch(error){toast(error.message,true)}};
+const workspacePages=["overview","assets","knowledge","studio","operations","review","audit","members"];
+const pageFromLocation=()=>{const page=location.pathname.split("/").filter(Boolean)[1]||"overview";return workspacePages.includes(page)?page:"overview"};
 
 function showWorkspace(){
   $("#auth-view").hidden=Boolean(state.token);$("#workspace").hidden=!state.token;$("#logout").hidden=!state.token;
-  if(state.token) refresh();
+  if(state.token){navigate(pageFromLocation(),false);refresh()}
 }
-function navigate(page){
+function navigate(page,push=true){
+  if(!workspacePages.includes(page))page="overview";
   $$(".nav").forEach(x=>x.classList.toggle("active",x.dataset.page===page));
   $$(".page").forEach(x=>x.classList.toggle("active",x.dataset.pagePanel===page));
   const titles={overview:"经营概览",assets:"品牌与农产品",knowledge:"可信知识库",studio:"内容创作台",operations:"发布与运营",review:"审核与版本",audit:"审计记录",members:"团队与权限"};
   $("#page-title").textContent=titles[page];
+  const path=page==="overview"?"/workspace/":`/workspace/${page}`;
+  if(push&&location.pathname!==path)history.pushState({page},"",path);
 }
 async function refresh(){
   state.actor=await api("/v1/me");
@@ -185,8 +190,18 @@ async function renderReviews(selectedId){
 }
 async function loadGenerationRuns(projectId){
   state.generationRuns=projectId?await api(`/v1/content-projects/${projectId}/generation-runs`):[];
-  $("#generation-history-list").innerHTML=state.generationRuns.map(run=>`<article><div class="panel-heading"><div><h3>${escapeHtml(run.output.format||"生成内容")}</h3><p>${escapeHtml(run.provider)} / ${escapeHtml(run.model)} · ${escapeHtml(run.prompt_name)} v${escapeHtml(run.prompt_version)}</p></div><span class="badge approved">${escapeHtml(run.status)}</span></div><div class="provenance"><span>${run.latency_ms} ms</span><span>${escapeHtml(new Date(run.created_at).toLocaleString())}</span>${run.sources.map(source=>`<span title="${escapeHtml(source.id)}">${escapeHtml(source.citation_label||source.title)}</span>`).join("")}</div><details><summary>查看规范化任务与完整输出</summary><pre>${escapeHtml(JSON.stringify({input:run.normalized_input,output:run.output},null,2))}</pre></details></article>`).join("")||"该任务尚无生成记录";
+  $("#generation-history-list").innerHTML=state.generationRuns.map(run=>{
+    const manifest=run.normalized_input?.context_sources||[];
+    const sourceEvidence=run.sources.map(source=>{
+      const evidence=manifest.find(item=>item.source_id===source.id);
+      const scope=evidence?.scope==="product"?"产品知识":evidence?.scope==="brand"?"品牌知识":"组织知识";
+      const length=evidence?`${evidence.included_chars}/${evidence.source_chars} 字`:"已引用";
+      return `<li><div><strong>${escapeHtml(source.citation_label||source.title)}</strong><small>${escapeHtml(scope)} · ${escapeHtml(length)}</small></div>${evidence?.truncated?'<span class="context-flag">已截取</span>':'<span class="context-flag complete">完整</span>'}</li>`;
+    }).join("");
+    return `<article><div class="panel-heading"><div><h3>${escapeHtml(run.output.format||"生成内容")}</h3><p>${escapeHtml(run.provider)} / ${escapeHtml(run.model)} · ${escapeHtml(run.prompt_name)} v${escapeHtml(run.prompt_version)}</p></div><span class="badge approved">${escapeHtml(run.status)}</span></div><div class="provenance"><span>${run.latency_ms} ms</span><span>${escapeHtml(new Date(run.created_at).toLocaleString())}</span><span>${run.sources.length} 条可信来源</span></div>${sourceEvidence?`<div class="context-evidence"><div class="context-evidence-head"><strong>本次实际使用的知识</strong><small>${escapeHtml(run.normalized_input?.context_policy||"legacy")} · 可追溯</small></div><ul>${sourceEvidence}</ul></div>`:""}<details><summary>查看规范化任务与完整输出</summary><pre>${escapeHtml(JSON.stringify({input:run.normalized_input,output:run.output},null,2))}</pre></details></article>`;
+  }).join("")||"该任务尚无生成记录";
 }
-$("#logout").addEventListener("click",()=>{localStorage.removeItem("heyu_token");state.token="";location.reload()});
+$("#logout").addEventListener("click",()=>{localStorage.removeItem("heyu_token");state.token="";location.href="/workspace/"});
 $$(".jump").forEach(x=>x.addEventListener("click",()=>navigate(x.dataset.target)));
+window.addEventListener("popstate",()=>navigate(pageFromLocation(),false));
 showWorkspace();

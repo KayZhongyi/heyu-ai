@@ -7,7 +7,12 @@ commit SHA, deployment profile, reviewer, and pass/fail evidence.
 
 - [ ] Install from a fresh source ZIP or clone using the documented procedure.
 - [ ] Open `/health` and confirm `{"status":"ok"}`.
-- [ ] Open `/` and confirm the workspace loads without missing assets.
+- [ ] Open `/` and confirm the product homepage loads without missing assets
+      and contains no workspace forms or tenant data.
+- [ ] Select **进入工作台** and confirm `/workspace/` opens the authentication
+      or workspace surface.
+- [ ] Open `/workspace/knowledge`, refresh the browser, then use Back/Forward
+      and confirm the selected module remains independently addressable.
 - [ ] Confirm no private PDF, PPT, database, `.env`, or API key is committed.
 
 ## 2. Organization and authentication

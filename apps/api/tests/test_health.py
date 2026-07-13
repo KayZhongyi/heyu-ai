@@ -89,10 +89,21 @@ def test_login_accepts_organization_slug(client):
     assert login.json()["organization_id"] == bootstrap.json()["organization_id"]
 
 
-def test_workspace_is_served(client):
+def test_landing_and_workspace_are_served(client):
     response = client.get("/")
     assert response.status_code == 200
     assert "禾语 AI" in response.text
+    assert "让每一份农产品价值" in response.text
+    assert 'href="/workspace/"' in response.text
+
+    workspace = client.get("/workspace/studio")
+    assert workspace.status_code == 200
+    assert 'id="bootstrap-form"' in workspace.text
+    assert 'data-page-panel="studio"' in workspace.text
+
+    missing_page = client.get("/workspace/not-a-module")
+    assert missing_page.status_code == 404
+    assert missing_page.json()["detail"] == "Workspace page not found."
 
     asset = client.get("/assets/app.js")
     assert asset.status_code == 200
@@ -102,7 +113,11 @@ def test_workspace_is_served(client):
 def test_workspace_files_are_utf8(client):
     response = client.get("/")
     assert response.encoding == "utf-8"
-    assert "让真实农产品" in response.text
+    assert "让每一份农产品价值" in response.text
+
+    workspace = client.get("/workspace/")
+    assert workspace.encoding == "utf-8"
+    assert "让真实农产品" in workspace.text
 
 
 def test_find_web_dir_supports_repository_layout(tmp_path: Path):
