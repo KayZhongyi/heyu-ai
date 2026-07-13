@@ -62,6 +62,10 @@ class BrandCreate(BaseModel):
     voice: str = ""
 
 
+class BrandUpdate(BrandCreate):
+    pass
+
+
 class BrandRead(ORMModel):
     id: str
     organization_id: str
@@ -80,6 +84,10 @@ class ProductCreate(BaseModel):
     storage_method: str = ""
     selling_points: list[str] = []
     prohibited_claims: list[str] = []
+
+
+class ProductUpdate(ProductCreate):
+    pass
 
 
 class ProductRead(ORMModel):

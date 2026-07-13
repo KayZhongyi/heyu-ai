@@ -28,6 +28,9 @@ commit SHA, deployment profile, reviewer, and pass/fail evidence.
 - [ ] Create a brand with story and voice guidance.
 - [ ] Create a product with origin, specification, storage instructions,
       selling points, and prohibited claims.
+- [ ] Edit the brand and product, refresh the page, and confirm the updated values persist.
+- [ ] Confirm the audit page contains `brand.updated` and `product.updated` events.
+- [ ] Confirm creator, reviewer, and viewer roles cannot edit brand or product records.
 - [ ] Reload the page and confirm both records persist.
 
 ## 4. Trusted knowledge

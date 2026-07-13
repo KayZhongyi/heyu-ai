@@ -1,3 +1,5 @@
+import pytest
+
 from tests.conftest import bootstrap
 
 
@@ -39,6 +41,32 @@ def test_owner_can_add_member_and_role_is_enforced(client, auth):
             "/v1/brands",
             headers=creator_auth,
             json={"name": "Forbidden brand", "story": "", "voice": ""},
+        ).status_code
+        == 403
+    )
+    brand = client.post(
+        "/v1/brands",
+        headers=auth,
+        json={"name": "Owner brand", "story": "", "voice": ""},
+    ).json()
+    product = client.post(
+        "/v1/products",
+        headers=auth,
+        json={"brand_id": brand["id"], "name": "Owner product"},
+    ).json()
+    assert (
+        client.put(
+            f"/v1/brands/{brand['id']}",
+            headers=creator_auth,
+            json={"name": "Forbidden edit", "story": "", "voice": ""},
+        ).status_code
+        == 403
+    )
+    assert (
+        client.put(
+            f"/v1/products/{product['id']}",
+            headers=creator_auth,
+            json={"brand_id": brand["id"], "name": "Forbidden edit"},
         ).status_code
         == 403
     )
@@ -97,6 +125,58 @@ def test_owner_can_change_role_and_old_token_is_revoked(client, auth):
     assert new_login.status_code == 200
     new_auth = {"Authorization": f"Bearer {new_login.json()['access_token']}"}
     assert client.get("/v1/brands", headers=new_auth).status_code == 200
+
+
+@pytest.mark.parametrize("role", ["creator", "reviewer", "viewer"])
+def test_non_asset_roles_cannot_edit_brand_or_product(client, auth, role):
+    brand = client.post(
+        "/v1/brands",
+        headers=auth,
+        json={"name": "Protected brand", "story": "", "voice": ""},
+    ).json()
+    product = client.post(
+        "/v1/products",
+        headers=auth,
+        json={"brand_id": brand["id"], "name": "Protected product"},
+    ).json()
+    email = f"{role}@example.com"
+    password = f"{role}-password"
+    client.post(
+        "/v1/members",
+        headers=auth,
+        json={
+            "email": email,
+            "display_name": role.title(),
+            "password": password,
+            "role": role,
+        },
+    )
+    login = client.post(
+        "/v1/auth/login",
+        json={
+            "organization_slug": "green-farm",
+            "email": email,
+            "password": password,
+        },
+    ).json()
+    member_auth = {"Authorization": f"Bearer {login['access_token']}"}
+
+    assert (
+        client.put(
+            f"/v1/brands/{brand['id']}",
+            headers=member_auth,
+            json={"name": "Forbidden edit", "story": "", "voice": ""},
+        ).status_code
+        == 403
+    )
+    assert (
+        client.put(
+            f"/v1/products/{product['id']}",
+            headers=member_auth,
+            json={"brand_id": brand["id"], "name": "Forbidden edit"},
+        ).status_code
+        == 403
+    )
 
 
 def test_member_management_is_tenant_scoped_and_owner_protected(client, auth):

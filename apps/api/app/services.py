@@ -27,6 +27,7 @@ from app.models import (
 from app.schemas import (
     Actor,
     BrandCreate,
+    BrandUpdate,
     ContentProjectCreate,
     ContentReview,
     ContentVersionCreate,
@@ -37,6 +38,7 @@ from app.schemas import (
     KnowledgeSourceRevisionCreate,
     PerformanceSnapshotCreate,
     ProductCreate,
+    ProductUpdate,
     PublicationCreate,
     VideoDiagnosisCreate,
 )
@@ -90,6 +92,19 @@ def list_brands(db: Session, actor: Actor) -> list[Brand]:
     )
 
 
+def update_brand(db: Session, actor: Actor, brand_id: str, data: BrandUpdate) -> Brand:
+    brand = _tenant_brand(db, actor, brand_id)
+    changes = {
+        field: value for field, value in data.model_dump().items() if getattr(brand, field) != value
+    }
+    for field, value in changes.items():
+        setattr(brand, field, value)
+    audit(db, actor, "brand.updated", "brand", brand.id, {"fields": sorted(changes)})
+    db.commit()
+    db.refresh(brand)
+    return brand
+
+
 def create_product(db: Session, actor: Actor, data: ProductCreate) -> Product:
     brand = db.scalar(
         select(Brand).where(
@@ -116,6 +131,29 @@ def list_products(db: Session, actor: Actor) -> list[Product]:
             .order_by(Product.created_at.desc())
         )
     )
+
+
+def update_product(db: Session, actor: Actor, product_id: str, data: ProductUpdate) -> Product:
+    product = _tenant_product(db, actor, product_id)
+    _tenant_brand(db, actor, data.brand_id)
+    changes = {
+        field: value
+        for field, value in data.model_dump().items()
+        if getattr(product, field) != value
+    }
+    for field, value in changes.items():
+        setattr(product, field, value)
+    audit(
+        db,
+        actor,
+        "product.updated",
+        "product",
+        product.id,
+        {"fields": sorted(changes)},
+    )
+    db.commit()
+    db.refresh(product)
+    return product
 
 
 def _tenant_brand(db: Session, actor: Actor, brand_id: str) -> Brand:

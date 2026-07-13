@@ -49,9 +49,9 @@
 
       <section id="auth-view" class="auth-card">
         <div>
-          <span class="pill">零成本本地演示</span>
-          <h2>让真实农产品，被准确地讲述。</h2>
-          <p>先建立品牌与产品事实，再由 AI 生成有来源、可审核、可持续迭代的短视频与直播内容。</p>
+          <span class="pill">本地工作空间</span>
+          <h2>进入禾语内容工作台</h2>
+          <p>管理品牌与产品资料、审核知识来源，并创建可追溯的营销内容。</p>
         </div>
         <div class="auth-forms">
         <div class="auth-tabs" role="tablist" aria-label="进入工作台方式">
@@ -82,7 +82,7 @@
       <div id="workspace" hidden>
         <section class="page active" data-page-panel="overview">
           <div class="hero">
-            <div class="hero-copy"><span class="pill">TRACEABLE CONTENT ENGINE</span><h2>把可信的农产品知识，转化为<em>可以放心发布的内容。</em></h2><p>禾语将品牌资料、产地事实与产品卖点沉淀为经过审核的知识，并生成来源可查、过程可审、版本可追溯的营销脚本。</p></div>
+            <div class="hero-copy"><span class="pill">工作台概览</span><h2>今天，从哪里开始？</h2><p>查看内容资产与待办状态，然后进入对应模块继续工作。</p></div>
             <div class="hero-status"><span>今日工作焦点</span><strong><i></i><span id="focus-status">工作空间已就绪</span></strong><small id="focus-detail">先完善知识，再开始创作</small></div>
           </div>
           <div class="metric-grid">
@@ -112,8 +112,8 @@
 
         <section class="page" data-page-panel="assets">
           <div class="two-col">
-            <form class="panel" id="brand-form"><h2>新建品牌</h2><label>品牌名称<input name="name" placeholder="例如：田埂播播菜" required></label><label>品牌故事<textarea name="story" placeholder="为什么开始、服务谁、坚持什么"></textarea></label><label>表达风格<textarea name="voice" placeholder="真诚、朴实、有知识感"></textarea></label><button class="primary">保存品牌</button></form>
-            <form class="panel" id="product-form"><h2>新建农产品</h2><label>所属品牌<select name="brand_id" class="brand-select" required></select></label><label>产品名称<input name="name" placeholder="例如：当季有机番茄" required></label><div class="form-grid"><label>产地<input name="origin"></label><label>规格<input name="specification"></label><label>展示价格<input name="price_display"></label><label>保质期<input name="shelf_life"></label></div><label>储存方式<textarea name="storage_method"></textarea></label><label>核心卖点（每行一条）<textarea name="selling_points"></textarea></label><label>禁止表述（每行一条）<textarea name="prohibited_claims"></textarea></label><button class="primary">保存产品</button></form>
+            <form class="panel" id="brand-form"><input name="id" type="hidden"><h2 id="brand-form-title">新建品牌</h2><label>品牌名称<input name="name" placeholder="例如：田埂播播菜" required></label><label>品牌故事<textarea name="story" placeholder="为什么开始、服务谁、坚持什么"></textarea></label><label>表达风格<textarea name="voice" placeholder="真诚、朴实、有知识感"></textarea></label><button class="primary" id="brand-save-button">保存品牌</button><button class="ghost wide" id="brand-edit-cancel" type="button" hidden>取消编辑</button></form>
+            <form class="panel" id="product-form"><input name="id" type="hidden"><h2 id="product-form-title">新建农产品</h2><label>所属品牌<select name="brand_id" class="brand-select" required></select></label><label>产品名称<input name="name" placeholder="例如：当季有机番茄" required></label><div class="form-grid"><label>产地<input name="origin"></label><label>规格<input name="specification"></label><label>展示价格<input name="price_display"></label><label>保质期<input name="shelf_life"></label></div><label>储存方式<textarea name="storage_method"></textarea></label><label>核心卖点（每行一条）<textarea name="selling_points"></textarea></label><label>禁止表述（每行一条）<textarea name="prohibited_claims"></textarea></label><button class="primary" id="product-save-button">保存产品</button><button class="ghost wide" id="product-edit-cancel" type="button" hidden>取消编辑</button></form>
           </div>
           <div class="section-head"><div><p class="eyebrow">ASSET LIBRARY</p><h2>已有资产</h2></div></div><div id="asset-list" class="card-list empty">暂无品牌与产品</div>
         </section>

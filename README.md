@@ -9,7 +9,8 @@ history, and auditability.
 
 - Multi-tenant organizations, memberships, and role-based access control
 - Owner/Admin team management with immediate role-change enforcement
-- Brand and agricultural product records
+- Maintainable brand and agricultural product records with tenant-scoped editing,
+  role enforcement, and audit events
 - Source-backed knowledge documents with review status
 - Explicit draft → pending review → approved/rejected knowledge governance
 - Immutable, linear knowledge revision chains with per-revision integrity metadata

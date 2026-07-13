@@ -24,6 +24,7 @@ from app.schemas import (
     BootstrapRequest,
     BrandCreate,
     BrandRead,
+    BrandUpdate,
     ContentProjectCreate,
     ContentProjectRead,
     ContentReview,
@@ -47,6 +48,7 @@ from app.schemas import (
     PerformanceSnapshotRead,
     ProductCreate,
     ProductRead,
+    ProductUpdate,
     PublicationCreate,
     PublicationDetailRead,
     PublicationRead,
@@ -90,6 +92,8 @@ from app.services import (
     revise_knowledge_source,
     submit_content_version,
     submit_knowledge_source,
+    update_brand,
+    update_product,
 )
 
 
@@ -405,6 +409,16 @@ def get_brands(
     return list_brands(db, actor)
 
 
+@app.put("/v1/brands/{brand_id}", response_model=BrandRead)
+def edit_brand(
+    brand_id: str,
+    data: BrandUpdate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.product_manager)),
+) -> BrandRead:
+    return update_brand(db, actor, brand_id, data)
+
+
 @app.post("/v1/products", response_model=ProductRead, status_code=201)
 def add_product(
     data: ProductCreate,
@@ -419,6 +433,16 @@ def get_products(
     db: Session = Depends(get_db), actor: Actor = Depends(current_actor)
 ) -> list[ProductRead]:
     return list_products(db, actor)
+
+
+@app.put("/v1/products/{product_id}", response_model=ProductRead)
+def edit_product(
+    product_id: str,
+    data: ProductUpdate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.product_manager)),
+) -> ProductRead:
+    return update_product(db, actor, product_id, data)
 
 
 @app.post("/v1/knowledge", response_model=KnowledgeSourceRead, status_code=201)

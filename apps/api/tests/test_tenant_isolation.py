@@ -35,6 +35,64 @@ def test_brand_and_product_are_scoped_to_organization(client, auth):
     assert cross_tenant_product.status_code == 404
 
 
+def test_brand_and_product_updates_are_scoped_and_audited(client, auth):
+    brand = client.post(
+        "/v1/brands",
+        headers=auth,
+        json={"name": "Original brand", "story": "Before", "voice": "Warm"},
+    ).json()
+    product = client.post(
+        "/v1/products",
+        headers=auth,
+        json={"brand_id": brand["id"], "name": "Original product"},
+    ).json()
+    second = bootstrap(client, "asset-editor-second", "asset-editor@example.com")
+    second_auth = {"Authorization": f"Bearer {second['access_token']}"}
+
+    assert (
+        client.put(
+            f"/v1/brands/{brand['id']}",
+            headers=second_auth,
+            json={"name": "Hijacked", "story": "", "voice": ""},
+        ).status_code
+        == 404
+    )
+    assert (
+        client.put(
+            f"/v1/products/{product['id']}",
+            headers=second_auth,
+            json={"brand_id": brand["id"], "name": "Hijacked"},
+        ).status_code
+        == 404
+    )
+
+    updated_brand = client.put(
+        f"/v1/brands/{brand['id']}",
+        headers=auth,
+        json={"name": "Updated brand", "story": "After", "voice": "Clear"},
+    )
+    assert updated_brand.status_code == 200
+    assert updated_brand.json()["name"] == "Updated brand"
+
+    updated_product = client.put(
+        f"/v1/products/{product['id']}",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "name": "Updated product",
+            "origin": "Demo field",
+            "selling_points": ["Verified origin"],
+            "prohibited_claims": ["Medical claim"],
+        },
+    )
+    assert updated_product.status_code == 200
+    assert updated_product.json()["selling_points"] == ["Verified origin"]
+
+    actions = [item["action"] for item in client.get("/v1/audit-events", headers=auth).json()]
+    assert "brand.updated" in actions
+    assert "product.updated" in actions
+
+
 def test_invalid_token_is_rejected(client):
     response = client.get("/v1/brands", headers={"Authorization": "Bearer invalid"})
     assert response.status_code == 401

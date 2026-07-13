@@ -117,7 +117,7 @@ def test_workspace_files_are_utf8(client):
 
     workspace = client.get("/workspace/")
     assert workspace.encoding == "utf-8"
-    assert "让真实农产品" in workspace.text
+    assert "进入禾语内容工作台" in workspace.text
 
 
 def test_find_web_dir_supports_repository_layout(tmp_path: Path):

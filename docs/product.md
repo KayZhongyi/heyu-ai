@@ -17,14 +17,16 @@ products communicate clearly, accurately, and consistently.
 
 1. Create an organization and first owner.
 2. Add a brand and an agricultural product.
-3. Add source documents, submit them for review, and approve verified sources.
-4. Create a structured content brief.
-5. Generate a source-backed script through the AI gateway.
-6. Edit the generated content into a new immutable version.
-7. Explicitly submit a draft version for review.
-8. Approve or reject only a version currently pending review.
-9. Inspect the audit trail and generation provenance.
-10. Register an approved version as published and append timestamped performance
+3. Maintain brand and product facts without recreating records; edits are limited to
+   owner, admin, and product-manager roles and are written to the organization audit trail.
+4. Add source documents, submit them for review, and approve verified sources.
+5. Create a structured content brief.
+6. Generate a source-backed script through the AI gateway.
+7. Edit the generated content into a new immutable version.
+8. Explicitly submit a draft version for review.
+9. Approve or reject only a version currently pending review.
+10. Inspect the audit trail and generation provenance.
+11. Register an approved version as published and append timestamped performance
     snapshots as real platform data becomes available.
 
 ## Content types in the first release
