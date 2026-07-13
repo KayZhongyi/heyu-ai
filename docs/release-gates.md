@@ -14,6 +14,8 @@ No milestone is called "commercial-grade" solely because it has a polished UI.
 - [x] Only approved sources are eligible for production generation.
 - [x] Content edits create versions instead of overwriting review history.
 - [x] CI runs formatting/linting, tests, and migration validation.
+- [x] CI audits tracked files for private documents, databases, environment
+      files, private keys, and obvious credential patterns.
 - [x] Backup/restore and deployment instructions are documented.
 - [x] PostgreSQL backup restores into a fresh data volume in CI.
 - [x] Production mode rejects default secrets, SQLite, wildcard/non-HTTPS CORS,

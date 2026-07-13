@@ -104,6 +104,11 @@ Application rollback and database rollback are separate decisions.
 ## Secrets and external AI providers
 
 - Never commit `.env`, tokens, API keys, production databases, or user files.
+- Run `python scripts/audit-repository.py` before a release. CI runs the same
+  tracked-file audit and fails on private documents, database files, private
+  keys, environment files, and common credential formats. This is a release
+  guardrail, not a replacement for credential rotation or a dedicated secret
+  scanner.
 - Use a long random `APP_SECRET` outside local demonstrations.
 - Treat ChatGPT or Codex subscriptions as separate from API credentials.
 - Keep the deterministic provider as the no-cost fallback.

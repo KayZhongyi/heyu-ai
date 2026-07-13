@@ -29,6 +29,18 @@ jobs:
           alembic upgrade head
       - run: pytest --cov=app --cov-report=term-missing --cov-fail-under=80
 
+  repository-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Self-test repository audit rules
+        run: python scripts/test-audit-repository.py
+      - name: Audit tracked files and obvious secrets
+        run: python scripts/audit-repository.py
+
   windows-package:
     runs-on: windows-latest
     steps:
