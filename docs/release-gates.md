@@ -7,12 +7,14 @@ Evidence must refer to the exact commit being evaluated.
 
 The verified functional release-candidate baseline is:
 
-- Commit: `b38e9182cf01fc5fa1f21d84368492630a6dce8f`
-- GitHub Actions run: `29267742493`
+- Commit: `d956355d4e3f999c755fe929efb9798d636acf52`
+- GitHub Actions run: `29270467374`
 - Result: `SUCCESS`
 - Jobs: `api`, `repository-audit`, `browser-e2e`, `windows-package`, and
   `docker-build` all passed.
-- Independent review: no P0 or P1 findings; engineering MVP candidate `GO`.
+- Independent review found transaction and SQLite-concurrency risks before
+  commit; both were closed with an independent limiter transaction, atomic
+  database upserts, and concurrency/isolation regression tests.
 
 This evidence applies to that exact functional commit. Documentation changes
 after it require their own exact-commit CI before the new repository HEAD is
@@ -20,7 +22,7 @@ treated as verified.
 
 Local and remote evidence for the baseline:
 
-- 64 Python tests passed locally; the exact-commit API job passed its 80%
+- 76 Python tests passed locally; the exact-commit API job passed its 80%
   coverage gate.
 - Ruff lint and format checks passed.
 - JavaScript syntax, i18n dictionary, content-renderer, and repository-audit
@@ -43,13 +45,23 @@ Local and remote evidence for the baseline:
   source IDs are deterministically removed.
 - The invalid-provider test double is isolated in `apps/api/e2e_app.py`; the
   production entry point remains `app.main:app`.
-- SQLite migrations passed through `e1b2c3d4f5a6`, including full
+- SQLite migrations passed through `f2c3d4e5a6b7`, including full
   upgrade/downgrade/re-upgrade and an empty autogenerate check.
 - PostgreSQL was migrated from an empty database, restarted, backed up, and
   restored into a fresh volume.
 - The PostgreSQL workflow created, listed, revoked, and replaced an invitation;
   it also verified revoked-link rejection and owner/invited-user access after
   restart and restore.
+- Authentication and invitation limits persist in the primary database, emit
+  `429`, `Retry-After`, and `Cache-Control: no-store`, and survive an API
+  restart.
+- Stored limiter subjects are 64-character HMAC digests; the PostgreSQL
+  acceptance check verifies that raw account email and client address are not
+  retained in limiter buckets.
+- SQLite concurrent consumption is covered by a regression test that preloads
+  an existing bucket and proves the configured success ceiling without lost
+  updates. A separate test proves limiter commit/rollback cannot affect staged
+  business objects.
 
 ## Competition/local demo gate
 
