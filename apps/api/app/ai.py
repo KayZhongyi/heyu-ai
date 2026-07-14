@@ -247,6 +247,491 @@ class DeterministicProvider:
             "hashtags": [f"#{product.name}", "#农产品", "#产地故事"],
         }
 
+    @staticmethod
+    def _localized_shooting_checklist_content(
+        project: ContentProject,
+        brand: Brand,
+        product: Product,
+        fact_text: str,
+        selling_points: str,
+        supply: CampaignSupplySnapshot | None,
+        farmer_evidence: CampaignFarmerEvidenceSnapshot | None,
+        locale: Literal["zh-HK", "en"],
+    ) -> dict:
+        is_english = locale == "en"
+        origin = product.origin or (
+            "the origin recorded in the approved product profile"
+            if is_english
+            else "已審核產品檔案記錄的產地"
+        )
+        if is_english:
+            supply_task = (
+                f"Confirm the current specification ({supply.specification}), available "
+                f"quantity ({supply.available_quantity} {supply.quantity_unit}) and "
+                "dispatch timing; update the approved snapshot if anything changed."
+                if supply
+                else "Before filming price, stock, harvest or delivery details, add and "
+                "approve a current campaign supply snapshot."
+            )
+            farmer_task = (
+                f"Before featuring {farmer_evidence.party_display_name}, verify each "
+                "approved use of their name, image, voice and relationship wording."
+                if farmer_evidence
+                else "Do not film or describe a specific partnership or outcome without "
+                "approved subject evidence and media consent."
+            )
+            supply_subject = (
+                f"Current campaign specification: {supply.specification}"
+                if supply
+                else f"Approved specification for {product.name}"
+            )
+            supply_evidence = (
+                f"Supply snapshot revision {supply.revision_number}; stock and delivery "
+                "details must match the valid snapshot on filming day."
+                if supply
+                else "Do not show price, stock, harvest or delivery promises until a "
+                "supply snapshot is approved."
+            )
+            return {
+                "format": "mobile_shooting_checklist",
+                "shooting_goal": (
+                    f"Film a clear vertical story for {brand.name}'s {product.name}: show "
+                    "the real product first, explain verified details, then close with one "
+                    "specific next step."
+                ),
+                "before_shooting": [
+                    {
+                        "task": "Clean the phone lens, select vertical 9:16, lock focus and "
+                        "exposure, and record five seconds of room sound.",
+                        "required": True,
+                        "reason": "Keep every clip clear, consistent and easier to edit.",
+                    },
+                    {
+                        "task": f"Prepare an intact {product.name}, a clean background, its "
+                        "packaging and approved proof of origin or specification.",
+                        "required": True,
+                        "reason": "Keep every visible product fact aligned with approved records.",
+                    },
+                    {
+                        "task": supply_task,
+                        "required": True,
+                        "reason": "Price, stock, harvest and delivery details can change quickly.",
+                    },
+                    {
+                        "task": farmer_task,
+                        "required": True,
+                        "reason": "Protect privacy, media rights and accurate relationship claims.",
+                    },
+                ],
+                "shots": [
+                    {
+                        "sequence": 1,
+                        "duration_seconds": 3,
+                        "shot_size": "close-up",
+                        "orientation": "vertical",
+                        "subject": f"Front view of {product.name} and its packaging",
+                        "action": "Hold a steady frame, then make one slow push-in.",
+                        "voiceover_or_text": (
+                            f"Start with a clear look at {product.name} from {origin}."
+                        ),
+                        "evidence_required": (
+                            "Product name, packaging and origin must match approved records."
+                        ),
+                        "capture_notes": (
+                            "Keep title space above the product and record at least two takes."
+                        ),
+                    },
+                    {
+                        "sequence": 2,
+                        "duration_seconds": 8,
+                        "shot_size": "detail",
+                        "orientation": "vertical",
+                        "subject": (
+                            f"Visible texture, appearance or handling details of {product.name}"
+                        ),
+                        "action": (
+                            "Record the same real detail from two angles without "
+                            "appearance-altering filters."
+                        ),
+                        "voiceover_or_text": f"Verified product points: {selling_points}.",
+                        "evidence_required": f"Approved knowledge: {fact_text}",
+                        "capture_notes": (
+                            "Use soft or natural light and keep one continuous original take."
+                        ),
+                    },
+                    {
+                        "sequence": 3,
+                        "duration_seconds": 8,
+                        "shot_size": "medium close-up",
+                        "orientation": "vertical",
+                        "subject": supply_subject,
+                        "action": (
+                            "Show weighing, packing or specification comparison without "
+                            "fixing temporary stock in frame."
+                        ),
+                        "voiceover_or_text": (
+                            "Use the currently approved campaign page for specification "
+                            "and supply details."
+                        ),
+                        "evidence_required": supply_evidence,
+                        "capture_notes": (
+                            "Mask phone numbers, addresses and order numbers on labels "
+                            "or documents."
+                        ),
+                    },
+                    {
+                        "sequence": 4,
+                        "duration_seconds": 6,
+                        "shot_size": "medium",
+                        "orientation": "vertical",
+                        "subject": f"A real use, packing or storage moment for {product.name}",
+                        "action": (
+                            "Complete one continuous action and keep two seconds before "
+                            "and after it."
+                        ),
+                        "voiceover_or_text": product.storage_method
+                        or "Follow the approved product guidance for storage and use.",
+                        "evidence_required": (
+                            "Storage and use guidance must come from approved product records."
+                        ),
+                        "capture_notes": (
+                            "Keep packaging, tools, table position and hand movement continuous."
+                        ),
+                    },
+                    {
+                        "sequence": 5,
+                        "duration_seconds": 5,
+                        "shot_size": "close-up",
+                        "orientation": "vertical",
+                        "subject": f"{brand.name} identity with {product.name}",
+                        "action": "Hold a clean closing frame with room for one button or caption.",
+                        "voiceover_or_text": project.objective
+                        or (
+                            "Check the approved product information before deciding what "
+                            "to explore next."
+                        ),
+                        "evidence_required": (
+                            "The call to action must not include unapproved price, "
+                            "scarcity or outcome promises."
+                        ),
+                        "capture_notes": (
+                            "Hold the final frame for at least two seconds for safe "
+                            "platform cropping."
+                        ),
+                    },
+                ],
+                "continuity_checks": [
+                    (
+                        "Keep every shot vertical 9:16 with consistent packaging, "
+                        "surface and light direction."
+                    ),
+                    (
+                        "Match every spoken and visible origin, specification and brand "
+                        "name to approved records."
+                    ),
+                    (
+                        "Remove private contact, address, order, vehicle and unapproved "
+                        "face or voice details."
+                    ),
+                    (
+                        "Keep original files, filming date and evidence revision for "
+                        "review and traceability."
+                    ),
+                ],
+                "do_not_capture_or_claim": [
+                    (
+                        "Do not use filters, substitutes or staging to change real "
+                        "colour, size, quantity or freshness."
+                    ),
+                    (
+                        "Do not claim unapproved certifications, health effects, sales, "
+                        "income or customer outcomes."
+                    ),
+                    (
+                        "Do not present expired price, stock, harvest or delivery details "
+                        "as long-term promises."
+                    ),
+                    (
+                        "Do not use a farmer's name, image, voice, story or relationship "
+                        "outside the approved consent scope."
+                    ),
+                ],
+            }
+
+        supply_task = (
+            f"核對本次活動規格「{supply.specification}」、可售數量 "
+            f"{supply.available_quantity}{supply.quantity_unit} 及出貨時效；"
+            "如拍攝當日有變，須先更新已審核快照。"
+            if supply
+            else "拍攝價格、庫存、採收或物流資訊前，先補充並審核本次活動供應快照。"
+        )
+        farmer_task = (
+            f"如涉及{farmer_evidence.party_display_name}的姓名、聲音、影像或合作關係，"
+            "逐項核對授權範圍及可用說法。"
+            if farmer_evidence
+            else "未取得已審核的主體證據及影像授權前，不拍攝或聲稱具體合作關係及成效。"
+        )
+        supply_subject = (
+            f"本次活動規格：{supply.specification}" if supply else f"{product.name}的已審核規格"
+        )
+        supply_evidence = (
+            f"供應快照第 {supply.revision_number} 版；庫存及物流以拍攝當日有效快照為準。"
+            if supply
+            else "供應快照審核通過前，不展示價格、庫存、採收或物流承諾。"
+        )
+        return {
+            "format": "mobile_shooting_checklist",
+            "shooting_goal": (
+                f"以手機直度拍好{brand.name}的{product.name}：先讓觀眾看清真實產品，"
+                "再用可核實畫面說明重點，最後給出一個清晰行動提示。"
+            ),
+            "before_shooting": [
+                {
+                    "task": "清潔手機鏡頭，設定直度 9:16，鎖定曝光及對焦，並錄下 5 秒環境聲。",
+                    "required": True,
+                    "reason": "確保素材清晰、方向一致，亦方便後期保留自然聲。",
+                },
+                {
+                    "task": (
+                        f"準備外觀完整的{product.name}、乾淨背景、包裝及可證明產地或規格的"
+                        "已審核資料。"
+                    ),
+                    "required": True,
+                    "reason": "確保畫面中的產品事實與已審核資料一致。",
+                },
+                {
+                    "task": supply_task,
+                    "required": True,
+                    "reason": "價格、庫存、採收及物流屬易變資訊，不可沿用過期說法。",
+                },
+                {
+                    "task": farmer_task,
+                    "required": True,
+                    "reason": "保障私隱、肖像及合作關係描述的真確性。",
+                },
+            ],
+            "shots": [
+                {
+                    "sequence": 1,
+                    "duration_seconds": 3,
+                    "shot_size": "近鏡",
+                    "orientation": "vertical",
+                    "subject": f"{product.name}成品及包裝正面",
+                    "action": "固定機位拍攝主體，再緩慢向前推近。",
+                    "voiceover_or_text": f"先看清這份來自{origin}的{product.name}。",
+                    "evidence_required": "產品名稱、包裝及產地必須與已審核資料一致。",
+                    "capture_notes": "主體放在畫面中央偏下，上方預留標題位置；至少拍兩次。",
+                },
+                {
+                    "sequence": 2,
+                    "duration_seconds": 8,
+                    "shot_size": "特寫",
+                    "orientation": "vertical",
+                    "subject": f"{product.name}可見的外觀、質感或處理細節",
+                    "action": "從兩個角度記錄真實細節，不使用改變顏色或大小的濾鏡。",
+                    "voiceover_or_text": f"已審核的產品重點：{selling_points}。",
+                    "evidence_required": f"知識庫資料：{fact_text}",
+                    "capture_notes": "使用自然光或柔光，並保留一段連續原片。",
+                },
+                {
+                    "sequence": 3,
+                    "duration_seconds": 8,
+                    "shot_size": "中近鏡",
+                    "orientation": "vertical",
+                    "subject": supply_subject,
+                    "action": "拍攝稱重、包裝或規格核對過程，不把臨時庫存數字永久放入畫面。",
+                    "voiceover_or_text": "規格及供應資訊以本次活動已審核頁面為準。",
+                    "evidence_required": supply_evidence,
+                    "capture_notes": "如拍到標籤或單據，遮蓋電話、地址及訂單編號。",
+                },
+                {
+                    "sequence": 4,
+                    "duration_seconds": 6,
+                    "shot_size": "中鏡",
+                    "orientation": "vertical",
+                    "subject": f"{product.name}的真實使用、分裝或儲存場景",
+                    "action": "完成一個連貫動作，並在動作前後各多拍 2 秒。",
+                    "voiceover_or_text": product.storage_method
+                    or "儲存及使用方式以已審核產品說明為準。",
+                    "evidence_required": "儲存或使用建議必須來自已審核產品資料。",
+                    "capture_notes": "保持包裝、器具、檯面及手部動作連貫。",
+                },
+                {
+                    "sequence": 5,
+                    "duration_seconds": 5,
+                    "shot_size": "近鏡",
+                    "orientation": "vertical",
+                    "subject": f"{brand.name}品牌標識及{product.name}",
+                    "action": "穩定停留，並預留按鈕或字幕位置。",
+                    "voiceover_or_text": project.objective
+                    or "查看已審核產品資訊，再決定是否進一步了解。",
+                    "evidence_required": "行動提示不可包含未審核價格、稀缺性或效果保證。",
+                    "capture_notes": "最後一格至少靜止 2 秒，方便不同平台安全裁切。",
+                },
+            ],
+            "continuity_checks": [
+                "所有鏡頭保持直度 9:16，產品包裝、檯面及光線方向前後一致。",
+                "逐鏡核對口述、字幕、包裝及畫面中的產地、規格與品牌名稱。",
+                "確認沒有拍到私人電話、地址、訂單、車牌或未經授權的人臉與聲音。",
+                "保留原始素材、拍攝日期及證據版本，方便審核追溯。",
+            ],
+            "do_not_capture_or_claim": [
+                "不得使用濾鏡、替代品或擺拍改變產品真實顏色、大小、數量或新鮮度。",
+                "不得聲稱未經審核的認證、治療或保健功效、銷量、收益及消費者結果。",
+                "不得把過期價格、庫存、採收日期或物流時效拍成長期有效承諾。",
+                "不得在授權範圍外使用農戶姓名、肖像、聲音、故事或合作關係。",
+            ],
+        }
+
+    @staticmethod
+    def _shooting_checklist_content(
+        project: ContentProject,
+        brand: Brand,
+        product: Product,
+        fact_text: str,
+        selling_points: str,
+        supply: CampaignSupplySnapshot | None,
+        farmer_evidence: CampaignFarmerEvidenceSnapshot | None,
+        locale: str = "zh-CN",
+    ) -> dict:
+        if locale in {"zh-HK", "en"}:
+            return DeterministicProvider._localized_shooting_checklist_content(
+                project,
+                brand,
+                product,
+                fact_text,
+                selling_points,
+                supply,
+                farmer_evidence,
+                locale,
+            )
+        product_origin = product.origin or "已审核资料记录的产地"
+        supply_task = (
+            f"核对本次活动规格“{supply.specification}”、可售数量"
+            f"{supply.available_quantity}{supply.quantity_unit}和发货时效，"
+            "拍摄当天如有变化须先更新审核快照。"
+            if supply
+            else "拍摄价格、库存、采收和物流信息前，先补充并审核本次活动供给快照。"
+        )
+        farmer_task = (
+            f"涉及{farmer_evidence.party_display_name}的姓名、声音、影像或合作关系时，"
+            "逐项核对授权范围和可用表述。"
+            if farmer_evidence
+            else "未取得已审核主体证据与影像授权时，不拍摄或声称具体合作关系和成效。"
+        )
+        supply_subject = (
+            f"本次活动规格：{supply.specification}" if supply else f"{product.name}的已审核规格信息"
+        )
+        supply_evidence = (
+            f"供给快照 #{supply.revision_number}；库存与物流以拍摄当天有效快照为准"
+            if supply
+            else "不得展示价格、库存、采收或物流承诺，直至供给快照审核通过"
+        )
+        return {
+            "format": "mobile_shooting_checklist",
+            "shooting_goal": (
+                f"用手机竖屏拍清{brand.name}的{product.name}：先让观众看见产品，"
+                "再用可核实画面说明特点，最后给出明确行动提示。"
+            ),
+            "before_shooting": [
+                {
+                    "task": "清洁手机镜头，开启竖屏 9:16，锁定曝光与对焦，并录制 5 秒环境声。",
+                    "required": True,
+                    "reason": "保证素材清晰、方向一致，并为后期剪辑保留自然声。",
+                },
+                {
+                    "task": (
+                        f"准备外观完整的{product.name}、干净背景、包装和能证明产地或规格的"
+                        "已审核材料；不得用未审核道具暗示认证或功效。"
+                    ),
+                    "required": True,
+                    "reason": "让画面中的产品事实与审核资料一致。",
+                },
+                {
+                    "task": supply_task,
+                    "required": True,
+                    "reason": "价格、库存、采收和物流属于易变化信息，不能沿用过期口径。",
+                },
+                {
+                    "task": farmer_task,
+                    "required": True,
+                    "reason": "保护农户隐私、肖像和合作关系表述的真实性。",
+                },
+            ],
+            "shots": [
+                {
+                    "sequence": 1,
+                    "duration_seconds": 3,
+                    "shot_size": "近景",
+                    "orientation": "vertical",
+                    "subject": f"{product.name}成品与包装正面",
+                    "action": "固定机位拍摄主体，再缓慢向前推进；补拍一条无手部遮挡的安全镜头。",
+                    "voiceover_or_text": f"先看清这份来自{product_origin}的{product.name}。",
+                    "evidence_required": "产品名称、包装和产地表述必须与已审核产品资料一致。",
+                    "capture_notes": "主体置于画面中央偏下，顶部预留标题区；每条至少拍两遍。",
+                },
+                {
+                    "sequence": 2,
+                    "duration_seconds": 8,
+                    "shot_size": "特写",
+                    "orientation": "vertical",
+                    "subject": f"{product.name}可见的外观、质地或处理细节",
+                    "action": "从两个角度记录真实细节，不使用滤镜改变颜色或大小。",
+                    "voiceover_or_text": f"已审核的产品特点：{selling_points}。",
+                    "evidence_required": f"知识库事实：{fact_text}",
+                    "capture_notes": "使用自然光或柔光；保留一条连续原片，避免只拍无法核验的局部。",
+                },
+                {
+                    "sequence": 3,
+                    "duration_seconds": 8,
+                    "shot_size": "中近景",
+                    "orientation": "vertical",
+                    "subject": supply_subject,
+                    "action": "拍摄称量、包装或规格对照过程；不要把临时库存数字永久印入画面。",
+                    "voiceover_or_text": "规格与供给信息以本次活动已审核页面为准。",
+                    "evidence_required": supply_evidence,
+                    "capture_notes": "如拍到标签或单据，遮挡手机号、地址、订单号等个人信息。",
+                },
+                {
+                    "sequence": 4,
+                    "duration_seconds": 6,
+                    "shot_size": "中景",
+                    "orientation": "vertical",
+                    "subject": f"{product.name}的真实使用、分装或储存场景",
+                    "action": "完成一个连贯动作，并补拍动作开始和结束各 2 秒。",
+                    "voiceover_or_text": (
+                        product.storage_method or "储存与使用方式请以已审核产品说明为准。"
+                    ),
+                    "evidence_required": "储存或使用建议必须来自已审核产品资料。",
+                    "capture_notes": "保持包装、器具和台面位置连续，避免跳轴和手部动作断裂。",
+                },
+                {
+                    "sequence": 5,
+                    "duration_seconds": 5,
+                    "shot_size": "近景",
+                    "orientation": "vertical",
+                    "subject": f"{brand.name}品牌标识与{product.name}",
+                    "action": "稳定停留并留出按钮或字幕区域，不用夸张促销贴纸遮挡产品。",
+                    "voiceover_or_text": project.objective
+                    or "查看已审核产品信息，再决定是否了解更多。",
+                    "evidence_required": "行动引导不得包含未审核价格、稀缺性或效果保证。",
+                    "capture_notes": "最后一帧至少静止 2 秒，便于不同平台安全裁切。",
+                },
+            ],
+            "continuity_checks": [
+                "所有镜头保持竖屏 9:16，产品包装、台面和光线方向前后一致。",
+                "逐镜核对口播、字幕、包装和画面中的产地、规格及品牌名称。",
+                "确认没有拍到个人电话、住址、订单、车牌或未经授权的人脸与声音。",
+                "保留原始素材、拍摄日期和对应证据版本，便于审核追溯。",
+            ],
+            "do_not_capture_or_claim": [
+                "不得用滤镜、替代品或摆拍改变产品真实颜色、大小、数量或新鲜度。",
+                "不得声称未经审核的认证、治疗或保健功效、销量、收益及消费者结果。",
+                "不得把过期价格、库存、采收日期或物流时效拍成长期有效承诺。",
+                "不得在授权范围外使用农户姓名、肖像、声音、故事或合作关系。",
+            ],
+        }
+
     def generate_script(
         self,
         project: ContentProject,
@@ -275,6 +760,17 @@ class DeterministicProvider:
         }:
             content = self._livestream_content(
                 project, brand, product, fact_text, selling_points, supply
+            )
+        elif project.content_type == ContentType.mobile_shooting_checklist:
+            content = self._shooting_checklist_content(
+                project,
+                brand,
+                product,
+                fact_text,
+                selling_points,
+                supply,
+                farmer_evidence,
+                brief.locale if brief else "zh-CN",
             )
         else:
             content = self._text_content(project, brand, product, fact_text, selling_points, supply)
@@ -326,6 +822,15 @@ class DeterministicProvider:
                         -1,
                         {"stage": "活动必讲信息", "script": required_copy},
                     )
+            elif content["format"] == "mobile_shooting_checklist":
+                if brief.core_message:
+                    content["shots"][0]["voiceover_or_text"] = brief.core_message
+                if required_copy:
+                    content["shots"][1]["voiceover_or_text"] = (
+                        f"{content['shots'][1]['voiceover_or_text']} {required_copy}"
+                    )
+                if brief.desired_action:
+                    content["shots"][-1]["voiceover_or_text"] = brief.desired_action
         content["risk_notes"] = risk_notes
         if brief:
             content["risk_notes"].extend(
@@ -416,6 +921,37 @@ class _TitleAndCoverOutput(_StrictOutput):
     cover_copy_options: list[str] = Field(min_length=1)
 
 
+class _ShootingPreparationItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task: str = Field(min_length=1)
+    required: bool
+    reason: str = Field(min_length=1)
+
+
+class _ShootingShot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sequence: int = Field(ge=1)
+    duration_seconds: int = Field(ge=1, le=120)
+    shot_size: str = Field(min_length=1)
+    orientation: Literal["vertical"]
+    subject: str = Field(min_length=1)
+    action: str = Field(min_length=1)
+    voiceover_or_text: str = Field(min_length=1)
+    evidence_required: str = Field(min_length=1)
+    capture_notes: str = Field(min_length=1)
+
+
+class _MobileShootingChecklistOutput(_StrictOutput):
+    format: Literal["mobile_shooting_checklist"]
+    shooting_goal: str = Field(min_length=1)
+    before_shooting: list[_ShootingPreparationItem] = Field(min_length=1)
+    shots: list[_ShootingShot] = Field(min_length=1)
+    continuity_checks: list[str] = Field(min_length=1)
+    do_not_capture_or_claim: list[str] = Field(min_length=1)
+
+
 _OUTPUT_MODELS: dict[ContentType, type[_StrictOutput]] = {
     ContentType.short_video_30s: _ShortVideoOutput,
     ContentType.short_video_60s: _ShortVideoOutput,
@@ -425,6 +961,7 @@ _OUTPUT_MODELS: dict[ContentType, type[_StrictOutput]] = {
     ContentType.comment_reply: _CommentReplyOutput,
     ContentType.social_post: _SocialPostOutput,
     ContentType.title_and_cover: _TitleAndCoverOutput,
+    ContentType.mobile_shooting_checklist: _MobileShootingChecklistOutput,
 }
 
 _EXPECTED_FORMATS = {
@@ -436,6 +973,7 @@ _EXPECTED_FORMATS = {
     ContentType.comment_reply: "comment_reply",
     ContentType.social_post: "social_post",
     ContentType.title_and_cover: "title_and_cover",
+    ContentType.mobile_shooting_checklist: "mobile_shooting_checklist",
 }
 
 
@@ -475,6 +1013,13 @@ def validate_generation_output(
             "The configured AI provider returned the wrong video duration",
             code="provider_invalid_output",
         )
+    if content_type == ContentType.mobile_shooting_checklist and [
+        shot["sequence"] for shot in normalized["shots"]
+    ] != [1, 2, 3, 4, 5]:
+        raise AIProviderError(
+            "The configured AI provider must return five consecutive shooting steps",
+            code="provider_invalid_output",
+        )
 
     if trusted_source_labels and not normalized["citations"]:
         raise AIProviderError(
@@ -511,7 +1056,7 @@ def _content_strings(value: object) -> list[str]:
         return [
             text
             for key, nested in value.items()
-            if key not in {"citations", "risk_notes"}
+            if key not in {"citations", "risk_notes", "do_not_capture_or_claim"}
             for text in _content_strings(nested)
         ]
     if isinstance(value, list):

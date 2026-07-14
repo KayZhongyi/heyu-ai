@@ -291,6 +291,10 @@ async function main() {
       "/workspace/campaigns",
       "direct campaign workspace navigation did not preserve the route",
     );
+    await page
+      .locator("#campaign-list article", { hasText: campaign.title })
+      .locator("li", { hasText: "Mobile shooting checklist" })
+      .waitFor();
 
     await page.locator("#campaign-brief-campaign-select").selectOption(campaign.id);
     assert.equal(

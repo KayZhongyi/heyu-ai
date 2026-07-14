@@ -146,6 +146,28 @@ def test_campaign_brief_output_validation_blocks_missing_and_prohibited_copy():
     assert prohibited.value.code == "campaign_prohibited_message_used"
 
 
+def test_campaign_brief_output_validation_ignores_prohibition_guidance():
+    brief = campaign_brief()
+    with pytest.raises(AIProviderError) as missing:
+        validate_campaign_brief_output(
+            {
+                "format": "mobile_shooting_checklist",
+                "do_not_capture_or_claim": ["Do not State today's specification"],
+            },
+            brief,
+        )
+    assert missing.value.code == "campaign_mandatory_message_missing"
+
+    brief.mandatory_messages = []
+    validate_campaign_brief_output(
+        {
+            "format": "mobile_shooting_checklist",
+            "do_not_capture_or_claim": ["Never promise medical benefits"],
+        },
+        brief,
+    )
+
+
 def test_campaign_brief_output_validation_enforces_duration_limit():
     brief = campaign_brief()
     brief.mandatory_messages = []
@@ -189,6 +211,135 @@ def valid_short_video_output(source_id: str = "source-1") -> dict:
         "citations": [{"source_id": source_id, "label": "Approved fact"}],
         "risk_notes": [],
     }
+
+
+def valid_mobile_shooting_checklist(source_id: str = "source-1") -> dict:
+    return {
+        "format": "mobile_shooting_checklist",
+        "shooting_goal": "Capture a factual vertical product story.",
+        "before_shooting": [
+            {
+                "task": "Clean the lens and verify the approved product.",
+                "required": True,
+                "reason": "Keep the footage usable and factual.",
+            }
+        ],
+        "shots": [
+            {
+                "sequence": sequence,
+                "duration_seconds": 5,
+                "shot_size": "close-up",
+                "orientation": "vertical",
+                "subject": "Approved product and packaging",
+                "action": "Hold the frame steady.",
+                "voiceover_or_text": "Show the approved product name.",
+                "evidence_required": "Approved product record",
+                "capture_notes": "Leave safe space for captions.",
+            }
+            for sequence in range(1, 6)
+        ],
+        "continuity_checks": ["Keep product and lighting positions consistent."],
+        "do_not_capture_or_claim": ["Do not invent certifications or outcomes."],
+        "citations": [{"source_id": source_id, "label": "Approved fact"}],
+        "risk_notes": [],
+    }
+
+
+def test_deterministic_provider_builds_actionable_mobile_shooting_checklist():
+    project, brand, product = entities()
+    project.content_type = ContentType.mobile_shooting_checklist
+
+    result = DeterministicProvider().generate_script(
+        project,
+        brand,
+        product,
+        [],
+        brief=campaign_brief(),
+    )
+
+    assert result.content["format"] == "mobile_shooting_checklist"
+    assert result.content["shots"][0]["orientation"] == "vertical"
+    assert [shot["sequence"] for shot in result.content["shots"]] == [1, 2, 3, 4, 5]
+    assert "State today's specification" in result.content["shots"][1]["voiceover_or_text"]
+    assert (
+        result.content["shots"][-1]["voiceover_or_text"]
+        == "Open the product page and check today's specification"
+    )
+    validate_generation_output(
+        result.content,
+        ContentType.mobile_shooting_checklist,
+        {},
+    )
+    validate_campaign_brief_output(result.content, campaign_brief())
+
+
+@pytest.mark.parametrize(
+    ("locale", "goal_copy", "first_shot_size", "prohibition_copy"),
+    [
+        ("en", "Film a clear vertical story", "close-up", "Do not use filters"),
+        ("zh-HK", "以手機直度拍好", "近鏡", "不得使用濾鏡"),
+    ],
+)
+def test_mobile_shooting_checklist_follows_campaign_locale(
+    locale,
+    goal_copy,
+    first_shot_size,
+    prohibition_copy,
+):
+    project, brand, product = entities()
+    project.content_type = ContentType.mobile_shooting_checklist
+    brief = campaign_brief()
+    brief.locale = locale
+
+    content = (
+        DeterministicProvider()
+        .generate_script(
+            project,
+            brand,
+            product,
+            [],
+            brief=brief,
+        )
+        .content
+    )
+
+    assert goal_copy in content["shooting_goal"]
+    assert content["shots"][0]["shot_size"] == first_shot_size
+    assert content["do_not_capture_or_claim"][0].startswith(prohibition_copy)
+    validate_generation_output(content, ContentType.mobile_shooting_checklist, {})
+    validate_campaign_brief_output(content, brief)
+
+
+def test_mobile_shooting_checklist_validation_rejects_non_vertical_or_incomplete_shots():
+    non_vertical = valid_mobile_shooting_checklist()
+    non_vertical["shots"][0]["orientation"] = "landscape"
+    with pytest.raises(AIProviderError) as orientation:
+        validate_generation_output(
+            non_vertical,
+            ContentType.mobile_shooting_checklist,
+            {"source-1": "Trusted source"},
+        )
+    assert orientation.value.code == "provider_invalid_output"
+
+    incomplete = valid_mobile_shooting_checklist()
+    incomplete["shots"][0].pop("evidence_required")
+    with pytest.raises(AIProviderError) as evidence:
+        validate_generation_output(
+            incomplete,
+            ContentType.mobile_shooting_checklist,
+            {"source-1": "Trusted source"},
+        )
+    assert evidence.value.code == "provider_invalid_output"
+
+    wrong_sequence = valid_mobile_shooting_checklist()
+    wrong_sequence["shots"][-1]["sequence"] = 6
+    with pytest.raises(AIProviderError) as sequence:
+        validate_generation_output(
+            wrong_sequence,
+            ContentType.mobile_shooting_checklist,
+            {"source-1": "Trusted source"},
+        )
+    assert sequence.value.code == "provider_invalid_output"
 
 
 def test_generation_output_validation_rejects_missing_fields_and_wrong_format():

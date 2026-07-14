@@ -2,11 +2,53 @@ from datetime import UTC, datetime, timedelta
 
 from app.ai import GenerationResult
 from app.models import CampaignFarmerEvidenceSnapshot
+from app.services import detect_farmer_claims
 from tests.conftest import bootstrap, invite_and_accept
 
 
 def auth_for(account: dict) -> dict[str, str]:
     return {"Authorization": f"Bearer {account['access_token']}"}
+
+
+def test_farmer_claim_detector_ignores_explicit_prohibition_guidance():
+    content = {
+        "format": "mobile_shooting_checklist",
+        "do_not_capture_or_claim": [
+            "不得在授权范围外使用农户姓名、肖像、声音、故事或合作关系。",
+            "未经证据审核，不得声称助农成效或农户增收。",
+        ],
+    }
+
+    assert detect_farmer_claims(content) == []
+
+
+def test_farmer_claim_detector_still_scans_user_visible_shooting_copy():
+    content = {
+        "format": "mobile_shooting_checklist",
+        "shots": [
+            {
+                "voiceover_or_text": "每一单都能帮助农户增收 30%。",
+            }
+        ],
+        "do_not_capture_or_claim": ["不得编造助农成效。"],
+    }
+
+    claims = detect_farmer_claims(content)
+
+    assert claims
+    assert all(claim["path"].startswith("$.shots") for claim in claims)
+
+
+def test_farmer_claim_detector_does_not_trust_positive_copy_in_prohibition_field():
+    claims = detect_farmer_claims(
+        {
+            "format": "mobile_shooting_checklist",
+            "do_not_capture_or_claim": ["每一单都能帮助农户增收 30%。"],
+        }
+    )
+
+    assert claims
+    assert all(claim["path"].startswith("$.do_not_capture_or_claim") for claim in claims)
 
 
 def create_approved_assets(client, auth):
