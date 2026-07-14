@@ -67,15 +67,25 @@ class DeterministicProvider:
         brand: Brand,
         product: Product,
         sources: list[ContextSource],
+        locale: str = "zh-CN",
     ) -> tuple[str, str, list[dict], list[str]]:
         facts = [source.content.strip() for source in sources if source.content.strip()]
-        fact_text = "；".join(facts[:3]) or "请先补充并审核产品资料"
-        selling_points = "、".join(product.selling_points) or "真实产地与产品特色"
+        if locale == "en":
+            fact_text = "; ".join(facts[:3]) or "Add and approve product evidence first"
+            selling_points = ", ".join(product.selling_points) or "its product characteristics"
+            risk_notes = [f"Do not use: {claim}" for claim in product.prohibited_claims]
+        elif locale == "zh-HK":
+            fact_text = "；".join(facts[:3]) or "請先補充並審批產品資料"
+            selling_points = "、".join(product.selling_points) or "產品資料及特色"
+            risk_notes = [f"不得使用：{claim}" for claim in product.prohibited_claims]
+        else:
+            fact_text = "；".join(facts[:3]) or "请先补充并审核产品资料"
+            selling_points = "、".join(product.selling_points) or "产品资料与特色"
+            risk_notes = [f"禁止使用：{claim}" for claim in product.prohibited_claims]
         citations = [
             {"source_id": source.id, "label": source.citation_label or source.title}
             for source in sources
         ]
-        risk_notes = [f"禁止使用：{claim}" for claim in product.prohibited_claims]
         return fact_text, selling_points, citations, risk_notes
 
     @staticmethod
@@ -86,10 +96,111 @@ class DeterministicProvider:
         fact_text: str,
         selling_points: str,
         supply: CampaignSupplySnapshot | None,
+        locale: str = "zh-CN",
     ) -> dict:
         is_sixty_seconds = project.content_type == ContentType.short_video_60s
         end_second = 60 if is_sixty_seconds else 30
         middle_end = 48 if is_sixty_seconds else 20
+        if locale == "en":
+            if product.origin:
+                hook = f"What makes {product.name} from {product.origin} worth a closer look?"
+                origin_title = f"The verified origin story of {product.name}"
+            else:
+                hook = f"What makes {product.name} worth a closer look?"
+                origin_title = f"The product story behind {product.name}"
+            body = (
+                f"This is {product.name} from {brand.name}. "
+                f"Its verified product points are {selling_points}. "
+                f"According to approved evidence: {fact_text}. "
+            )
+            if project.objective:
+                body += f"This story is designed to help the audience {project.objective}. "
+            if product.price_display:
+                body += f"The current displayed offer is {product.price_display}. "
+            if supply:
+                body += (
+                    f"This campaign uses the {supply.specification} specification, with "
+                    f"{supply.available_quantity} {supply.quantity_unit} currently available "
+                    f"and dispatch expected within {supply.ship_within_hours} hours. "
+                )
+            cta = "Ask us for the verified production or product details you want to check next."
+            return {
+                "format": "short_video_script",
+                "duration_seconds": end_second,
+                "title_options": [
+                    origin_title,
+                    f"Meet {product.name} in {end_second} seconds",
+                    f"{brand.name}: a closer look at a real farm product",
+                ],
+                "hook": hook,
+                "script": f"{hook} {body}{cta}",
+                "shots": [
+                    {
+                        "seconds": "0-3",
+                        "visual": "Reveal the real product and place of origin",
+                        "voiceover": hook,
+                    },
+                    {
+                        "seconds": f"3-{middle_end}",
+                        "visual": "Show product details and real production scenes",
+                        "voiceover": body.strip(),
+                    },
+                    {
+                        "seconds": f"{middle_end}-{end_second}",
+                        "visual": "Close on the brand and one clear next step",
+                        "voiceover": cta,
+                    },
+                ],
+                "cta": cta,
+            }
+        if locale == "zh-HK":
+            if product.origin:
+                hook = f"來自{product.origin}的{product.name}，有甚麼值得你留意？"
+                origin_title = f"{product.name}的產地故事"
+            else:
+                hook = f"{product.name}有甚麼值得你留意？"
+                origin_title = f"{product.name}的產品故事"
+            body = (
+                f"這是{brand.name}帶來的{product.name}。"
+                f"已審批的產品重點包括{selling_points}。"
+                f"根據經審核的產品資料：{fact_text}。"
+            )
+            if project.objective:
+                body += f"這段內容希望幫助大家{project.objective}。"
+            if product.price_display:
+                body += f"目前展示資料為{product.price_display}。"
+            if supply:
+                body += (
+                    f"本次活動規格為{supply.specification}，"
+                    f"現時可售數量為{supply.available_quantity}{supply.quantity_unit}，"
+                    f"下單後預計{supply.ship_within_hours}小時內寄出。"
+                )
+            cta = "想核實更多生產或產品資料，歡迎在留言區告訴我們。"
+            return {
+                "format": "short_video_script",
+                "duration_seconds": end_second,
+                "title_options": [
+                    origin_title,
+                    f"{end_second}秒認識{product.name}",
+                    f"{brand.name}帶你細看真實農產",
+                ],
+                "hook": hook,
+                "script": f"{hook}{body}{cta}",
+                "shots": [
+                    {"seconds": "0-3", "visual": "產品及產地快速亮相", "voiceover": hook},
+                    {
+                        "seconds": f"3-{middle_end}",
+                        "visual": "產品細節及真實生產場景",
+                        "voiceover": body,
+                    },
+                    {
+                        "seconds": f"{middle_end}-{end_second}",
+                        "visual": "品牌畫面及清晰行動提示",
+                        "voiceover": cta,
+                    },
+                ],
+                "cta": cta,
+            }
         hook = f"你知道来自{product.origin or '产地'}的{product.name}有什么特别吗？"
         body = (
             f"这是{brand.name}带来的{product.name}。"
@@ -141,7 +252,149 @@ class DeterministicProvider:
         fact_text: str,
         selling_points: str,
         supply: CampaignSupplySnapshot | None,
+        locale: str = "zh-CN",
     ) -> dict:
+        if locale == "en":
+            greeting = (
+                f"Welcome to {brand.name}. Today we are taking a closer look at {product.name}."
+            )
+            fact_statement = f"According to approved evidence: {fact_text}."
+            if project.content_type == ContentType.livestream_opening:
+                segments = [
+                    {"stage": "Welcome", "script": greeting},
+                    {
+                        "stage": "Value preview",
+                        "script": (
+                            "We will cover its origin, verified characteristics and how to "
+                            f"evaluate it, starting with {selling_points}."
+                        ),
+                    },
+                    {
+                        "stage": "Audience prompt",
+                        "script": (
+                            "Tell us in the comments: would you like to check the origin, "
+                            "specification or storage guidance first?"
+                        ),
+                    },
+                ]
+                format_name = "livestream_opening"
+            elif project.content_type == ContentType.livestream_interaction:
+                segments = [
+                    {
+                        "stage": "Origin question",
+                        "script": f"Where do you think {product.name} comes from?",
+                    },
+                    {
+                        "stage": "Priority question",
+                        "script": (
+                            f"Which point would you like us to verify first: {selling_points}?"
+                        ),
+                    },
+                    {
+                        "stage": "Concern check",
+                        "script": (
+                            "When buying farm products, which matters most to you: quality, "
+                            "storage or delivery?"
+                        ),
+                    },
+                    {"stage": "Evidence-led answer", "script": fact_statement},
+                ]
+                format_name = "livestream_interaction"
+            else:
+                purchase_script = (
+                    f"This campaign uses the {supply.specification} specification, with "
+                    f"{supply.available_quantity} {supply.quantity_unit} currently available, "
+                    f"dispatch expected within {supply.ship_within_hours} hours, and this "
+                    f"freight policy: {supply.freight_policy}."
+                    if supply
+                    else (
+                        "The specification is "
+                        f"{product.specification or 'shown on the current product page'}, "
+                        "and the storage guidance is "
+                        + (product.storage_method or "provided in the approved product information")
+                        + "."
+                    )
+                )
+                segments = [
+                    {"stage": "Product reveal", "script": greeting},
+                    {
+                        "stage": "Verified product points",
+                        "script": f"The points worth checking are {selling_points}.",
+                    },
+                    {"stage": "Evidence", "script": fact_statement},
+                    {"stage": "Purchase information", "script": purchase_script},
+                    {
+                        "stage": "Close and invite questions",
+                        "script": (
+                            "What else would you like to verify? Leave a question and we "
+                            "will answer from the approved records."
+                        ),
+                    },
+                ]
+                format_name = "livestream_product_pitch"
+            return {
+                "format": format_name,
+                "run_of_show": segments,
+                "host_notes": [
+                    "Use approved facts only; do not improvise health or outcome claims.",
+                    "Confirm price, stock and delivery against the live campaign page.",
+                ],
+            }
+        if locale == "zh-HK":
+            greeting = f"歡迎來到{brand.name}直播，今日同大家認識{product.name}。"
+            fact_statement = f"根據經審核的產品資料：{fact_text}。"
+            if project.content_type == ContentType.livestream_opening:
+                segments = [
+                    {"stage": "歡迎", "script": greeting},
+                    {
+                        "stage": "內容預告",
+                        "script": f"接下來會講清楚產地、特色及選購方法，先由{selling_points}說起。",
+                    },
+                    {
+                        "stage": "互動",
+                        "script": "新加入的朋友可以留言：你最想先了解產地、規格還是儲存方法？",
+                    },
+                ]
+                format_name = "livestream_opening"
+            elif project.content_type == ContentType.livestream_interaction:
+                segments = [
+                    {"stage": "產地提問", "script": f"大家估一估，{product.name}來自哪裏？"},
+                    {"stage": "重點選擇", "script": f"{selling_points}之中，你最想先聽哪一點？"},
+                    {"stage": "顧慮收集", "script": "選購農產品時，你最關心品質、儲存還是運送？"},
+                    {"stage": "按證據回應", "script": fact_statement},
+                ]
+                format_name = "livestream_interaction"
+            else:
+                purchase_script = (
+                    f"本次活動規格為{supply.specification}，"
+                    f"現時可售{supply.available_quantity}{supply.quantity_unit}，"
+                    f"下單後預計{supply.ship_within_hours}小時內寄出，"
+                    f"運費安排為{supply.freight_policy}。"
+                    if supply
+                    else (
+                        f"規格為{product.specification or '以目前商品頁為準'}，"
+                        f"儲存建議為{product.storage_method or '請參閱已審批產品說明'}。"
+                    )
+                )
+                segments = [
+                    {"stage": "產品亮相", "script": greeting},
+                    {"stage": "產品重點", "script": f"值得留意的已審批特點包括{selling_points}。"},
+                    {"stage": "事實依據", "script": fact_statement},
+                    {"stage": "選購提示", "script": purchase_script},
+                    {
+                        "stage": "互動收結",
+                        "script": "還有哪項產品資料想核實？請留言，我們會按經審核的資料回覆。",
+                    },
+                ]
+                format_name = "livestream_product_pitch"
+            return {
+                "format": format_name,
+                "run_of_show": segments,
+                "host_notes": [
+                    "只陳述已審批事實，不即場延伸功效或結果承諾。",
+                    "價格、庫存及物流以直播時的實際活動頁面為準。",
+                ],
+            }
         greeting = f"欢迎来到{brand.name}直播间，今天带大家认识{product.name}。"
         fact_statement = f"根据已审核资料：{fact_text}。"
         if project.content_type == ContentType.livestream_opening:
@@ -205,7 +458,125 @@ class DeterministicProvider:
         fact_text: str,
         selling_points: str,
         supply: CampaignSupplySnapshot | None,
+        locale: str = "zh-CN",
     ) -> dict:
+        if locale == "en":
+            if project.content_type == ContentType.comment_reply:
+                return {
+                    "format": "comment_reply",
+                    "reply_options": [
+                        (
+                            f"Thanks for asking. The verified points for {product.name} are "
+                            f"{selling_points}; these details come from approved product records."
+                        ),
+                        f"The approved information we can confirm is: {fact_text}.",
+                        (
+                            "Tell us whether you want to check specification, storage or "
+                            "delivery, and we will answer from the approved records."
+                        ),
+                    ],
+                }
+            if project.content_type == ContentType.title_and_cover:
+                if product.origin:
+                    origin_title = f"Meet {product.name} through its verified origin"
+                    origin_cover = f"Verified origin · {product.name}"
+                else:
+                    origin_title = f"Meet {product.name} through its product story"
+                    origin_cover = f"Product facts · {product.name}"
+                return {
+                    "format": "title_and_cover",
+                    "title_options": [
+                        origin_title,
+                        f"Why {brand.name} chose {product.name}",
+                        f"Check the facts before choosing {product.name}",
+                    ],
+                    "cover_copy_options": [
+                        origin_cover,
+                        "Check the facts. Choose with confidence.",
+                        selling_points,
+                    ],
+                }
+            supply_copy = (
+                f"This campaign uses the {supply.specification} specification, with "
+                f"{supply.available_quantity} {supply.quantity_unit} currently available "
+                f"and dispatch expected within {supply.ship_within_hours} hours. "
+                if supply
+                else ""
+            )
+            headline = (
+                f"A closer look at {product.name} from {product.origin}"
+                if product.origin
+                else f"A closer look at {product.name} and its product details"
+            )
+            return {
+                "format": "social_post",
+                "headline": headline,
+                "body": (
+                    f"{brand.name} is making the product information clear: the verified "
+                    f"points are {selling_points}. According to approved evidence, "
+                    f"{fact_text}. {supply_copy}"
+                ).strip(),
+                "cta": (
+                    "What product detail would you like to verify next? Leave a question "
+                    "and we will answer from the approved records."
+                ),
+                "hashtags": [f"#{product.name}", "#FarmProducts", "#OriginStory"],
+            }
+        if locale == "zh-HK":
+            if project.content_type == ContentType.comment_reply:
+                return {
+                    "format": "comment_reply",
+                    "reply_options": [
+                        (
+                            f"多謝關注。{product.name}的已審批重點包括{selling_points}，"
+                            "相關資料來自經審核的產品檔案。"
+                        ),
+                        f"就你關心的產品資料，目前可以確認的是：{fact_text}。",
+                        "如想了解規格、儲存或寄送資料，請告訴我們具體問題，我們會按資料核實。",
+                    ],
+                }
+            if project.content_type == ContentType.title_and_cover:
+                if product.origin:
+                    origin_title = f"由產地認識{product.name}"
+                    origin_cover = f"產地資料 · {product.name}"
+                else:
+                    origin_title = f"由產品故事認識{product.name}"
+                    origin_cover = f"產品資料 · {product.name}"
+                return {
+                    "format": "title_and_cover",
+                    "title_options": [
+                        origin_title,
+                        f"{brand.name}為何選擇{product.name}",
+                        f"選購{product.name}前，先看清事實",
+                    ],
+                    "cover_copy_options": [
+                        origin_cover,
+                        "先看事實，再選農產",
+                        selling_points,
+                    ],
+                }
+            supply_copy = (
+                f"本次活動規格為{supply.specification}，"
+                f"現時可售{supply.available_quantity}{supply.quantity_unit}，"
+                f"下單後預計{supply.ship_within_hours}小時內寄出。"
+                if supply
+                else ""
+            )
+            headline = (
+                f"今日認真介紹來自{product.origin}的{product.name}"
+                if product.origin
+                else f"今日認真介紹{product.name}"
+            )
+            return {
+                "format": "social_post",
+                "headline": headline,
+                "body": (
+                    f"{brand.name}希望把產品資料講清楚：已審批重點包括{selling_points}。"
+                    f"根據經審核的產品資料，{fact_text}。{supply_copy}"
+                ),
+                "cta": "你還想核實哪項產品資料？歡迎留言，我們會按經審核的資料補充。",
+                "hashtags": [f"#{product.name}", "#農產品", "#產地故事"],
+            }
         if project.content_type == ContentType.comment_reply:
             return {
                 "format": "comment_reply",
@@ -743,15 +1114,16 @@ class DeterministicProvider:
         brief: CampaignBriefRevision | None = None,
     ) -> GenerationResult:
         started = time.perf_counter()
+        locale = brief.locale if brief else "zh-CN"
         fact_text, selling_points, citations, risk_notes = self._common_context(
-            brand, product, sources
+            brand, product, sources, locale
         )
         if project.content_type in {
             ContentType.short_video_30s,
             ContentType.short_video_60s,
         }:
             content = self._video_content(
-                project, brand, product, fact_text, selling_points, supply
+                project, brand, product, fact_text, selling_points, supply, locale
             )
         elif project.content_type in {
             ContentType.livestream_opening,
@@ -759,7 +1131,7 @@ class DeterministicProvider:
             ContentType.livestream_interaction,
         }:
             content = self._livestream_content(
-                project, brand, product, fact_text, selling_points, supply
+                project, brand, product, fact_text, selling_points, supply, locale
             )
         elif project.content_type == ContentType.mobile_shooting_checklist:
             content = self._shooting_checklist_content(
@@ -770,10 +1142,12 @@ class DeterministicProvider:
                 selling_points,
                 supply,
                 farmer_evidence,
-                brief.locale if brief else "zh-CN",
+                locale,
             )
         else:
-            content = self._text_content(project, brand, product, fact_text, selling_points, supply)
+            content = self._text_content(
+                project, brand, product, fact_text, selling_points, supply, locale
+            )
         if brief:
             required_copy = " ".join(
                 message.strip() for message in brief.mandatory_messages if message.strip()
@@ -818,9 +1192,13 @@ class DeterministicProvider:
                 if brief.desired_action:
                     content["run_of_show"][-1]["script"] = brief.desired_action
                 if required_copy:
+                    stage = {
+                        "en": "Required campaign message",
+                        "zh-HK": "活動必須提及",
+                    }.get(locale, "活动必讲信息")
                     content["run_of_show"].insert(
                         -1,
-                        {"stage": "活动必讲信息", "script": required_copy},
+                        {"stage": stage, "script": required_copy},
                     )
             elif content["format"] == "mobile_shooting_checklist":
                 if brief.core_message:
@@ -833,11 +1211,22 @@ class DeterministicProvider:
                     content["shots"][-1]["voiceover_or_text"] = brief.desired_action
         content["risk_notes"] = risk_notes
         if brief:
+            prohibited_prefix = {
+                "en": "Do not use the campaign brief's prohibited wording: ",
+                "zh-HK": "不得使用活動 Brief 的禁用字句：",
+            }.get(locale, "不得使用活动简报禁用表述：")
             content["risk_notes"].extend(
-                f"不得使用活动简报禁用表述：{message}" for message in brief.prohibited_messages
+                f"{prohibited_prefix}{message}" for message in brief.prohibited_messages
             )
         if farmer_evidence:
-            content["risk_notes"].append("助农与合作关系声明只能使用已审核且在授权范围内的表述。")
+            farmer_risk = {
+                "en": (
+                    "Farmer-impact and partnership claims must stay within approved "
+                    "evidence and consent."
+                ),
+                "zh-HK": "助農及合作關係說法只可使用已審批且在授權範圍內的表述。",
+            }.get(locale, "助农与合作关系声明只能使用已审核且在授权范围内的表述。")
+            content["risk_notes"].append(farmer_risk)
         content["citations"] = citations
         return GenerationResult(
             content=content,
