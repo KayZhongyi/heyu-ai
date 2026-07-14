@@ -122,6 +122,7 @@ docs/
   acceptance-test.md           人工验收流程
 scripts/
   setup_demo_accounts.py       安全创建两至三个展示账号
+  seed_demo_workspace.py       初始化合成演示资料与内容
   release-evidence.py          生成精确提交发布证据
   audit-repository.py          仓库发布审计
   test-browser-e2e.js          浏览器端到端测试
