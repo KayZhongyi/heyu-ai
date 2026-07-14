@@ -173,6 +173,21 @@ FARMER_CLAIM_SKIP_KEYS = {
     "metadata",
     "internal_notes",
 }
+FARMER_CLAIM_PROHIBITION_KEYS = {"do_not_capture_or_claim"}
+FARMER_CLAIM_PROHIBITION_PREFIXES = (
+    "不得",
+    "禁止",
+    "請勿",
+    "请勿",
+    "不要",
+    "do not ",
+    "don't ",
+    "must not ",
+    "never ",
+)
+FARMER_CLAIM_CONDITIONAL_PROHIBITION = re.compile(
+    r"^(?:未经|未經|未取得|未获|未獲).{0,30}(?:不得|不应|不應|不要|禁止)"
+)
 QUANTIFIED_PATTERN = re.compile(
     r"(?:\d+(?:\.\d+)?\s*(?:%|％|元|万元|萬元|户|戶|吨|噸|kg|公斤|元|美元|港元))",
     re.IGNORECASE,
@@ -203,19 +218,36 @@ def detect_farmer_claims(content: object) -> list[dict]:
 
     detected: list[dict] = []
 
-    def visit(value: object, path: str) -> None:
+    def visit(value: object, path: str, *, prohibition_guidance: bool = False) -> None:
         if isinstance(value, dict):
             for key, child in value.items():
-                if str(key).lower() not in FARMER_CLAIM_SKIP_KEYS:
-                    visit(child, f"{path}.{key}")
+                normalized_key = str(key).lower()
+                if normalized_key not in FARMER_CLAIM_SKIP_KEYS:
+                    visit(
+                        child,
+                        f"{path}.{key}",
+                        prohibition_guidance=(
+                            prohibition_guidance or normalized_key in FARMER_CLAIM_PROHIBITION_KEYS
+                        ),
+                    )
             return
         if isinstance(value, list):
             for index, child in enumerate(value):
-                visit(child, f"{path}[{index}]")
+                visit(
+                    child,
+                    f"{path}[{index}]",
+                    prohibition_guidance=prohibition_guidance,
+                )
             return
         if not isinstance(value, str):
             return
         lowered = value.casefold()
+        if prohibition_guidance:
+            stripped = lowered.strip()
+            if stripped.startswith(
+                FARMER_CLAIM_PROHIBITION_PREFIXES
+            ) or FARMER_CLAIM_CONDITIONAL_PROHIBITION.search(stripped):
+                return
         matched_types: set[str] = set()
         for claim_type, phrases in FARMER_CLAIM_PATTERNS.items():
             if any(phrase.casefold() in lowered for phrase in phrases):
@@ -1474,6 +1506,12 @@ def create_campaign_package(
             ),
             ("livestream_interaction", ContentType.livestream_interaction, 60, False),
             ("comment_reply_bank", ContentType.comment_reply, 70, False),
+            (
+                "mobile_shooting_checklist",
+                ContentType.mobile_shooting_checklist,
+                80,
+                False,
+            ),
         )
         for slot_key, content_type, position, required in default_items:
             project = ContentProject(

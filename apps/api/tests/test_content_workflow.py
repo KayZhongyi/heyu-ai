@@ -60,6 +60,66 @@ def create_approved_source(client, auth, brand, product):
     return approved.json()
 
 
+def test_mobile_shooting_checklist_generation_is_versioned_and_traceable(client, auth):
+    brand, product = create_brand_and_product(client, auth)
+    brand = client.put(
+        f"/v1/brands/{brand['id']}",
+        headers=auth,
+        json={"name": brand["name"], "story": "真实产品品牌", "voice": brand["voice"]},
+    ).json()
+    client.post(f"/v1/brands/{brand['id']}/submit", headers=auth)
+    brand = client.post(
+        f"/v1/brands/{brand['id']}/review",
+        headers=auth,
+        json={"status": "approved", "note": "Neutral brand record approved"},
+    ).json()
+    source = create_approved_source(client, auth, brand, product)
+    project = client.post(
+        "/v1/content-projects",
+        headers=auth,
+        json={
+            "brand_id": brand["id"],
+            "product_id": product["id"],
+            "title": "手机拍摄清单",
+            "content_type": "mobile_shooting_checklist",
+            "platform": "douyin",
+            "objective": "引导观众查看已审核产品信息",
+        },
+    )
+    assert project.status_code == 201, project.text
+    project_data = project.json()
+
+    response = client.post(
+        f"/v1/content-projects/{project_data['id']}/generate",
+        headers=auth,
+    )
+
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    content = payload["version"]["content"]
+    assert content["format"] == "mobile_shooting_checklist"
+    assert len(content["shots"]) == 5
+    assert all(shot["orientation"] == "vertical" for shot in content["shots"])
+    assert content["citations"] == [{"source_id": source["id"], "label": "Test product record"}]
+    assert payload["version"]["version_number"] == 1
+    assert payload["source_ids"] == [source["id"]]
+    runs = client.get(
+        f"/v1/content-projects/{project_data['id']}/generation-runs",
+        headers=auth,
+    )
+    assert runs.status_code == 200, runs.text
+    run = runs.json()[0]
+    assert run["id"] == payload["run_id"]
+    assert run["status"] == "succeeded"
+    assert run["sources"] == [
+        {
+            "id": source["id"],
+            "title": "Approved product fact",
+            "citation_label": "Test product record",
+        }
+    ]
+
+
 def test_generation_requires_approved_assets_and_edits_reset_approval(client, auth):
     brand = client.post(
         "/v1/brands",

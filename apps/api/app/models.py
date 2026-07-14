@@ -44,6 +44,7 @@ class KnowledgeKind(StrEnum):
 class ContentType(StrEnum):
     short_video_30s = "short_video_30s"
     short_video_60s = "short_video_60s"
+    mobile_shooting_checklist = "mobile_shooting_checklist"
     livestream_opening = "livestream_opening"
     livestream_product_pitch = "livestream_product_pitch"
     livestream_interaction = "livestream_interaction"

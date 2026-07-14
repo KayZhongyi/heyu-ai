@@ -9,7 +9,11 @@
     hook: "开场钩子", script: "完整口播", shots: "分镜脚本", cta: "行动引导",
     livestream: "直播流程", hostNotes: "主播提示", replyOptions: "回复备选",
     coverOptions: "封面文案备选", headline: "标题", body: "正文", hashtags: "话题标签",
-    structured: "结构化内容", risks: "风险提示", citations: "引用来源",
+    shootingGoal: "拍摄目标", beforeShooting: "开拍前准备", shotTasks: "镜头任务",
+    continuityChecks: "连贯性检查", prohibitedCapture: "禁止拍摄或声称",
+    required: "必做", optional: "建议", evidenceRequired: "事实依据",
+    captureNotes: "拍摄提示", structured: "结构化内容", risks: "风险提示",
+    citations: "引用来源",
   };
   const label = (options, key) => options?.t ? options.t(`content_renderer.${key}`) : defaultLabels[key];
   const section = (title, lines) => {
@@ -49,6 +53,21 @@
       lines.push(...section(label(options, "body"), [content.body]));
       lines.push(...section(label(options, "cta"), [content.cta]));
       lines.push(...section(label(options, "hashtags"), [(content.hashtags || []).join(" ")]));
+    } else if (format === "mobile_shooting_checklist") {
+      lines.push(...section(label(options, "shootingGoal"), [content.shooting_goal]));
+      lines.push(...section(label(options, "beforeShooting"), (content.before_shooting || []).map(
+        item => `${item.required ? label(options, "required") : label(options, "optional")}｜${text(item.task)}｜${text(item.reason)}`,
+      )));
+      lines.push(...section(label(options, "shotTasks"), (content.shots || []).map(
+        shot => [
+          `${text(shot.sequence)}｜${text(shot.duration_seconds)}s｜${text(shot.shot_size)}｜${text(shot.subject)}`,
+          `${text(shot.action)}｜${text(shot.voiceover_or_text)}`,
+          `${label(options, "evidenceRequired")}：${text(shot.evidence_required)}`,
+          `${label(options, "captureNotes")}：${text(shot.capture_notes)}`,
+        ].join("\n"),
+      )));
+      lines.push(...section(label(options, "continuityChecks"), numbered(content.continuity_checks)));
+      lines.push(...section(label(options, "prohibitedCapture"), numbered(content.do_not_capture_or_claim)));
     } else {
       lines.push(...section(label(options, "structured"), [JSON.stringify(content, null, 2)]));
     }

@@ -28,6 +28,28 @@ const fixtures = [
     title_options: ["从产地认识番茄"],
     cover_copy_options: ["先看事实"],
   },
+  {
+    format: "mobile_shooting_checklist",
+    shooting_goal: "用手机竖屏拍清产品事实。",
+    before_shooting: [
+      { task: "清洁镜头并核对产品", required: true, reason: "保证画面清晰且信息准确" },
+    ],
+    shots: [
+      {
+        sequence: 1,
+        duration_seconds: 5,
+        shot_size: "近景",
+        orientation: "vertical",
+        subject: "产品与包装",
+        action: "稳定拍摄",
+        voiceover_or_text: "展示已审核产品名称",
+        evidence_required: "已审核产品资料",
+        capture_notes: "预留字幕安全区",
+      },
+    ],
+    continuity_checks: ["保持产品和光线位置一致"],
+    do_not_capture_or_claim: ["不得虚构认证或功效"],
+  },
 ];
 
 for (const fixture of fixtures) {
@@ -37,6 +59,7 @@ for (const fixture of fixtures) {
   assert.match(rendered, /禾语 AI 内容稿/);
   assert.match(rendered, /风险提示/);
   assert.match(rendered, /产品档案/);
+  assert.doesNotMatch(rendered, /\[object Object\]/);
   assert.doesNotMatch(rendered, /^\s*\{/);
 }
 
