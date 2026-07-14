@@ -1,10 +1,11 @@
+import base64
 from pathlib import Path
 
 import pytest
 from sqlalchemy.exc import OperationalError
 
-from app.config import Settings
-from app.main import find_web_dir
+from app.config import Settings, get_settings
+from app.main import find_web_dir, valid_demo_basic_authorization
 
 
 def test_health(client):
@@ -59,6 +60,141 @@ def test_production_settings_accept_explicit_secure_values():
         cors_origins="https://heyu.example,https://admin.heyu.example",
         auto_create_schema=False,
     ).validate_runtime()
+
+
+def test_production_settings_allow_same_origin_only_cors():
+    Settings(
+        app_env="production",
+        app_secret="a-unique-production-secret-with-more-than-32-characters",
+        database_url="postgresql+psycopg://app:secret@db:5432/heyu",
+        cors_origins="",
+        auto_create_schema=False,
+    ).validate_runtime()
+
+
+@pytest.mark.parametrize(
+    ("provider_url", "sqlalchemy_url"),
+    [
+        (
+            "postgresql://app:secret@db:5432/heyu",
+            "postgresql+psycopg://app:secret@db:5432/heyu",
+        ),
+        (
+            "postgres://app:secret@db:5432/heyu",
+            "postgresql+psycopg://app:secret@db:5432/heyu",
+        ),
+    ],
+)
+def test_provider_postgresql_urls_select_installed_psycopg_driver(provider_url, sqlalchemy_url):
+    assert Settings(database_url=provider_url).sqlalchemy_database_url == sqlalchemy_url
+
+
+def test_alembic_url_escapes_provider_percent_encoding():
+    settings = Settings(database_url="postgresql://app:p%40ss@db:5432/heyu")
+    assert settings.alembic_database_url == ("postgresql+psycopg://app:p%%40ss@db:5432/heyu")
+
+
+def test_production_settings_reject_non_postgresql_database():
+    settings = Settings(
+        app_env="production",
+        app_secret="a-unique-production-secret-with-more-than-32-characters",
+        database_url="mysql://app:secret@db:3306/heyu",
+        cors_origins="",
+        auto_create_schema=False,
+    )
+    with pytest.raises(RuntimeError, match="DATABASE_URL must use PostgreSQL"):
+        settings.validate_runtime()
+
+
+def test_demo_access_protection_requires_strong_credentials():
+    settings = Settings(
+        app_env="production",
+        app_secret="a-unique-production-secret-with-more-than-32-characters",
+        database_url="postgresql://app:secret@db:5432/heyu",
+        cors_origins="",
+        auto_create_schema=False,
+        demo_access_protection_enabled=True,
+        demo_basic_auth_username="",
+        demo_basic_auth_password="short",
+    )
+    with pytest.raises(RuntimeError) as error:
+        settings.validate_runtime()
+    assert "DEMO_BASIC_AUTH_USERNAME" in str(error.value)
+    assert "DEMO_BASIC_AUTH_PASSWORD" in str(error.value)
+
+
+def test_demo_basic_authorization_uses_constant_value_comparison():
+    settings = Settings(
+        demo_basic_auth_username="heyu-demo",
+        demo_basic_auth_password="a-long-demo-password",
+    )
+    valid = base64.b64encode(b"heyu-demo:a-long-demo-password").decode()
+    invalid = base64.b64encode(b"heyu-demo:wrong-password").decode()
+    assert valid_demo_basic_authorization(f"Basic {valid}", settings)
+    assert not valid_demo_basic_authorization(f"Basic {invalid}", settings)
+    assert not valid_demo_basic_authorization("Basic not-base64", settings)
+    assert not valid_demo_basic_authorization("Bearer token", settings)
+
+
+def test_demo_access_middleware_protects_public_surfaces_and_bootstrap(client, monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "demo_access_protection_enabled", True)
+    monkeypatch.setattr(settings, "demo_basic_auth_username", "heyu-demo")
+    monkeypatch.setattr(settings, "demo_basic_auth_password", "a-long-demo-password")
+
+    denied_page = client.get("/")
+    assert denied_page.status_code == 401
+    assert denied_page.headers["www-authenticate"].startswith("Basic ")
+    assert client.get("/health").status_code == 200
+    assert client.get("/ready").status_code == 200
+
+    denied_bootstrap = client.post(
+        "/v1/auth/bootstrap",
+        json={
+            "organization_name": "Protected Demo",
+            "organization_slug": "protected-demo",
+            "email": "owner@protected.example",
+            "display_name": "Protected Owner",
+            "password": "SecurePassword2026!",
+        },
+    )
+    assert denied_bootstrap.status_code == 401
+
+    credentials = base64.b64encode(b"heyu-demo:a-long-demo-password").decode()
+    allowed_page = client.get("/", headers={"Authorization": f"Basic {credentials}"})
+    assert allowed_page.status_code == 200
+
+    spoofed_bootstrap = client.post(
+        "/v1/auth/bootstrap",
+        headers={"Authorization": "Bearer not-a-real-token"},
+        json={
+            "organization_name": "Spoofed Demo",
+            "organization_slug": "spoofed-demo",
+            "email": "owner@spoofed.example",
+            "display_name": "Spoofed Owner",
+            "password": "SecurePassword2026!",
+        },
+    )
+    assert spoofed_bootstrap.status_code == 401
+
+    bootstrap = client.post(
+        "/v1/auth/bootstrap",
+        headers={"Authorization": f"Basic {credentials}"},
+        json={
+            "organization_name": "Protected Demo",
+            "organization_slug": "protected-demo",
+            "email": "owner@protected.example",
+            "display_name": "Protected Owner",
+            "password": "SecurePassword2026!",
+        },
+    )
+    assert bootstrap.status_code == 201
+    actor = client.get(
+        "/v1/me",
+        headers={"Authorization": f"Bearer {bootstrap.json()['access_token']}"},
+    )
+    assert actor.status_code == 200
+    assert actor.json()["role"] == "owner"
 
 
 def test_development_settings_keep_zero_cost_defaults():
