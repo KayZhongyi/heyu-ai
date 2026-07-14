@@ -7,8 +7,8 @@ Evidence must refer to the exact commit being evaluated.
 
 The verified functional release-candidate baseline is:
 
-- Commit: `d956355d4e3f999c755fe929efb9798d636acf52`
-- GitHub Actions run: `29270467374`
+- Commit: `6bb7b12dd4351407b58a474fd3ae3e20c483fa83`
+- GitHub Actions run: `29311635621`
 - Result: `SUCCESS`
 - Jobs: `api`, `repository-audit`, `browser-e2e`, `windows-package`, and
   `docker-build` all passed.
@@ -16,14 +16,16 @@ The verified functional release-candidate baseline is:
   commit; both were closed with an independent limiter transaction, atomic
   database upserts, and concurrency/isolation regression tests.
 
-This evidence applies to that exact functional commit. Documentation changes
-after it require their own exact-commit CI before the new repository HEAD is
-treated as verified.
+This evidence applies only to that exact commit. Generate a machine-readable
+record for a newer commit with `python scripts/release-evidence.py`; see
+`docs/release-evidence.md`. Documentation changes after the baseline require
+their own exact-commit CI before the newer repository HEAD is treated as
+verified.
 
 Local and remote evidence for the baseline:
 
-- 76 Python tests passed locally; the exact-commit API job passed its 80%
-  coverage gate.
+- 133 Python tests are collected locally; the exact-commit API job passed its
+  80% coverage gate.
 - Ruff lint and format checks passed.
 - JavaScript syntax, i18n dictionary, content-renderer, and repository-audit
   checks passed.

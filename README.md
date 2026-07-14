@@ -118,9 +118,11 @@ docs/
   product.md                   产品范围与业务规则
   operations.md                启动、备份、恢复与运维
   release-gates.md             Demo、工程 MVP 与公网发布门槛
+  release-evidence.md          精确提交自动化发布证据
   acceptance-test.md           人工验收流程
 scripts/
   setup_demo_accounts.py       安全创建两至三个展示账号
+  release-evidence.py          生成精确提交发布证据
   audit-repository.py          仓库发布审计
   test-browser-e2e.js          浏览器端到端测试
   test-i18n.js                 三语完整性测试
