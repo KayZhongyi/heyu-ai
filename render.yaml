@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: heyu-ai-demo
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerContext: .
+    dockerfilePath: ./apps/api/Dockerfile
+    healthCheckPath: /ready
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: heyu-ai-demo-db
+          property: connectionString
+      - key: AUTO_CREATE_SCHEMA
+        value: "false"
+      - key: ABUSE_LIMITS_ENABLED
+        value: "true"
+      - key: DEMO_ACCESS_PROTECTION_ENABLED
+        value: "true"
+      - key: DEMO_BASIC_AUTH_USERNAME
+        value: heyu-demo
+      - key: DEMO_BASIC_AUTH_PASSWORD
+        sync: false
+      - key: CORS_ORIGINS
+        value: ""
+      - key: AI_PROVIDER
+        value: mock
+      - key: AI_MODEL
+        value: deterministic-v1
+
+databases:
+  - name: heyu-ai-demo-db
+    plan: free
+    region: singapore
+    databaseName: heyu_ai
+    user: heyu_ai
+    ipAllowList: []

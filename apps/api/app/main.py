@@ -1,3 +1,5 @@
+import base64
+import binascii
 import hashlib
 import secrets
 from contextlib import asynccontextmanager
@@ -6,7 +8,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import IntegrityError
@@ -166,11 +168,63 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="Agri Content Platform API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[item.strip() for item in get_settings().cors_origins.split(",")],
+    allow_origins=[item.strip() for item in get_settings().cors_origins.split(",") if item.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+DEMO_PUBLIC_API_PATHS = {
+    "/v1/auth/bootstrap",
+    "/v1/auth/login",
+    "/v1/invitations/inspect",
+    "/v1/invitations/accept",
+}
+
+
+def valid_demo_basic_authorization(authorization: str, settings: Settings) -> bool:
+    if not authorization.startswith("Basic "):
+        return False
+    try:
+        encoded = authorization.removeprefix("Basic ").strip()
+        decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+        username, password = decoded.split(":", 1)
+    except (binascii.Error, UnicodeDecodeError, ValueError):
+        return False
+    return secrets.compare_digest(
+        username, settings.demo_basic_auth_username
+    ) and secrets.compare_digest(password, settings.demo_basic_auth_password)
+
+
+@app.middleware("http")
+async def protect_supervised_demo(request: Request, call_next):
+    settings = get_settings()
+    if (
+        not settings.demo_access_protection_enabled
+        or request.url.path in {"/health", "/ready"}
+        or request.method == "OPTIONS"
+    ):
+        return await call_next(request)
+
+    authorization = request.headers.get("authorization", "")
+    if valid_demo_basic_authorization(authorization, settings):
+        return await call_next(request)
+
+    if (
+        authorization.startswith("Bearer ")
+        and request.url.path.startswith("/v1/")
+        and request.url.path not in DEMO_PUBLIC_API_PATHS
+    ):
+        return await call_next(request)
+
+    return PlainTextResponse(
+        "Heyu AI demo access is required.",
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        headers={
+            "WWW-Authenticate": 'Basic realm="Heyu AI Demo", charset="UTF-8"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @app.middleware("http")

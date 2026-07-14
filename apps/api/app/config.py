@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     invitation_inspect_limit_window_seconds: int = 300
     invitation_accept_limit_attempts: int = 10
     invitation_accept_limit_window_seconds: int = 300
+    demo_access_protection_enabled: bool = False
+    demo_basic_auth_username: str = ""
+    demo_basic_auth_password: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -40,18 +43,32 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.app_env.strip().lower() == "production"
 
+    @property
+    def sqlalchemy_database_url(self) -> str:
+        """Use the installed psycopg v3 driver for provider-issued PostgreSQL URLs."""
+        if self.database_url.startswith("postgresql://"):
+            return self.database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+        if self.database_url.startswith("postgres://"):
+            return self.database_url.replace("postgres://", "postgresql+psycopg://", 1)
+        return self.database_url
+
+    @property
+    def alembic_database_url(self) -> str:
+        """Escape URL interpolation characters before passing through ConfigParser."""
+        return self.sqlalchemy_database_url.replace("%", "%%")
+
     def validate_runtime(self) -> None:
         """Reject unsafe production settings before the application starts."""
         errors: list[str] = []
         if self.is_production:
             if self.app_secret in DEVELOPMENT_SECRETS or len(self.app_secret) < 32:
                 errors.append("APP_SECRET must be a unique value with at least 32 characters")
-            if self.database_url.startswith("sqlite"):
+            if not self.sqlalchemy_database_url.startswith("postgresql+psycopg://"):
                 errors.append("DATABASE_URL must use PostgreSQL in production")
 
             origins = [item.strip() for item in self.cors_origins.split(",") if item.strip()]
-            if not origins or "*" in origins:
-                errors.append("CORS_ORIGINS must explicitly list trusted origins")
+            if "*" in origins:
+                errors.append("CORS_ORIGINS must not contain a wildcard in production")
             for origin in origins:
                 parsed = urlparse(origin)
                 if parsed.scheme != "https" or not parsed.netloc:
@@ -62,6 +79,14 @@ class Settings(BaseSettings):
                 errors.append("AUTO_CREATE_SCHEMA must be false in production")
             if not self.abuse_limits_enabled:
                 errors.append("ABUSE_LIMITS_ENABLED must be true in production")
+            if self.demo_access_protection_enabled:
+                if not self.demo_basic_auth_username.strip():
+                    errors.append(
+                        "DEMO_BASIC_AUTH_USERNAME is required when demo access "
+                        "protection is enabled"
+                    )
+                if len(self.demo_basic_auth_password) < 12:
+                    errors.append("DEMO_BASIC_AUTH_PASSWORD must contain at least 12 characters")
 
         positive_limits = {
             "ABUSE_BUCKET_RETENTION_SECONDS": self.abuse_bucket_retention_seconds,

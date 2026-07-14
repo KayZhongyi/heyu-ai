@@ -10,7 +10,9 @@ claim that browser appearance or usability has been reviewed by a human.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
+import os
 import sys
 import time
 import traceback
@@ -36,10 +38,18 @@ class AcceptanceFailure(RuntimeError):
 
 
 class ApiClient:
-    def __init__(self, base_url: str, timeout: float) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float,
+        demo_username: str = "",
+        demo_password: str = "",
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.token = ""
+        self.demo_username = demo_username
+        self.demo_password = demo_password
 
     def request(
         self,
@@ -57,6 +67,11 @@ class ApiClient:
             headers["Content-Type"] = "application/json; charset=utf-8"
         if authenticated and self.token:
             headers["Authorization"] = f"Bearer {self.token}"
+        elif self.demo_username or self.demo_password:
+            credentials = base64.b64encode(
+                f"{self.demo_username}:{self.demo_password}".encode("utf-8")
+            ).decode("ascii")
+            headers["Authorization"] = f"Basic {credentials}"
         request = urllib.request.Request(
             f"{self.base_url}{path}",
             data=body,
@@ -100,8 +115,16 @@ class ApiClient:
 
 
 class AcceptanceRun:
-    def __init__(self, base_url: str, timeout: float) -> None:
-        self.client = ApiClient(base_url, timeout)
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float,
+        demo_username: str = "",
+        demo_password: str = "",
+    ) -> None:
+        self.client = ApiClient(base_url, timeout, demo_username, demo_password)
+        self.demo_username = demo_username
+        self.demo_password = demo_password
         self.steps: list[StepResult] = []
         self.ids: dict[str, str] = {}
         self.suffix = uuid.uuid4().hex[:10]
@@ -519,7 +542,12 @@ class AcceptanceRun:
         }
 
     def _isolation_and_audit(self) -> dict[str, Any]:
-        other = ApiClient(self.client.base_url, self.client.timeout)
+        other = ApiClient(
+            self.client.base_url,
+            self.client.timeout,
+            self.demo_username,
+            self.demo_password,
+        )
         other_slug = f"heyu-isolation-{self.suffix}"
         token = other.request(
             "POST",
@@ -599,7 +627,20 @@ def main() -> int:
         sys.stderr.reconfigure(encoding="utf-8")
     args = parse_args()
     started = datetime.now(UTC)
-    runner = AcceptanceRun(args.base_url, args.timeout)
+    demo_username = os.environ.get("HEYU_DEMO_USERNAME", "")
+    demo_password = os.environ.get("HEYU_DEMO_PASSWORD", "")
+    if bool(demo_username) != bool(demo_password):
+        print(
+            "[FAIL] HEYU_DEMO_USERNAME and HEYU_DEMO_PASSWORD must be set together.",
+            file=sys.stderr,
+        )
+        return 2
+    runner = AcceptanceRun(
+        args.base_url,
+        args.timeout,
+        demo_username=demo_username,
+        demo_password=demo_password,
+    )
     status = "PASS"
     error = None
     error_trace = None
