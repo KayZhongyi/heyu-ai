@@ -507,9 +507,7 @@ def test_localized_sixty_second_video_keeps_duration_and_shot_boundaries(locale)
     brief.mandatory_messages = []
 
     content = (
-        DeterministicProvider()
-        .generate_script(project, brand, product, [], brief=brief)
-        .content
+        DeterministicProvider().generate_script(project, brand, product, [], brief=brief).content
     )
 
     assert content["duration_seconds"] == 60
