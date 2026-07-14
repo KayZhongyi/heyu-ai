@@ -5,6 +5,7 @@ import pytest
 
 from app.ai import (
     AIProviderError,
+    ContextSource,
     DeterministicProvider,
     OpenAICompatibleProvider,
     get_ai_provider,
@@ -12,7 +13,14 @@ from app.ai import (
     validate_generation_output,
 )
 from app.config import Settings
-from app.models import Brand, CampaignBriefRevision, ContentProject, ContentType, Product
+from app.models import (
+    Brand,
+    CampaignBriefRevision,
+    CampaignSupplySnapshot,
+    ContentProject,
+    ContentType,
+    Product,
+)
 
 
 def entities():
@@ -308,6 +316,205 @@ def test_mobile_shooting_checklist_follows_campaign_locale(
     assert content["do_not_capture_or_claim"][0].startswith(prohibition_copy)
     validate_generation_output(content, ContentType.mobile_shooting_checklist, {})
     validate_campaign_brief_output(content, brief)
+
+
+@pytest.mark.parametrize(
+    ("locale", "content_type", "path", "expected"),
+    [
+        ("en", ContentType.short_video_30s, ("shots", 0, "visual"), "Reveal the real product"),
+        ("en", ContentType.livestream_opening, ("run_of_show", 0, "stage"), "Welcome"),
+        (
+            "en",
+            ContentType.livestream_product_pitch,
+            ("run_of_show", 0, "stage"),
+            "Product reveal",
+        ),
+        (
+            "en",
+            ContentType.livestream_interaction,
+            ("run_of_show", 0, "stage"),
+            "Origin question",
+        ),
+        ("en", ContentType.comment_reply, ("reply_options", 0), "Thanks for asking"),
+        ("en", ContentType.social_post, ("headline",), "A closer look"),
+        ("en", ContentType.title_and_cover, ("title_options", 0), "Meet"),
+        ("zh-HK", ContentType.short_video_30s, ("shots", 0, "visual"), "產品及產地快速亮相"),
+        ("zh-HK", ContentType.livestream_opening, ("run_of_show", 0, "stage"), "歡迎"),
+        (
+            "zh-HK",
+            ContentType.livestream_product_pitch,
+            ("run_of_show", 0, "stage"),
+            "產品亮相",
+        ),
+        (
+            "zh-HK",
+            ContentType.livestream_interaction,
+            ("run_of_show", 0, "stage"),
+            "產地提問",
+        ),
+        ("zh-HK", ContentType.comment_reply, ("reply_options", 0), "多謝關注"),
+        ("zh-HK", ContentType.social_post, ("headline",), "今日認真介紹"),
+        ("zh-HK", ContentType.title_and_cover, ("title_options", 0), "由產地認識"),
+    ],
+)
+def test_deterministic_marketing_content_follows_campaign_locale(
+    locale,
+    content_type,
+    path,
+    expected,
+):
+    project, brand, product = entities()
+    project.content_type = content_type
+    brief = campaign_brief()
+    brief.locale = locale
+    brief.core_message = ""
+    brief.audience_need = ""
+    brief.desired_action = ""
+    brief.mandatory_messages = []
+
+    content = (
+        DeterministicProvider()
+        .generate_script(
+            project,
+            brand,
+            product,
+            [],
+            brief=brief,
+        )
+        .content
+    )
+
+    value = content
+    for part in path:
+        value = value[part]
+    assert expected in value
+    serialized = json.dumps(content, ensure_ascii=False)
+    assert product.name in serialized
+    assert product.prohibited_claims[0] in serialized
+    if locale == "en":
+        assert content["risk_notes"][0].startswith("Do not use:")
+    else:
+        assert content["risk_notes"][0].startswith("不得使用：")
+    validate_generation_output(content, content_type, {})
+    validate_campaign_brief_output(content, brief)
+
+
+@pytest.mark.parametrize("locale", ["en", "zh-HK"])
+def test_localized_marketing_content_preserves_reviewed_business_values(locale):
+    project, brand, product = entities()
+    project.objective = "導向 SKU-A7 詳情頁"
+    product.origin = "雲南·紅河 A區"
+    product.price_display = "HK$88／2盒"
+    product.selling_points = ["自然成熟 21天"]
+    source = ContextSource(
+        id="source-1",
+        title="批次記錄",
+        citation_label="2026-Q3 批次",
+        content="糖度抽檢 8.6°Bx；批次 LOT-A7",
+        content_sha256="sha256",
+    )
+    supply = CampaignSupplySnapshot(
+        specification="500g × 2盒",
+        available_quantity=37,
+        quantity_unit="份",
+        ship_within_hours=36,
+        freight_policy="港九滿 HK$199 包郵",
+    )
+    brief = campaign_brief()
+    brief.locale = locale
+    brief.core_message = ""
+    brief.audience_need = ""
+    brief.desired_action = ""
+    brief.mandatory_messages = []
+
+    project.content_type = ContentType.short_video_30s
+    video = (
+        DeterministicProvider()
+        .generate_script(project, brand, product, [source], supply=supply, brief=brief)
+        .content
+    )
+    video_text = json.dumps(video, ensure_ascii=False)
+    for reviewed_value in (
+        product.name,
+        product.origin,
+        product.price_display,
+        product.selling_points[0],
+        source.content,
+        supply.specification,
+        str(supply.available_quantity),
+        supply.quantity_unit,
+        str(supply.ship_within_hours),
+        project.objective,
+    ):
+        assert reviewed_value in video_text
+
+    project.content_type = ContentType.livestream_product_pitch
+    livestream = (
+        DeterministicProvider()
+        .generate_script(project, brand, product, [source], supply=supply, brief=brief)
+        .content
+    )
+    assert supply.freight_policy in json.dumps(livestream["run_of_show"], ensure_ascii=False)
+    marketing_text = json.dumps(
+        {key: value for key, value in video.items() if key not in {"risk_notes", "citations"}},
+        ensure_ascii=False,
+    )
+    assert product.prohibited_claims[0] not in marketing_text
+    assert any(product.prohibited_claims[0] in note for note in video["risk_notes"])
+
+
+@pytest.mark.parametrize(
+    ("locale", "forbidden"),
+    [
+        ("en", ("verified place of origin", "verified origin")),
+        ("zh-HK", ("真實產地", "已審批資料記錄的產地")),
+    ],
+)
+def test_localized_content_does_not_invent_verified_origin(locale, forbidden):
+    project, brand, product = entities()
+    product.origin = ""
+    brief = campaign_brief()
+    brief.locale = locale
+    brief.core_message = ""
+    brief.audience_need = ""
+    brief.desired_action = ""
+    brief.mandatory_messages = []
+
+    for content_type in (
+        ContentType.short_video_30s,
+        ContentType.social_post,
+        ContentType.title_and_cover,
+    ):
+        project.content_type = content_type
+        content = (
+            DeterministicProvider()
+            .generate_script(project, brand, product, [], brief=brief)
+            .content
+        )
+        serialized = json.dumps(content, ensure_ascii=False).lower()
+        assert all(phrase.lower() not in serialized for phrase in forbidden)
+
+
+@pytest.mark.parametrize("locale", ["en", "zh-HK"])
+def test_localized_sixty_second_video_keeps_duration_and_shot_boundaries(locale):
+    project, brand, product = entities()
+    project.content_type = ContentType.short_video_60s
+    brief = campaign_brief()
+    brief.locale = locale
+    brief.core_message = ""
+    brief.audience_need = ""
+    brief.desired_action = ""
+    brief.mandatory_messages = []
+
+    content = (
+        DeterministicProvider()
+        .generate_script(project, brand, product, [], brief=brief)
+        .content
+    )
+
+    assert content["duration_seconds"] == 60
+    assert [shot["seconds"] for shot in content["shots"]] == ["0-3", "3-48", "48-60"]
+    validate_generation_output(content, ContentType.short_video_60s, {})
 
 
 def test_mobile_shooting_checklist_validation_rejects_non_vertical_or_incomplete_shots():
