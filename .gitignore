@@ -5,6 +5,7 @@ node_modules/
 .pnpm-store/
 .next/
 dist/
+build/
 coverage/
 .coverage
 __pycache__/
