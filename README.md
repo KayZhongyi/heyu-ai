@@ -40,6 +40,8 @@
 需要让组长或内容同学直接通过网址体验时，可以按
 [Render 免费在线 Demo 指南](docs/render-demo.md)创建短期演示环境。仓库无需因此公开；
 实际连接 Render 和 GitHub 外部账号前必须由负责人确认授权。
+部署完成后可使用 [`scripts/setup_demo_accounts.py`](scripts/setup_demo_accounts.py)
+通过真实邀请流程创建两至三个展示账号。所有密码只从本机环境变量读取，不会写入仓库或验收报告。
 
 ## 新成员从这里开始
 
@@ -118,6 +120,7 @@ docs/
   release-gates.md             Demo、工程 MVP 与公网发布门槛
   acceptance-test.md           人工验收流程
 scripts/
+  setup_demo_accounts.py       安全创建两至三个展示账号
   audit-repository.py          仓库发布审计
   test-browser-e2e.js          浏览器端到端测试
   test-i18n.js                 三语完整性测试
