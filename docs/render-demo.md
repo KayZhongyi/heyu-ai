@@ -100,6 +100,20 @@ python scripts/seed_demo_workspace.py `
 或最新内容版本已经被驳回，脚本会停止，不会覆盖人工资料或抹掉审核意见。输出报告不含
 密码或令牌。所有示例资料均为合成数据，不得作为真实品牌、产品、产地或经营事实使用。
 
+### 推荐：一次完成账号与内容初始化
+
+部署状态变为 `Live` 后，在仓库根目录运行：
+
+```powershell
+.\scripts\initialize-render-demo.ps1 `
+  -BaseUrl https://实际地址.onrender.com
+```
+
+脚本会在 PowerShell 中安全询问 Render 外层访问密码以及三个 Demo 账号密码，然后依次
+创建账号和合成展示内容。输入内容不会出现在命令行参数或报告中；脚本结束时会恢复或
+清除当前进程中的临时环境变量。生成的 `accounts.json` 和 `workspace.json` 只包含非
+敏感验收信息，默认写入被 Git 忽略的 `outputs/render-demo/`。
+
 ## 首次验收
 
 将实际地址替换到下面的命令中：
