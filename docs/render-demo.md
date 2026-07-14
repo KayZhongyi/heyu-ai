@@ -38,6 +38,45 @@ PostgreSQL 有有效期，因此它只适合作为短期 Demo 数据库。部署
 浏览器首次打开时会显示系统登录框。用户名固定为 `heyu-demo`，密码是创建
 Blueprint 时填写的临时密码。只将这组信息发送给本次演示成员，演示结束后立即删除。
 
+## 准备两至三个展示账号
+
+推荐使用同一个演示组织中的三个角色：
+
+- `owner`：负责人，管理组织、资料、成员与审核流程；
+- `creator`：内容同学，生成和修改营销内容；
+- `reviewer`：审核同学，查看依据并完成内容审核。
+
+账号必须通过平台的 Bootstrap、邀请和接受邀请接口创建，不要把账号密码或数据库种子
+硬编码进仓库。先在当前 PowerShell 窗口设置临时密码：
+
+```powershell
+$env:HEYU_DEMO_USERNAME = "heyu-demo"
+$env:HEYU_DEMO_PASSWORD = "<Render 外层访问密码>"
+$env:HEYU_DEMO_OWNER_PASSWORD = "<负责人临时密码>"
+$env:HEYU_DEMO_CREATOR_PASSWORD = "<内容账号临时密码>"
+$env:HEYU_DEMO_REVIEWER_PASSWORD = "<审核账号临时密码>"
+```
+
+四个密码必须各不相同；外层访问密码至少 12 位，三个账号密码至少 10 位。
+
+然后运行：
+
+```powershell
+python scripts/setup_demo_accounts.py `
+  --base-url https://实际地址.onrender.com `
+  --accounts 3 `
+  --output outputs/render-demo-accounts.json
+```
+
+默认邮箱为 `leader@demo.example`、`video@demo.example` 和 `review@demo.example`。平台当前
+不发送邮件，因此可使用这些合成地址；需要更换时使用 `--owner-email`、`--creator-email`
+和 `--reviewer-email`。只需要两个账号时传入 `--accounts 2`。
+
+一次完整执行成功后，脚本可重复运行：已有组织会改为登录，已有成员会被验证而不会重复创建。
+如果已有账号的角色不一致，脚本默认停止；负责人确认确实需要修改后，才可增加
+`--repair-roles`。输出报告只包含组织、邮箱、角色和用户 ID，不包含密码、访问令牌或邀请令牌。
+临时密码应通过私下渠道发送，演示结束后删除 Render 资源。
+
 ## 首次验收
 
 将实际地址替换到下面的命令中：
