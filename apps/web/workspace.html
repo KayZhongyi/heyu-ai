@@ -207,6 +207,56 @@
               <div id="campaign-list" class="stack empty" data-business-data></div>
             </div>
           </div>
+          <section class="panel brief-workbench">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">EVIDENCE-BACKED CAMPAIGN BRIEF</p>
+                <h2 data-i18n="campaignBrief.heading">营销 Brief 与事实证据</h2>
+                <p class="form-note" data-i18n="campaignBrief.intro">先确定受众、核心信息和行动目标，再把每个事实卖点绑定到已审核资料、当期供给或农户授权。</p>
+              </div>
+              <span class="pill" id="campaign-brief-revision-count">0</span>
+            </div>
+            <label><span data-i18n="campaignBrief.campaign">选择营销活动</span><select id="campaign-brief-campaign-select"></select></label>
+            <div class="brief-layout">
+              <form id="campaign-brief-form" class="brief-form" data-write-scope="content">
+                <div class="form-grid">
+                  <label><span data-i18n="campaignBrief.platform">发布平台</span><input name="platform" required></label>
+                  <label><span data-i18n="campaignBrief.locale">内容语言</span><select name="locale">
+                    <option value="zh-CN" data-i18n="campaignBrief.locale.zh-CN">简体中文</option>
+                    <option value="zh-HK" data-i18n="campaignBrief.locale.zh-HK">繁體中文（香港）</option>
+                    <option value="en" data-i18n="campaignBrief.locale.en">English</option>
+                  </select></label>
+                </div>
+                <label><span data-i18n="campaignBrief.targetAudience">目标受众</span><textarea name="target_audience" required></textarea></label>
+                <label><span data-i18n="campaignBrief.audienceNeed">受众真实需要</span><textarea name="audience_need" required></textarea></label>
+                <label><span data-i18n="campaignBrief.objective">营销目标</span><textarea name="objective" required></textarea></label>
+                <label><span data-i18n="campaignBrief.coreMessage">核心信息</span><textarea name="core_message" required></textarea></label>
+                <label><span data-i18n="campaignBrief.desiredAction">希望受众采取的行动</span><textarea name="desired_action" required></textarea></label>
+                <label><span data-i18n="campaignBrief.tone">表达语气</span><input name="tone"></label>
+                <div class="form-grid">
+                  <label><span data-i18n="campaignBrief.hookSeconds">开头抓取时间（秒）</span><input name="hook_seconds" type="number" min="1" max="60"></label>
+                  <label><span data-i18n="campaignBrief.maxDuration">最长时长（秒）</span><input name="max_duration_seconds" type="number" min="1" max="3600"></label>
+                </div>
+                <label><span data-i18n="campaignBrief.mandatory">必须表达（每行一项）</span><textarea name="mandatory_messages"></textarea></label>
+                <label><span data-i18n="campaignBrief.prohibited">禁止表达（每行一项）</span><textarea name="prohibited_messages"></textarea></label>
+                <fieldset class="claim-builder">
+                  <legend data-i18n="campaignBrief.claims">事实卖点与证据</legend>
+                  <p class="form-note" data-i18n="campaignBrief.claimsHelp">每条事实卖点至少绑定一个当前有效证据。系统会在提交、生成、审核和发布时再次验证。</p>
+                  <div id="campaign-brief-claims" class="claim-rows"></div>
+                  <button class="ghost wide" id="campaign-brief-add-claim" type="button" data-i18n="campaignBrief.addClaim">添加事实卖点</button>
+                </fieldset>
+                <label><span data-i18n="campaignBrief.extraRequirements">额外要求</span><textarea name="extra_requirements"></textarea></label>
+                <label><span data-i18n="campaignBrief.changeSummary">本次修订说明</span><input name="change_summary" maxlength="255"></label>
+                <button class="primary wide" type="submit" data-i18n="campaignBrief.saveDraft">保存 Brief 草稿</button>
+              </form>
+              <div>
+                <div class="section-head supply-history-head">
+                  <div><p class="eyebrow">BRIEF REVISION HISTORY</p><h3 data-i18n="campaignBrief.history">Brief 版本、证据完整度与审核</h3></div>
+                </div>
+                <div id="campaign-brief-history" class="stack empty" data-business-data></div>
+              </div>
+            </div>
+          </section>
           <section class="panel supply-workbench">
             <div class="panel-heading">
               <div>
@@ -266,7 +316,7 @@
             </div>
             <label><span data-i18n="farmerEvidence.campaign">选择营销活动</span><select id="farmer-evidence-campaign-select"></select></label>
             <div class="farmer-evidence-layout">
-              <form id="farmer-evidence-form" class="farmer-evidence-form" data-write-scope="content">
+              <form id="farmer-evidence-form" class="farmer-evidence-form" data-write-scope="farmer-evidence">
                 <div class="form-grid">
                   <label><span data-i18n="farmerEvidence.partyDisplayName">农户或合作社公开名称</span><input name="party_display_name" required data-i18n-placeholder="farmerEvidence.placeholder.partyDisplayName"></label>
                   <label><span data-i18n="farmerEvidence.relationshipType">合作关系类型</span><select name="relationship_type" required>

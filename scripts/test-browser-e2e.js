@@ -283,9 +283,150 @@ async function main() {
     assert.equal(campaignResponse.status(), 201);
     const campaign = await campaignResponse.json();
 
-    await page.goto(`${baseUrl}/workspace/?lang=en`, { waitUntil: "networkidle" });
+    await page.goto(`${baseUrl}/workspace/campaigns?lang=en`, { waitUntil: "networkidle" });
     await page.locator("#workspace").waitFor({ state: "visible" });
-    await openWorkspacePage(page, "campaigns");
+    await page.locator('[data-page-panel="campaigns"]').waitFor({ state: "visible" });
+    assert.equal(
+      new URL(page.url()).pathname,
+      "/workspace/campaigns",
+      "direct campaign workspace navigation did not preserve the route",
+    );
+
+    await page.locator("#campaign-brief-campaign-select").selectOption(campaign.id);
+    assert.equal(
+      await page.locator("#campaign-brief-campaign-select").inputValue(),
+      campaign.id,
+      "campaign brief workbench did not select the requested campaign",
+    );
+    const campaignBriefForm = page.locator("#campaign-brief-form");
+    await campaignBriefForm.locator('[name="platform"]').fill("Instagram");
+    await campaignBriefForm.locator('[name="locale"]').selectOption("en");
+    await campaignBriefForm
+      .locator('[name="target_audience"]')
+      .fill("Customers who value transparent sourcing");
+    await campaignBriefForm
+      .locator('[name="audience_need"]')
+      .fill("A concise reason to trust the product story.");
+    await campaignBriefForm
+      .locator('[name="objective"]')
+      .fill("Increase consideration for the campaign.");
+    await campaignBriefForm
+      .locator('[name="core_message"]')
+      .fill("Choose a product with a reviewed story.");
+    await campaignBriefForm
+      .locator('[name="desired_action"]')
+      .fill("Read the campaign and consider purchasing.");
+    await campaignBriefForm.locator('[name="tone"]').fill("Clear and factual");
+    await campaignBriefForm
+      .locator('[name="extra_requirements"]')
+      .fill("Use only reviewed wording.");
+    await campaignBriefForm
+      .locator('[name="change_summary"]')
+      .fill("Browser E2E evidence-backed revision");
+    await page.evaluate(() => render());
+    assert.equal(
+      await campaignBriefForm.locator('[name="core_message"]').inputValue(),
+      "Choose a product with a reviewed story.",
+      "an unrelated workspace render reset the in-progress campaign brief form",
+    );
+    const claimRow = page.locator("#campaign-brief-claims .claim-row").first();
+    await claimRow
+      .locator('[data-claim-field="claim_text"]')
+      .fill("The demonstration product is harvested by hand.");
+    await claimRow.locator('[data-claim-field="claim_type"]').selectOption("product_fact");
+    await claimRow
+      .locator('[data-claim-field="source_type"]')
+      .selectOption("knowledge_source");
+    await claimRow.locator('[data-claim-field="source_id"]').selectOption(source.id);
+    assert.equal(
+      await claimRow.locator('[data-claim-field="evidence_key"]').inputValue(),
+      "content",
+      "knowledge-source claims must map to the source content field",
+    );
+
+    const [briefCreateResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url() === `${baseUrl}/v1/campaign-packages/${campaign.id}/brief-revisions` &&
+          response.request().method() === "POST",
+      ),
+      campaignBriefForm.locator('button[type="submit"]').click(),
+    ]);
+    assert.equal(briefCreateResponse.status(), 201);
+    const briefRevision = await briefCreateResponse.json();
+    const briefCard = page.locator("#campaign-brief-history article", {
+      hasText: "Browser E2E evidence-backed revision",
+    });
+    await briefCard.waitFor();
+    await briefCard.locator(".brief-score strong", { hasText: "1/1" }).waitFor();
+
+    const evidenceMapResponse = await context.request.get(
+      `${baseUrl}/v1/campaign-packages/${campaign.id}/brief-revisions/${briefRevision.id}/claim-evidence-map`,
+      { headers: { Authorization: `Bearer ${ownerToken}` } },
+    );
+    assert.equal(evidenceMapResponse.status(), 200);
+    const evidenceMap = await evidenceMapResponse.json();
+    assert.equal(evidenceMap.complete, true, `brief evidence map blockers: ${evidenceMap.blockers}`);
+    assert.equal(evidenceMap.mapped_claims, 1);
+    assert.equal(evidenceMap.total_claims, 1);
+    assert.deepEqual(evidenceMap.blockers, []);
+
+    const [briefSubmitResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url() ===
+            `${baseUrl}/v1/campaign-packages/${campaign.id}/brief-revisions/${briefRevision.id}/submit` &&
+          response.request().method() === "POST",
+      ),
+      briefCard.locator("[data-submit-campaign-brief]").click(),
+    ]);
+    assert.equal(briefSubmitResponse.status(), 200);
+    await briefCard.locator(".badge.pending_review").waitFor();
+
+    page.once("dialog", (dialog) => dialog.accept("Browser E2E brief reviewed"));
+    const [briefReviewResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url() ===
+            `${baseUrl}/v1/campaign-packages/${campaign.id}/brief-revisions/${briefRevision.id}/review` &&
+          response.request().method() === "POST",
+      ),
+      briefCard.locator(
+        `[data-review-campaign-brief="${briefRevision.id}"][data-status="approved"]`,
+      ).click(),
+    ]);
+    assert.equal(briefReviewResponse.status(), 200);
+    await briefCard.locator(".badge.approved").first().waitFor();
+    await page
+      .locator("#campaign-list article", { hasText: campaign.title })
+      .locator(".readiness-chip.ready", { hasText: /Brief ready/i })
+      .waitFor();
+    await page.evaluate((campaignId) => {
+      const selected = state.campaigns.find((item) => item.id === campaignId);
+      selected.progress.generation_ready = false;
+      selected.progress.generation_blockers = ["campaign_claim_evidence_stale"];
+      renderCampaigns();
+    }, campaign.id);
+    const blockedCampaignCard = page.locator("#campaign-list article", {
+      hasText: campaign.title,
+    });
+    await blockedCampaignCard
+      .locator(".campaign-generation-blockers", {
+        hasText: /Evidence linked to the campaign brief has changed/i,
+      })
+      .waitFor();
+    assert.equal(
+      await blockedCampaignCard.locator("[data-generate-campaign-item]").count(),
+      0,
+      "campaign generation actions remained visible while the backend reported blockers",
+    );
+    await page.evaluate(() => refresh());
+    assert.deepEqual(
+      await page.evaluate(() => window.__heyuUnhandledRejections),
+      [],
+      "campaign brief flow emitted an unhandled promise rejection",
+    );
+
     await page.locator("#farmer-evidence-campaign-select").selectOption(campaign.id);
     const farmerEvidenceForm = page.locator("#farmer-evidence-form");
     await farmerEvidenceForm.locator('[name="party_display_name"]').fill("Browser E2E Cooperative");

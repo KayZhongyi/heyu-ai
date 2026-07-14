@@ -283,6 +283,13 @@ def test_campaign_creates_project_atomically_and_uses_defaults(
         "brief_ready": True,
         "supply_ready": False,
         "farmer_evidence_ready": True,
+        "generation_ready": False,
+        "generation_blockers": [
+            "campaign_supply_missing",
+            "campaign_brand_unapproved",
+            "campaign_product_unapproved",
+            "campaign_knowledge_source_missing",
+        ],
     }
     project = view["items"][0]["project"]
     assert project["platform"] == "抖音"
@@ -470,6 +477,13 @@ def test_campaign_can_create_the_default_marketing_pack_in_one_request(
         "brief_ready": True,
         "supply_ready": False,
         "farmer_evidence_ready": True,
+        "generation_ready": False,
+        "generation_blockers": [
+            "campaign_supply_missing",
+            "campaign_brand_unapproved",
+            "campaign_product_unapproved",
+            "campaign_knowledge_source_missing",
+        ],
     }
     assert [item["slot_key"] for item in campaign["items"]] == [
         "hero_short_video",

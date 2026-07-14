@@ -1227,6 +1227,54 @@ def _campaign_item_view(
     )
 
 
+def _campaign_generation_blockers(
+    db: Session,
+    campaign: CampaignPackage,
+    current_brief: CampaignBriefRevision | None,
+    current_supply: CampaignSupplySnapshot | None,
+    farmer_evidence_ready: bool,
+) -> list[str]:
+    blockers: list[str] = []
+    if current_brief is None:
+        blockers.append("campaign_brief_missing")
+    elif not _campaign_claim_evidence_map(db, campaign, current_brief).complete:
+        blockers.append("campaign_claim_evidence_stale")
+    if current_supply is None:
+        blockers.append("campaign_supply_missing")
+    if not farmer_evidence_ready:
+        blockers.append("campaign_farmer_evidence_missing")
+
+    brand_status = db.scalar(
+        select(Brand.status).where(
+            Brand.id == campaign.brand_id,
+            Brand.organization_id == campaign.organization_id,
+        )
+    )
+    if brand_status != ReviewStatus.approved:
+        blockers.append("campaign_brand_unapproved")
+    product_status = db.scalar(
+        select(Product.status).where(
+            Product.id == campaign.product_id,
+            Product.organization_id == campaign.organization_id,
+        )
+    )
+    if product_status != ReviewStatus.approved:
+        blockers.append("campaign_product_unapproved")
+    approved_source_id = db.scalar(
+        select(KnowledgeSource.id)
+        .where(
+            KnowledgeSource.organization_id == campaign.organization_id,
+            KnowledgeSource.status == ReviewStatus.approved,
+            (KnowledgeSource.product_id == campaign.product_id)
+            | (KnowledgeSource.brand_id == campaign.brand_id),
+        )
+        .limit(1)
+    )
+    if approved_source_id is None:
+        blockers.append("campaign_knowledge_source_missing")
+    return blockers
+
+
 def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRead:
     current_brief = _current_campaign_brief(db, campaign.id, campaign.organization_id)
     current_supply = _current_campaign_supply(db, campaign.id, campaign.organization_id)
@@ -1267,6 +1315,11 @@ def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRea
                     if current_brief
                     else campaign.extra_requirements
                 ),
+                "core_message": current_brief.core_message if current_brief else "",
+                "audience_need": current_brief.audience_need if current_brief else "",
+                "desired_action": current_brief.desired_action if current_brief else "",
+                "proof_points": current_brief.proof_points if current_brief else [],
+                "mandatory_messages": (current_brief.mandatory_messages if current_brief else []),
             },
             "content_projects": [
                 {
@@ -1297,6 +1350,13 @@ def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRea
                             if current_brief
                             else campaign.extra_requirements
                         ),
+                        "core_message": (current_brief.core_message if current_brief else ""),
+                        "audience_need": (current_brief.audience_need if current_brief else ""),
+                        "desired_action": (current_brief.desired_action if current_brief else ""),
+                        "proof_points": (current_brief.proof_points if current_brief else []),
+                        "mandatory_messages": (
+                            current_brief.mandatory_messages if current_brief else []
+                        ),
                     },
                     "content_projects": [
                         {
@@ -1323,6 +1383,13 @@ def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRea
         for item in item_models
     ]
     required_items = [item for item in items if item.required]
+    generation_blockers = _campaign_generation_blockers(
+        db,
+        campaign,
+        current_brief,
+        current_supply,
+        farmer_evidence_ready,
+    )
     progress = CampaignProgress(
         total=len(items),
         required=len(required_items),
@@ -1335,6 +1402,8 @@ def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRea
         brief_ready=current_brief is not None,
         supply_ready=current_supply is not None,
         farmer_evidence_ready=farmer_evidence_ready,
+        generation_ready=not generation_blockers,
+        generation_blockers=generation_blockers,
     )
     return CampaignPackageRead(
         **{

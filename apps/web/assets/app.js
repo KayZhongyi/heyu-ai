@@ -1,6 +1,6 @@
 const inviteFragment=new URLSearchParams(location.hash.replace(/^#/,"")).get("invite")||"";
 if(inviteFragment)history.replaceState(null,"","/workspace/");
-const state={token:localStorage.getItem("heyu_token")||"",actor:null,members:[],invitations:[],brands:[],products:[],knowledge:[],campaigns:[],campaignSupplySnapshots:[],campaignFarmerEvidenceSnapshots:[],projects:[],versions:[],generationRuns:[],publications:[],audit:[],currentVersion:null,inviteToken:inviteFragment};
+const state={token:localStorage.getItem("heyu_token")||"",actor:null,members:[],invitations:[],brands:[],products:[],knowledge:[],campaigns:[],campaignBriefRevisions:[],campaignBriefMaps:{},campaignSupplySnapshots:[],campaignFarmerEvidenceSnapshots:[],projects:[],versions:[],generationRuns:[],publications:[],audit:[],currentVersion:null,inviteToken:inviteFragment};
 const t=(key,variables={})=>HeyuI18n.t(key,variables);
 const roleLabel=role=>t(`role.${role}`)===`role.${role}`?role:t(`role.${role}`);
 const enumLabel=(prefix,value)=>{const key=`${prefix}.${value}`;const label=t(key);return label===key?value:label};
@@ -26,7 +26,14 @@ const invalidateSession=()=>{
   $$('[data-auth-panel]').forEach(panel=>panel.hidden=panel.dataset.authPanel!=="login");
   toast(t("auth.sessionExpired"),true);
 };
-const api=async(path,options={})=>{const headers={"Content-Type":"application/json",...(options.headers||{})};if(state.token)headers.Authorization=`Bearer ${state.token}`;const response=await fetch(path,{...options,headers});if(!response.ok){let message=response.status===429?t("error.tooManyRequests"):t("error.requestFailed",{status:response.status});try{const body=await response.json();if(response.status!==429)message=body.detail||message}catch{}if(response.status===401&&state.token){invalidateSession();message=t("auth.sessionExpired")}throw new Error(message)}return response.status===204?null:response.json()};
+const apiErrorMessage=(detail,fallback)=>{
+  if(typeof detail==="string")return detail;
+  if(!detail||typeof detail!=="object")return fallback;
+  const code=detail.code?briefBlockerLabel(String(detail.code).toLowerCase()):"";
+  const blockers=Array.isArray(detail.blockers)?detail.blockers.map(briefBlockerLabel):[];
+  return [code,...blockers].filter(Boolean).join(fieldSeparator())||fallback;
+};
+const api=async(path,options={})=>{const headers={"Content-Type":"application/json",...(options.headers||{})};if(state.token)headers.Authorization=`Bearer ${state.token}`;const response=await fetch(path,{...options,headers});if(!response.ok){let message=response.status===429?t("error.tooManyRequests"):t("error.requestFailed",{status:response.status});try{const body=await response.json();if(response.status!==429)message=apiErrorMessage(body.detail,message)}catch{}if(response.status===401&&state.token){invalidateSession();message=t("auth.sessionExpired")}throw new Error(message)}return response.status===204?null:response.json()};
 const formData=form=>Object.fromEntries(new FormData(form));
 const lines=value=>value.split("\n").map(v=>v.trim()).filter(Boolean);
 const toast=(message,error=false)=>{const el=$("#toast");el.textContent=message;el.className=`show${error?" error":""}`;clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.className="",3000)};
@@ -94,6 +101,7 @@ async function refresh(){
 const canWriteScope=scope=>{
   const role=state.actor?.role;
   if(scope==="assets")return ["owner","admin","product_manager"].includes(role);
+  if(scope==="farmer-evidence")return ["owner","admin","product_manager"].includes(role);
   if(scope==="content")return ["owner","admin","product_manager","creator"].includes(role);
   return false;
 };
@@ -149,6 +157,11 @@ function render(){
   renderMembers();
 }
 const campaignStatusLabel=value=>t(`campaign.status.${value}`);
+const campaignGenerationBlockerLabel=code=>{
+  const key=`campaign.generationBlocker.${code}`;
+  const label=t(key);
+  return label===key?code:label;
+};
 function renderCampaigns(){
   $("#campaign-count").textContent=t("campaign.count",{count:HeyuI18n.formatNumber(state.campaigns.length)});
   const canManage=canWriteScope("content");
@@ -158,15 +171,122 @@ function renderCampaigns(){
       const stale=Boolean(item.latest_version_id&&!item.content_current);
       const staleDetail=(item.stale_reasons||[]).map(reason=>t(`contentFreshness.${reason}`)).join(fieldSeparator());
       const status=item.publication_id?t("campaign.item.published"):item.approved_version_id?t("campaign.item.approved"):item.latest_version_id?t("campaign.item.draft"):t("campaign.item.notStarted");
-      const canRegenerate=campaign.current_supply_snapshot&&campaign.progress.farmer_evidence_ready;
-      const action=canManage&&(!item.latest_version_id||(stale&&canRegenerate))?`<button data-generate-campaign-item="${item.content_project_id}">${escapeHtml(t(stale?"supply.regenerate":"campaign.generate"))}</button>`:"";
+      const generationReady=Boolean(progress.generation_ready);
+      const action=canManage&&generationReady&&(!item.latest_version_id||stale)?`<button data-generate-campaign-item="${item.content_project_id}">${escapeHtml(t(stale?"supply.regenerate":"campaign.generate"))}</button>`:"";
       return `<li class="${stale?"supply-stale":""}"><span>${escapeHtml(t(`campaign.slot.${item.slot_key}`))}${stale?`<small>${escapeHtml(staleDetail||t("contentFreshness.content_stale"))}</small>`:""}</span><b>${escapeHtml(status)}</b>${action}</li>`;
     }).join("");
-    const readiness=`<div class="campaign-readiness"><span class="readiness-chip ${progress.supply_ready?"ready":""}">${escapeHtml(t(progress.supply_ready?"farmerEvidence.supplyReady":"farmerEvidence.supplyMissing"))}</span><span class="readiness-chip ${progress.farmer_evidence_ready?"ready":""}">${escapeHtml(t(progress.farmer_evidence_ready?"farmerEvidence.ready":"farmerEvidence.missing"))}</span></div>`;
-    return `<article class="campaign-card"><div class="panel-heading"><div><span class="badge ${campaign.status==="completed"?"approved":"pending_review"}">${escapeHtml(campaignStatusLabel(campaign.status))}</span><h3>${escapeHtml(campaign.title)}</h3></div><strong>${progress.required_approved}/${progress.required}</strong></div><p>${escapeHtml(campaign.platform)} · ${escapeHtml(campaign.target_audience)}</p>${readiness}<div class="campaign-progress"><i style="width:${progress.required?Math.round(progress.required_approved/progress.required*100):0}%"></i></div><ul>${items}</ul></article>`;
+    const readiness=`<div class="campaign-readiness"><span class="readiness-chip ${progress.brief_ready?"ready":""}">${escapeHtml(t(progress.brief_ready?"campaignBrief.ready":"campaignBrief.missing"))}</span><span class="readiness-chip ${progress.supply_ready?"ready":""}">${escapeHtml(t(progress.supply_ready?"farmerEvidence.supplyReady":"farmerEvidence.supplyMissing"))}</span><span class="readiness-chip ${progress.farmer_evidence_ready?"ready":""}">${escapeHtml(t(progress.farmer_evidence_ready?"farmerEvidence.ready":"farmerEvidence.missing"))}</span><button data-open-campaign-brief="${campaign.id}">${escapeHtml(t("campaignBrief.open"))}</button></div>`;
+    const generationBlockers=progress.generation_ready||!progress.generation_blockers?.length?"":`<div class="campaign-generation-blockers"><strong>${escapeHtml(t("campaign.generationBlocked"))}</strong><ul>${progress.generation_blockers.map(code=>`<li>${escapeHtml(campaignGenerationBlockerLabel(code))}</li>`).join("")}</ul></div>`;
+    return `<article class="campaign-card"><div class="panel-heading"><div><span class="badge ${campaign.status==="completed"?"approved":"pending_review"}">${escapeHtml(campaignStatusLabel(campaign.status))}</span><h3>${escapeHtml(campaign.title)}</h3></div><strong>${progress.required_approved}/${progress.required}</strong></div><p>${escapeHtml(campaign.platform)} · ${escapeHtml(campaign.target_audience)}</p>${readiness}${generationBlockers}<div class="campaign-progress"><i style="width:${progress.required?Math.round(progress.required_approved/progress.required*100):0}%"></i></div><ul>${items}</ul></article>`;
   }).join("")||`<p>${escapeHtml(t("campaign.empty"))}</p>`;
+  renderCampaignBriefOptions();
   renderSupplyCampaignOptions();
   renderFarmerEvidenceCampaignOptions();
+}
+const campaignBriefCampaign=()=>state.campaigns.find(item=>item.id===$("#campaign-brief-campaign-select")?.value);
+const briefClaimTypes=["product_fact","brand_story","regional_culture","supply_fact","farmer_impact","other"];
+const briefEvidenceTypes=["knowledge_source","supply_snapshot","farmer_evidence_snapshot"];
+const briefSupplyKeys=["specification","price_minor","available_quantity","quantity_unit","harvest_status","harvest_date","shipping_regions","ship_within_hours","freight_policy","storage_and_freshness","shortage_policy"];
+const briefFarmerKeys=["party_display_name","relationship_type","relationship_summary","benefit_mechanism","allowed_claims","prohibited_claims","consent_scope"];
+let activeCampaignBriefFormId=null;
+const briefEvidenceSources=(campaign,type)=>{
+  if(!campaign)return[];
+  if(type==="knowledge_source")return state.knowledge.filter(item=>item.status==="approved"&&(item.product_id===campaign.product_id||item.brand_id===campaign.brand_id)).map(item=>({id:item.id,label:item.title}));
+  if(type==="supply_snapshot")return campaign.current_supply_snapshot?[{id:campaign.current_supply_snapshot.id,label:t("campaignBrief.currentSupply")}]:[];
+  if(type==="farmer_evidence_snapshot")return campaign.current_farmer_evidence_snapshot?[{id:campaign.current_farmer_evidence_snapshot.id,label:t("campaignBrief.currentFarmerEvidence")}]:[];
+  return[];
+};
+const briefEvidenceKeys=type=>type==="supply_snapshot"?briefSupplyKeys:type==="farmer_evidence_snapshot"?briefFarmerKeys:["content"];
+const briefSelectOptions=(items,selected="")=>items.map(item=>`<option value="${escapeHtml(item.id??item)}"${String(item.id??item)===String(selected)?" selected":""}>${escapeHtml(item.label??t(`campaignBrief.evidenceKey.${item}`))}</option>`).join("");
+function refreshClaimRow(row){
+  const campaign=campaignBriefCampaign();
+  const type=row.querySelector('[data-claim-field="source_type"]').value;
+  const sourceSelect=row.querySelector('[data-claim-field="source_id"]');
+  const keySelect=row.querySelector('[data-claim-field="evidence_key"]');
+  const previousSource=sourceSelect.value;
+  const previousKey=keySelect.value;
+  const sources=briefEvidenceSources(campaign,type);
+  sourceSelect.innerHTML=`<option value="">${escapeHtml(t("campaignBrief.selectEvidence"))}</option>${briefSelectOptions(sources,previousSource)}`;
+  if(sources.some(item=>item.id===previousSource))sourceSelect.value=previousSource;
+  const keys=briefEvidenceKeys(type);
+  keySelect.innerHTML=briefSelectOptions(keys,previousKey);
+  if(keys.includes(previousKey))keySelect.value=previousKey;
+  keySelect.disabled=type==="knowledge_source";
+}
+function addCampaignBriefClaim(claim={}){
+  const ref=claim.evidence_refs?.[0]||{source_type:"knowledge_source",source_id:"",evidence_key:"content"};
+  const row=document.createElement("div");
+  row.className="claim-row";
+  row.innerHTML=`<button class="remove-claim" type="button" data-remove-brief-claim aria-label="${escapeHtml(t("campaignBrief.removeClaim"))}">×</button><div class="claim-row-grid"><label><span>${escapeHtml(t("campaignBrief.claimText"))}</span><textarea data-claim-field="claim_text" required>${escapeHtml(claim.claim_text||"")}</textarea></label><label><span>${escapeHtml(t("campaignBrief.claimType"))}</span><select data-claim-field="claim_type">${briefClaimTypes.map(type=>`<option value="${type}"${type===(claim.claim_type||"product_fact")?" selected":""}>${escapeHtml(t(`campaignBrief.claimType.${type}`))}</option>`).join("")}</select></label></div><div class="claim-row-source"><label><span>${escapeHtml(t("campaignBrief.sourceType"))}</span><select data-claim-field="source_type">${briefEvidenceTypes.map(type=>`<option value="${type}"${type===ref.source_type?" selected":""}>${escapeHtml(t(`campaignBrief.sourceType.${type}`))}</option>`).join("")}</select></label><label><span>${escapeHtml(t("campaignBrief.source"))}</span><select data-claim-field="source_id" required></select></label><label><span>${escapeHtml(t("campaignBrief.evidenceKey"))}</span><select data-claim-field="evidence_key"></select></label></div>`;
+  $("#campaign-brief-claims").append(row);
+  refreshClaimRow(row);
+  row.querySelector('[data-claim-field="source_id"]').value=ref.source_id||"";
+  row.querySelector('[data-claim-field="evidence_key"]').value=ref.evidence_key||"";
+}
+function populateCampaignBriefForm(campaign){
+  const form=$("#campaign-brief-form");
+  if(!form)return;
+  const brief=campaign?.current_brief_revision;
+  form.reset();
+  form.elements.platform.value=brief?.platform||campaign?.platform||"";
+  form.elements.locale.value=brief?.locale||HeyuI18n.getLocale();
+  form.elements.target_audience.value=brief?.target_audience||campaign?.target_audience||"";
+  form.elements.audience_need.value=brief?.audience_need||"";
+  form.elements.objective.value=brief?.objective||campaign?.objective||"";
+  form.elements.core_message.value=brief?.core_message||"";
+  form.elements.desired_action.value=brief?.desired_action||"";
+  form.elements.tone.value=brief?.tone||campaign?.tone||"";
+  form.elements.hook_seconds.value=brief?.channel_constraints?.hook_seconds||"";
+  form.elements.max_duration_seconds.value=brief?.channel_constraints?.max_duration_seconds||"";
+  form.elements.mandatory_messages.value=(brief?.mandatory_messages||[]).join("\n");
+  form.elements.prohibited_messages.value=(brief?.prohibited_messages||[]).join("\n");
+  form.elements.extra_requirements.value=brief?.extra_requirements||campaign?.extra_requirements||"";
+  form.elements.change_summary.value="";
+  $("#campaign-brief-claims").innerHTML="";
+  (brief?.claim_evidence||[]).forEach(addCampaignBriefClaim);
+  if(!brief?.claim_evidence?.length)addCampaignBriefClaim();
+}
+function renderCampaignBriefOptions(){
+  const select=$("#campaign-brief-campaign-select");
+  if(!select)return;
+  const selected=select.value;
+  select.innerHTML=options(state.campaigns,t("campaignBrief.selectCampaign"));
+  if(state.campaigns.some(item=>item.id===selected))select.value=selected;
+  else if(state.campaigns.length)select.value=state.campaigns[0].id;
+  if(select.value!==activeCampaignBriefFormId){
+    activeCampaignBriefFormId=select.value||null;
+    populateCampaignBriefForm(campaignBriefCampaign());
+    loadCampaignBriefRevisions(select.value).catch(error=>toast(error.message,true));
+  }
+}
+const briefBlockerLabel=blocker=>{
+  const key=blocker.split(":")[0];
+  const label=t(`campaignBrief.blocker.${key}`);
+  return label===`campaignBrief.blocker.${key}`?blocker:label;
+};
+function renderCampaignBriefHistory(){
+  const campaign=campaignBriefCampaign();
+  const currentId=campaign?.current_brief_revision?.id;
+  const canSubmit=["owner","admin","creator","product_manager"].includes(state.actor?.role);
+  const canReview=["owner","admin","reviewer"].includes(state.actor?.role);
+  $("#campaign-brief-revision-count").textContent=HeyuI18n.formatNumber(state.campaignBriefRevisions.length);
+  $("#campaign-brief-history").innerHTML=state.campaignBriefRevisions.map(brief=>{
+    const map=state.campaignBriefMaps[brief.id]||{complete:false,mapped_claims:0,total_claims:brief.claim_evidence.length,blockers:[]};
+    const current=brief.id===currentId;
+    const submit=canSubmit&&brief.status==="draft"?`<button class="approve" data-submit-campaign-brief="${brief.id}" data-campaign="${brief.campaign_package_id}">${escapeHtml(t("campaignBrief.submit"))}</button>`:"";
+    const review=canReview&&brief.status==="pending_review"?`<button class="approve" data-review-campaign-brief="${brief.id}" data-campaign="${brief.campaign_package_id}" data-status="approved">${escapeHtml(t("campaignBrief.approve"))}</button><button class="reject" data-review-campaign-brief="${brief.id}" data-campaign="${brief.campaign_package_id}" data-status="rejected">${escapeHtml(t("campaignBrief.reject"))}</button>`:"";
+    const blockers=map.blockers.length?`<div class="brief-blockers">${map.blockers.map(item=>escapeHtml(briefBlockerLabel(item))).join("<br>")}</div>`:"";
+    const proofs=brief.proof_points.length?`<ul class="brief-proof-list">${brief.proof_points.map(item=>`<li>${escapeHtml(item)}</li>`).join("")}</ul>`:"";
+    return `<article class="brief-card ${current?"current":""}"><div class="panel-heading"><div><span class="badge ${brief.status}">${escapeHtml(contentStatusLabel(brief.status))}</span>${current?`<span class="badge approved">${escapeHtml(t("campaignBrief.current"))}</span>`:""}<h3>${escapeHtml(t("campaignBrief.revision",{number:brief.revision_number}))}</h3></div><span class="pill">${escapeHtml(enumLabel("campaignBrief.locale",brief.locale))}</span></div><p>${escapeHtml(brief.core_message)}</p><div class="brief-score"><span>${escapeHtml(t(map.complete?"campaignBrief.evidenceComplete":"campaignBrief.evidenceIncomplete"))}</span><strong>${map.mapped_claims}/${map.total_claims}</strong></div>${blockers}${proofs}${brief.change_summary?`<p class="review-note">${escapeHtml(brief.change_summary)}</p>`:""}${submit||review?`<div class="row-actions">${submit}${review}</div>`:""}</article>`;
+  }).join("")||`<p>${escapeHtml(t("campaignBrief.empty"))}</p>`;
+}
+async function loadCampaignBriefRevisions(campaignId){
+  if(!campaignId){state.campaignBriefRevisions=[];state.campaignBriefMaps={};renderCampaignBriefHistory();return}
+  const revisions=await api(`/v1/campaign-packages/${campaignId}/brief-revisions`);
+  const maps=await Promise.all(revisions.map(brief=>api(`/v1/campaign-packages/${campaignId}/brief-revisions/${brief.id}/claim-evidence-map`)));
+  state.campaignBriefRevisions=revisions;
+  state.campaignBriefMaps=Object.fromEntries(maps.map(map=>[map.brief_revision_id,map]));
+  renderCampaignBriefHistory();
 }
 const toIso=value=>new Date(value).toISOString();
 const formatSupplyMoney=snapshot=>new Intl.NumberFormat(HeyuI18n.getLocale(),{style:"currency",currency:snapshot.currency}).format(Number(snapshot.price_minor||0)/100);
@@ -327,6 +447,38 @@ $("#campaign-form").addEventListener("submit",event=>{event.preventDefault();req
   await api("/v1/campaign-packages",{method:"POST",body:JSON.stringify(data)});
   event.target.reset();await refresh();
 },t("campaign.created"))});
+$("#campaign-brief-campaign-select").addEventListener("change",event=>{
+  activeCampaignBriefFormId=event.target.value||null;
+  populateCampaignBriefForm(campaignBriefCampaign());
+  request(()=>loadCampaignBriefRevisions(event.target.value));
+});
+$("#campaign-brief-add-claim").addEventListener("click",()=>addCampaignBriefClaim());
+$("#campaign-brief-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{
+  const campaignId=$("#campaign-brief-campaign-select").value;
+  if(!campaignId)throw new Error(t("campaignBrief.selectCampaign"));
+  const data=formData(event.target);
+  const claims=[...$("#campaign-brief-claims").querySelectorAll(".claim-row")].map(row=>{
+    const value=name=>row.querySelector(`[data-claim-field="${name}"]`).value.trim();
+    const sourceType=value("source_type");
+    const sourceId=value("source_id");
+    if(!sourceId)throw new Error(t("campaignBrief.evidenceRequired"));
+    return{claim_text:value("claim_text"),claim_type:value("claim_type"),evidence_refs:[{source_type:sourceType,source_id:sourceId,evidence_key:sourceType==="knowledge_source"?"content":value("evidence_key")}]};
+  });
+  const channelConstraints={};
+  if(data.hook_seconds)channelConstraints.hook_seconds=Number(data.hook_seconds);
+  if(data.max_duration_seconds)channelConstraints.max_duration_seconds=Number(data.max_duration_seconds);
+  delete data.hook_seconds;delete data.max_duration_seconds;
+  data.proof_points=claims.map(item=>item.claim_text);
+  data.claim_evidence=claims;
+  data.mandatory_messages=lines(data.mandatory_messages);
+  data.prohibited_messages=lines(data.prohibited_messages);
+  data.channel_constraints=channelConstraints;
+  await api(`/v1/campaign-packages/${campaignId}/brief-revisions`,{method:"POST",body:JSON.stringify(data)});
+  await refresh();
+  $("#campaign-brief-campaign-select").value=campaignId;
+  populateCampaignBriefForm(campaignBriefCampaign());
+  await loadCampaignBriefRevisions(campaignId);
+},t("campaignBrief.saved"))});
 $("#supply-campaign-select").addEventListener("change",event=>{renderSupplyEvidence();request(()=>loadSupplySnapshots(event.target.value))});
 $("#supply-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{
   const campaignId=$("#supply-campaign-select").value;if(!campaignId)throw new Error(t("supply.selectCampaign"));
@@ -442,6 +594,37 @@ $("#publication-form").addEventListener("submit",event=>{event.preventDefault();
   await refresh();
 },t("toast.publication.saved"))});
 $$("[data-auth-mode]").forEach(button=>button.addEventListener("click",()=>{$$("[data-auth-mode]").forEach(x=>x.classList.toggle("active",x===button));$$("[data-auth-panel]").forEach(panel=>panel.hidden=panel.dataset.authPanel!==button.dataset.authMode)}));
+document.addEventListener("click",event=>{
+  const remove=event.target.closest("[data-remove-brief-claim]");
+  if(remove){
+    const rows=$("#campaign-brief-claims").querySelectorAll(".claim-row");
+    if(rows.length===1){toast(t("campaignBrief.claimRequired"),true);return}
+    remove.closest(".claim-row").remove();
+  }
+  const open=event.target.closest("[data-open-campaign-brief]");
+  if(open){
+    $("#campaign-brief-campaign-select").value=open.dataset.openCampaignBrief;
+    activeCampaignBriefFormId=open.dataset.openCampaignBrief;
+    populateCampaignBriefForm(campaignBriefCampaign());
+    request(()=>loadCampaignBriefRevisions(open.dataset.openCampaignBrief));
+    $(".brief-workbench").scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  const submit=event.target.closest("[data-submit-campaign-brief]");
+  if(submit)request(async()=>{await api(`/v1/campaign-packages/${submit.dataset.campaign}/brief-revisions/${submit.dataset.submitCampaignBrief}/submit`,{method:"POST"});await refresh();$("#campaign-brief-campaign-select").value=submit.dataset.campaign;await loadCampaignBriefRevisions(submit.dataset.campaign)},t("campaignBrief.submitted"));
+  const review=event.target.closest("[data-review-campaign-brief]");
+  if(review){
+    const rejected=review.dataset.status==="rejected";
+    const note=prompt(t(rejected?"campaignBrief.rejectPrompt":"campaignBrief.reviewPrompt"),"");
+    if(note!==null){
+      if(rejected&&!note.trim()){toast(t("campaignBrief.rejectionNoteRequired"),true);return}
+      request(async()=>{await api(`/v1/campaign-packages/${review.dataset.campaign}/brief-revisions/${review.dataset.reviewCampaignBrief}/review`,{method:"POST",body:JSON.stringify({status:review.dataset.status,note})});await refresh();$("#campaign-brief-campaign-select").value=review.dataset.campaign;await loadCampaignBriefRevisions(review.dataset.campaign)},t("campaignBrief.reviewed"));
+    }
+  }
+});
+document.addEventListener("change",event=>{
+  const sourceType=event.target.closest('[data-claim-field="source_type"]');
+  if(sourceType)refreshClaimRow(sourceType.closest(".claim-row"));
+});
 document.addEventListener("click",event=>{
   const submit=event.target.closest("[data-submit-supply]");
   if(submit)request(async()=>{await api(`/v1/campaign-packages/${submit.dataset.campaign}/supply-snapshots/${submit.dataset.submitSupply}/submit`,{method:"POST"});await refresh();$("#supply-campaign-select").value=submit.dataset.campaign;await loadSupplySnapshots(submit.dataset.campaign)},t("supply.submitted"));

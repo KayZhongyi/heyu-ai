@@ -142,6 +142,10 @@ def test_landing_and_workspace_are_served(client):
     assert 'id="bootstrap-form"' in workspace.text
     assert 'data-page-panel="studio"' in workspace.text
 
+    campaigns = client.get("/workspace/campaigns")
+    assert campaigns.status_code == 200
+    assert 'data-page-panel="campaigns"' in campaigns.text
+
     missing_page = client.get("/workspace/not-a-module")
     assert missing_page.status_code == 404
     assert missing_page.json()["detail"] == "Workspace page not found."

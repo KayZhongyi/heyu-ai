@@ -202,6 +202,13 @@ def test_campaign_claim_evidence_map_gates_brief_submission(
     ).json()
     assert stale_map["complete"] is False
     assert any(item.startswith("supply_snapshot_not_current:") for item in stale_map["blockers"])
+    refreshed = client.get(
+        f"/v1/campaign-packages/{campaign['id']}",
+        headers=auth,
+    )
+    assert refreshed.status_code == 200, refreshed.text
+    assert refreshed.json()["progress"]["generation_ready"] is False
+    assert "campaign_claim_evidence_stale" in refreshed.json()["progress"]["generation_blockers"]
 
 
 def test_campaign_claim_evidence_rejects_a_claim_that_misstates_the_source_value(

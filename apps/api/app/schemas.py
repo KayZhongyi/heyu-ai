@@ -503,6 +503,8 @@ class CampaignProgress(BaseModel):
     brief_ready: bool
     supply_ready: bool
     farmer_evidence_ready: bool
+    generation_ready: bool
+    generation_blockers: list[str]
 
 
 class CampaignPackageRead(ORMModel):

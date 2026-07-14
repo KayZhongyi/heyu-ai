@@ -208,6 +208,7 @@ workspace_pages = {
     "overview",
     "assets",
     "knowledge",
+    "campaigns",
     "studio",
     "operations",
     "review",
