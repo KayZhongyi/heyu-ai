@@ -10,6 +10,8 @@
 ![License](https://img.shields.io/badge/License-Apache--2.0-5B7083)
 ![Status](https://img.shields.io/badge/Status-Engineering%20MVP-EA6A5A)
 
+> 🌱 **欢迎大家加入禾语 AI，一起建设，一起把它做得更好。**
+
 [快速开始](#快速开始) · [当前能力](#当前能力) · [参与开发](#参与开发) · [产品边界](#必须守住的产品边界) · [贡献指南](CONTRIBUTING.md)
 
 禾语 AI 是一个可本地运行、可持续扩展的农产品内容与运营平台。它把品牌档案、农产品事实和审核通过的知识资料组织成可信上下文，生成短视频脚本、直播话术及其他营销内容，并保留完整的来源、版本、审核与运营记录。
