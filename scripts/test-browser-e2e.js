@@ -96,6 +96,12 @@ async function expectSimpleModeLocale(page, locale, expectedCases, expectedPlatf
   for (const label of expectedPlatforms) {
     await page.getByText(label, { exact: true }).waitFor();
   }
+  const visibleText = await page.locator("body").innerText();
+  assert.doesNotMatch(
+    visibleText,
+    /�|(?:Ã.|Â.|â€|ðŸ)|(?:绂捐|鍐滀|闁嬪|鐢熸垚)/,
+    `simple mode ${locale} contains mojibake`,
+  );
   await expectNoHorizontalOverflow(page, `simple mode ${locale}`);
 }
 
@@ -129,14 +135,13 @@ async function generateDemoCase(
     true,
     `${caseId} did not select ${expectedPlatformValue}`,
   );
+  assert.equal(await page.locator(".result-tabs button").count(), 6);
   const strategyCards = page.locator("#result-content .result-card");
-  assert.equal(await strategyCards.count(), 4);
+  assert.ok((await strategyCards.count()) >= 2);
   await strategyCards.nth(1).getByText(expectedPlatformName, { exact: false }).waitFor();
-  assert.equal(
-    (await strategyCards.nth(3).locator("span").first().textContent()).trim(),
-    expectedNextActionsLabel,
-  );
-  const nextActions = strategyCards.nth(3).locator("li");
+  const nextActionsCard = strategyCards.filter({ hasText: expectedNextActionsLabel });
+  await nextActionsCard.waitFor();
+  const nextActions = nextActionsCard.locator("li");
   assert.ok(
     (await nextActions.count()) >= 3 && (await nextActions.count()) <= 6,
     `${caseId} next actions must contain 3 to 6 items`,
@@ -145,12 +150,26 @@ async function generateDemoCase(
     assert.ok((await nextActions.nth(index).innerText()).trim(), "next action must not be empty");
   }
 
-  await page.locator('[data-tab="videos"]').click();
-  assert.equal(await page.locator("#result-content .result-card").count(), 3);
+  await page.locator('[data-tab="topics"]').click();
+  assert.ok(await page.locator("#result-content .topic-card").count());
+  await page.locator('[data-tab="routes"]').click();
+  assert.equal(await page.locator("#result-content .route-card").count(), 3);
+  assert.equal(await page.locator("#result-content .route-card.recommended").count(), 1);
+  await page.locator('[data-select-route="1"]').click();
+  assert.equal(await page.locator("#result-content .route-card.selected").count(), 1);
+  await page.locator('[data-tab="prep"]').click();
+  assert.ok(await page.locator("#result-content .prep-hero").count());
   await page.locator('[data-tab="live"]').click();
   assert.ok(await page.locator("#result-content .result-card").count());
   await page.locator('[data-tab="calendar"]').click();
   assert.equal(await page.locator("#result-content .day-list > li").count(), 7);
+  assert.ok(await page.locator("#result-content [data-save-plan]").count());
+  const resultText = await page.locator("#result-state").innerText();
+  assert.doesNotMatch(
+    resultText,
+    /�|(?:Ã.|Â.|â€|ðŸ)|(?:绂捐|鍐滀|闁嬪|鐢熸垚)/,
+    `${caseId} result contains mojibake`,
+  );
 }
 
 async function expectLocalizedClaimError(page, locale, riskyDescription, expectedMessage) {
@@ -282,9 +301,9 @@ async function main() {
     );
     const productBeforeLocaleSwitch = await page.locator("#result-product").textContent();
     for (const [locale, tabLabel] of [
-      ["zh-HK", "短影片"],
-      ["en", "Videos"],
-      ["zh-CN", "短视频"],
+      ["zh-HK", "創意路線"],
+      ["en", "Creative routes"],
+      ["zh-CN", "创意路线"],
     ]) {
       await selectLocale(page, locale);
       assert.equal(

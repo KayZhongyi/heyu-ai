@@ -1,4 +1,6 @@
 import json
+import re
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -31,6 +33,14 @@ def sample_request(**overrides) -> MarketingPlanRequest:
     return MarketingPlanRequest.model_validate(data)
 
 
+def assert_no_corrupted_text(result: MarketingPlanResponse) -> None:
+    serialized = json.dumps(result.model_dump(), ensure_ascii=False)
+    assert "\ufffd" not in serialized
+    assert re.search(r"\?{2,}", serialized) is None
+    for fragment in ("锟斤拷", "鐨勌", "銆", "鈥", "鏂版", "瑙嗛", "浜у"):
+        assert fragment not in serialized
+
+
 def test_deterministic_plan_is_complete():
     result = DeterministicMarketingProvider().generate(sample_request())
 
@@ -40,6 +50,99 @@ def test_deterministic_plan_is_complete():
     assert len(result.seven_day_plan) == 7
     assert all(len(video.shots) >= 3 for video in result.videos)
     assert len({video.angle for video in result.videos}) == 3
+    assert_no_corrupted_text(result)
+
+
+@pytest.mark.parametrize(
+    ("locale", "product_name", "description", "selling_points", "platform"),
+    [
+        (
+            "zh-CN",
+            "当季番茄",
+            "自然成熟后采摘，适合家庭鲜食与做菜。",
+            ["自然成熟", "清甜多汁", "当天采摘"],
+            "douyin",
+        ),
+        (
+            "zh-HK",
+            "高山單叢茶",
+            "春季採摘並完成傳統工序，香氣清晰，適合日常沖泡。",
+            ["春季採摘", "傳統工序", "香氣清晰"],
+            "xiaohongshu",
+        ),
+        (
+            "zh-CN",
+            "水果礼盒",
+            "按成熟度分选后装箱，适合节日探访与家庭分享。",
+            ["多种水果搭配", "分级装箱", "适合分享"],
+            "wechat-channels",
+        ),
+    ],
+)
+def test_marketing_intelligence_covers_required_product_platform_pairs(
+    locale,
+    product_name,
+    description,
+    selling_points,
+    platform,
+):
+    result = DeterministicMarketingProvider().generate(
+        sample_request(
+            locale=locale,
+            product_name=product_name,
+            product_description=description,
+            selling_points=selling_points,
+            platform=platform,
+        )
+    )
+
+    assert [route.route_id for route in result.creative_routes] == [
+        "practical-hook",
+        "people-story",
+        "playful-contrast",
+    ]
+    assert [video.route_id for video in result.videos] == [
+        route.route_id for route in result.creative_routes
+    ]
+    assert len({route.name for route in result.creative_routes}) == 3
+    assert [signal.signal_type for signal in result.topic_signals] == [
+        "manual-hotspot",
+        "seasonal-farming",
+        "evergreen-pain-point",
+    ]
+    assert {signal.recommendation for signal in result.topic_signals}.issubset(
+        {"recommended", "consider", "skip"}
+    )
+    for signal in result.topic_signals:
+        dimension_scores = signal.fit_scores.model_dump()
+        assert set(dimension_scores) == {
+            "product",
+            "audience",
+            "platform",
+            "timeliness",
+            "filmability",
+            "source",
+        }
+        assert signal.total_score == round(
+            sum(item["score"] for item in dimension_scores.values()) / 6
+        )
+        assert signal.source_note
+        assert signal.explanation
+
+    for video in result.videos:
+        assessment = video.quality_assessment
+        assert assessment.total_score == round(sum(assessment.scores.model_dump().values()) / 6)
+        assert len(assessment.strengths) >= 2
+        assert assessment.improvements
+
+    assert result.next_step.current_stage == "select-route"
+    assert [stage.stage for stage in result.next_step.stages] == [
+        "select-route",
+        "prepare-shoot",
+        "record-publication",
+    ]
+    assert product_name in result.next_step.primary_action
+    assert_no_corrupted_text(result)
 
 
 def test_plan_supports_three_product_categories():
@@ -84,6 +187,26 @@ def test_plan_supports_three_locales():
     ]
     assert "广东清远" in zh_hk.product_profile.one_line_value
     assert "Seasonal tomatoes" in en.product_profile.one_line_value
+    assert [route.name for route in zh_cn.creative_routes] == [
+        "实用吸睛",
+        "人物故事",
+        "轻松反差",
+    ]
+    assert [route.name for route in zh_hk.creative_routes] == [
+        "實用吸睛",
+        "人物故事",
+        "輕鬆反差",
+    ]
+    zh_hk_text = json.dumps(zh_hk.model_dump(), ensure_ascii=False)
+    assert "不一样" not in zh_hk_text
+    assert zh_hk.videos[2].title.endswith("下一鏡不一樣")
+    assert [route.name for route in en.creative_routes] == [
+        "Practical hook",
+        "People story",
+        "Playful contrast",
+    ]
+    for result in (zh_cn, zh_hk, en):
+        assert_no_corrupted_text(result)
 
 
 def test_request_deduplicates_goals_and_rejects_high_risk_claims():
@@ -187,7 +310,7 @@ def test_configured_generation_degrades_to_mock(monkeypatch):
 
 
 def _openai_settings(**overrides) -> Settings:
-    values = {
+    values: dict[str, Any] = {
         "ai_provider": "openai-compatible",
         "ai_base_url": "https://model.example/v1",
         "ai_model": "domestic-model",
@@ -253,6 +376,22 @@ def test_openai_compatible_provider_accepts_fenced_json(monkeypatch):
     assert result.provider == "openai-compatible"
     assert result.model == "domestic-model"
     assert len(result.videos) == 3
+    assert len(result.creative_routes) == 3
+    assert len(result.topic_signals) == 3
+
+
+def test_openai_compatible_provider_rejects_legacy_response_without_intelligence(monkeypatch):
+    source = DeterministicMarketingProvider().generate(sample_request()).model_dump()
+    source.pop("creative_routes")
+    body = {"choices": [{"message": {"content": json.dumps(source, ensure_ascii=False)}}]}
+    monkeypatch.setattr(
+        marketing.httpx,
+        "post",
+        lambda *args, **kwargs: _FakeResponse(body),
+    )
+
+    with pytest.raises(MarketingProviderError):
+        OpenAICompatibleMarketingProvider(_openai_settings()).generate(sample_request())
 
 
 def test_degraded_result_is_not_cached_after_provider_recovers(monkeypatch):

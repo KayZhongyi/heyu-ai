@@ -11,28 +11,124 @@
     }
   };
   Object.assign(copy["zh-CN"], {
-    saveResult: "保存到团队工作台",
+    saveResult: "保存到经营方案库",
     savingResult: "正在保存…",
-    savedResult: "已保存到工作台",
-    openSavedPlan: "打开已保存方案",
+    savedResult: "已保存到经营方案库",
+    openSavedPlan: "前往经营方案库",
     saveError: "保存失败，请重新登录后再试。",
-    initialSaveSummary: "从农户简单模式保存完整经营方案"
+    initialSaveSummary: "从农户创建页保存完整经营方案",
+    resultStepsLabel: "方案执行步骤",
+    tabTopics: "选题适配",
+    tabRoutes: "创意路线",
+    tabPrep: "拍摄准备",
+    routeRecommended: "推荐路线",
+    routeSelected: "已选择",
+    chooseRoute: "选择这条路线",
+    whyWorks: "为什么可能有效",
+    qualityScore: "质量分",
+    improvements: "改进建议",
+    noImprovement: "当前版本可直接试拍，发布后再根据数据微调。",
+    topicSourceType: "来源类型",
+    topicNotRealtime: "规划参考，不代表实时热度",
+    topicFitScore: "适配分",
+    topicAdvice: "使用建议",
+    topicFallbackSource: "用户填写 / 内容规划",
+    topicFallbackAdvice: "发布当天再核对平台语境与热度，避免生硬蹭热点。",
+    prepChecklist: "开拍前确认",
+    selectedRouteLabel: "当前拍摄路线",
+    filmingTip: "拍摄提示",
+    callToAction: "结尾行动",
+    nextToTopics: "下一步：看选题适配",
+    nextToRoutes: "下一步：选择创意路线",
+    nextToPrep: "下一步：准备拍摄",
+    nextToLive: "下一步：准备直播",
+    nextToCalendar: "下一步：安排7天计划",
+    nextToLibrary: "保存并前往经营方案库",
+    workflowHint: "按顺序完成，每一步都能直接进入下一项。",
+    scorePending: "待评估",
+    recommendationRecommended: "建议使用",
+    recommendationConsider: "可尝试",
+    recommendationSkip: "谨慎使用"
   });
   Object.assign(copy["zh-HK"], {
-    saveResult: "儲存至團隊工作台",
+    saveResult: "儲存至營運方案庫",
     savingResult: "正在儲存…",
-    savedResult: "已儲存至工作台",
-    openSavedPlan: "開啟已儲存方案",
+    savedResult: "已儲存至營運方案庫",
+    openSavedPlan: "前往營運方案庫",
     saveError: "儲存失敗，請重新登入後再試。",
-    initialSaveSummary: "由農戶簡單模式儲存完整營運方案"
+    initialSaveSummary: "由農戶建立頁儲存完整營運方案",
+    resultStepsLabel: "方案執行步驟",
+    tabTopics: "選題配對",
+    tabRoutes: "創意路線",
+    tabPrep: "拍攝準備",
+    routeRecommended: "推薦路線",
+    routeSelected: "已選擇",
+    chooseRoute: "選擇這條路線",
+    whyWorks: "為甚麼可能有效",
+    qualityScore: "質量分",
+    improvements: "改進建議",
+    noImprovement: "目前版本可直接試拍，發佈後再按數據微調。",
+    topicSourceType: "來源類型",
+    topicNotRealtime: "規劃參考，不代表實時熱度",
+    topicFitScore: "配對分",
+    topicAdvice: "使用建議",
+    topicFallbackSource: "用戶填寫 / 內容規劃",
+    topicFallbackAdvice: "發佈當天再核對平台語境及熱度，避免生硬追逐熱點。",
+    prepChecklist: "開拍前確認",
+    selectedRouteLabel: "目前拍攝路線",
+    filmingTip: "拍攝提示",
+    callToAction: "結尾行動",
+    nextToTopics: "下一步：查看選題配對",
+    nextToRoutes: "下一步：選擇創意路線",
+    nextToPrep: "下一步：準備拍攝",
+    nextToLive: "下一步：準備直播",
+    nextToCalendar: "下一步：安排7天計劃",
+    nextToLibrary: "儲存並前往營運方案庫",
+    workflowHint: "按次序完成，每一步都可直接進入下一項。",
+    scorePending: "待評估",
+    recommendationRecommended: "建議使用",
+    recommendationConsider: "可嘗試",
+    recommendationSkip: "謹慎使用"
   });
   Object.assign(copy.en, {
-    saveResult: "Save to team workspace",
+    saveResult: "Save to plan library",
     savingResult: "Saving…",
-    savedResult: "Saved to workspace",
-    openSavedPlan: "Open saved plan",
+    savedResult: "Saved to the plan library",
+    openSavedPlan: "Go to plan library",
     saveError: "Could not save. Please sign in again and retry.",
-    initialSaveSummary: "Saved from the farmer creation flow"
+    initialSaveSummary: "Saved from the farmer creation flow",
+    resultStepsLabel: "Plan execution steps",
+    tabTopics: "Topic fit",
+    tabRoutes: "Creative routes",
+    tabPrep: "Shoot prep",
+    routeRecommended: "Recommended",
+    routeSelected: "Selected",
+    chooseRoute: "Choose this route",
+    whyWorks: "Why it may work",
+    qualityScore: "Quality score",
+    improvements: "How to improve it",
+    noImprovement: "This version is ready to test. Refine it after the first performance data arrives.",
+    topicSourceType: "Source type",
+    topicNotRealtime: "Planning reference, not a real-time popularity signal",
+    topicFitScore: "Fit score",
+    topicAdvice: "How to use it",
+    topicFallbackSource: "User brief / editorial planning",
+    topicFallbackAdvice: "Recheck the platform context and momentum on publishing day. Do not force the connection.",
+    prepChecklist: "Before filming",
+    selectedRouteLabel: "Selected filming route",
+    filmingTip: "Filming tip",
+    callToAction: "Closing action",
+    nextToTopics: "Next: review topic fit",
+    nextToRoutes: "Next: choose a creative route",
+    nextToPrep: "Next: prepare the shoot",
+    nextToLive: "Next: prepare the live session",
+    nextToCalendar: "Next: build the 7-day plan",
+    nextToLibrary: "Save and go to plan library",
+    workflowHint: "Work through the steps in order; each one leads directly to the next action.",
+    scorePending: "Pending",
+    recommendationRecommended: "Recommended",
+    recommendationConsider: "Worth testing",
+    recommendationSkip: "Use with caution"
   });
 
   const demoCases = {
@@ -148,7 +244,9 @@
   let result = null;
   let lastPayload = null;
   let activeTab = "strategy";
+  let selectedVideoIndex = 0;
   let selectedDemo = null;
+  const tabOrder = ["strategy", "topics", "routes", "prep", "live", "calendar"];
 
   function applyLocale(next) {
     locale = copy[next] ? next : "zh-CN";
@@ -221,7 +319,82 @@
   }
 
   function escape(value) {
-    return String(value ?? "").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[char]));
+    return String(value == null ? "" : value).replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[char]));
+  }
+
+  function list(value) {
+    return Array.isArray(value) ? value.filter(Boolean) : [];
+  }
+
+  function text(...values) {
+    return values.find((value) => typeof value === "string" && value.trim())?.trim() || "";
+  }
+
+  function score(value) {
+    const number = Number(value);
+    return Number.isFinite(number) && number >= 0 ? Math.min(100, Math.round(number)) : null;
+  }
+
+  function firstDefined(...values) {
+    return values.find((value) => value !== undefined && value !== null);
+  }
+
+  function qualityFor(video, index) {
+    const reviews = list(result?.quality_reviews);
+    return video?.quality_assessment
+      || reviews.find((review) => review?.route_id && review.route_id === video?.route_id)
+      || reviews[index]
+      || {};
+  }
+
+  function recommendedIndex() {
+    const videos = list(result?.videos);
+    const explicit = Number(result?.recommended_video_index);
+    if (Number.isInteger(explicit) && explicit >= 0 && explicit < videos.length) return explicit;
+    if (typeof result?.recommended_video_index === "string") {
+      const routeIndex = videos.findIndex((video) => video?.route_id === result.recommended_video_index);
+      if (routeIndex >= 0) return routeIndex;
+    }
+    let bestIndex = 0;
+    let bestScore = -1;
+    videos.forEach((video, index) => {
+      const reviewScore = score(qualityFor(video, index)?.total_score);
+      if (reviewScore !== null && reviewScore > bestScore) {
+        bestIndex = index;
+        bestScore = reviewScore;
+      }
+    });
+    return bestIndex;
+  }
+
+  function routeFor(video, index) {
+    const routes = list(result?.creative_routes);
+    return routes.find((route) => route?.route_id && route.route_id === video?.route_id)
+      || routes[index]
+      || {};
+  }
+
+  function flowFooter(nextTab, label) {
+    return `<div class="flow-next"><span>${escape(copy[locale].workflowHint)}</span><button type="button" data-next-tab="${escape(nextTab)}">${escape(label)} <b>→</b></button></div>`;
+  }
+
+  function setActiveTab(nextTab, shouldFocus = true) {
+    if (!tabOrder.includes(nextTab)) return;
+    activeTab = nextTab;
+    document.querySelectorAll(".result-tabs button").forEach((tab) => {
+      const active = tab.dataset.tab === activeTab;
+      tab.classList.toggle("active", active);
+      tab.setAttribute("aria-selected", String(active));
+    });
+    render();
+    if (shouldFocus) {
+      document.querySelector(`.result-tabs [data-tab="${activeTab}"]`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center"
+      });
+      content.scrollTo({top: 0, behavior: "smooth"});
+    }
   }
 
   async function readApiError(response) {
@@ -247,18 +420,94 @@
   function render() {
     if (!result) return;
     if (activeTab === "strategy") {
+      const productProfile = result.product_profile || {};
+      const strategy = result.strategy || {};
+      const nextActions = list(result.next_actions);
       content.innerHTML = `
-        <article class="result-card"><span>${escape(copy[locale].positioningLabel)}</span><h3>${escape(result.product_profile.one_line_value)}</h3><p>${escape(result.product_profile.story_angle)}</p><div class="tag-row">${result.product_profile.core_selling_points.map((item) => `<b>${escape(item)}</b>`).join("")}</div></article>
-        <article class="result-card"><span>${escape(result.strategy.platform_name)} · ${escape(copy[locale].strategyLabel)}</span><h3>${escape(result.strategy.content_focus)}</h3><p>${escape(result.strategy.recommended_duration)}</p><p>${escape(result.strategy.conversion_action)}</p></article>
-        <article class="result-card"><span>${escape(copy[locale].trendFitLabel)}</span><h3>${escape(result.trend.trend_used)}</h3><p>${escape(result.trend.integration_method)}</p><p>${escape(result.trend.caution)}</p></article>
-        <article class="result-card"><span>${escape(copy[locale].nextActionsLabel)}</span><ol class="shot-list">${result.next_actions.map((item, index) => `<li><b>0${index + 1}</b><span>${escape(item)}</span></li>`).join("")}</ol></article>`;
-    } else if (activeTab === "videos") {
-      content.innerHTML = result.videos.map((video, index) => `
-        <article class="result-card"><span>${escape(copy[locale].videoLabel)} 0${index + 1} · ${escape(video.angle)}</span><h3>${escape(video.title)}</h3><p><strong>${escape(copy[locale].hookLabel)}：</strong>${escape(video.hook)}</p><p>${escape(video.script)}</p><div class="tag-row"><b>${escape(video.cover_text)}</b><b>${escape(video.background_music)}</b></div><ol class="shot-list">${video.shots.map((shot) => `<li><b>${escape(shot.seconds)}</b><span>${escape(shot.visual)} · ${escape(shot.voiceover)}</span></li>`).join("")}</ol></article>`).join("");
+        <article class="result-card"><span>${escape(copy[locale].positioningLabel)}</span><h3>${escape(text(productProfile.one_line_value, lastPayload?.product_name))}</h3><p>${escape(productProfile.story_angle)}</p><div class="tag-row">${list(productProfile.core_selling_points).map((item) => `<b>${escape(item)}</b>`).join("")}</div></article>
+        <article class="result-card"><span>${escape(text(strategy.platform_name, lastPayload?.platform))} · ${escape(copy[locale].strategyLabel)}</span><h3>${escape(strategy.content_focus)}</h3><p>${escape(strategy.recommended_duration)}</p><p>${escape(strategy.conversion_action)}</p></article>
+        ${nextActions.length ? `<article class="result-card"><span>${escape(copy[locale].nextActionsLabel)}</span><ol class="shot-list">${nextActions.map((item, index) => `<li><b>${String(index + 1).padStart(2, "0")}</b><span>${escape(item)}</span></li>`).join("")}</ol></article>` : ""}
+        ${flowFooter("topics", copy[locale].nextToTopics)}`;
+    } else if (activeTab === "topics") {
+      const topicMatches = list(result.topic_matches).length
+        ? list(result.topic_matches)
+        : list(result.topic_signals);
+      const topics = topicMatches.length ? topicMatches : [{
+        title: result.trend?.trend_used,
+        source_label: copy[locale].topicFallbackSource,
+        explanation: result.trend?.integration_method,
+        usage_caution: result.trend?.caution,
+        recommendation: "consider"
+      }];
+      content.innerHTML = topics.map((topic, index) => {
+        const fitScore = score(firstDefined(topic.total_score, topic.fit_score, topic.score));
+        const sourceType = [
+          text(topic.signal_type, topic.source_type),
+          text(topic.source_label, topic.source_name)
+        ].filter(Boolean).join(" · ") || copy[locale].topicFallbackSource;
+        const recommendation = topic.recommendation === "recommended"
+          ? copy[locale].recommendationRecommended
+          : topic.recommendation === "skip"
+            ? copy[locale].recommendationSkip
+            : copy[locale].recommendationConsider;
+        return `
+          <article class="result-card topic-card">
+            <div class="card-heading"><span>${escape(copy[locale].trendFitLabel)} ${String(index + 1).padStart(2, "0")}</span><b>${escape(recommendation)}</b></div>
+            <h3>${escape(text(topic.title, topic.topic, result.trend?.trend_used))}</h3>
+            <dl class="signal-meta">
+              <div><dt>${escape(copy[locale].topicSourceType)}</dt><dd>${escape(sourceType)}</dd></div>
+              <div><dt>${escape(copy[locale].topicFitScore)}</dt><dd>${fitScore === null ? escape(copy[locale].scorePending) : `${fitScore}/100`}</dd></div>
+            </dl>
+            <p class="realtime-note">${escape(copy[locale].topicNotRealtime)}</p>
+            <p>${escape(text(topic.explanation, topic.content_angle, result.trend?.integration_method))}</p>
+            <div class="advice-box"><strong>${escape(copy[locale].topicAdvice)}</strong><span>${escape(text(topic.usage_caution, topic.advice, result.trend?.caution, copy[locale].topicFallbackAdvice))}</span></div>
+          </article>`;
+      }).join("") + flowFooter("routes", copy[locale].nextToRoutes);
+    } else if (activeTab === "routes") {
+      const videos = list(result.videos);
+      const recommended = recommendedIndex();
+      content.innerHTML = videos.map((video, index) => {
+        const route = routeFor(video, index);
+        const review = qualityFor(video, index);
+        const routeScore = score(firstDefined(review.total_score, review.quality_score, review.score));
+        const strengths = list(review.strengths);
+        const improvements = list(review.improvements).length
+          ? list(review.improvements)
+          : list(review.improvement_suggestions);
+        const selected = index === selectedVideoIndex;
+        return `
+          <article class="result-card route-card${index === recommended ? " recommended" : ""}${selected ? " selected" : ""}">
+            <div class="card-heading">
+              <span>${escape(copy[locale].videoLabel)} ${String(index + 1).padStart(2, "0")} · ${escape(text(route.name, video.angle))}</span>
+              <span class="route-badges">${index === recommended ? `<b>${escape(copy[locale].routeRecommended)}</b>` : ""}${selected ? `<b>${escape(copy[locale].routeSelected)}</b>` : ""}</span>
+            </div>
+            <h3>${escape(video.title)}</h3>
+            <p><strong>${escape(copy[locale].hookLabel)}：</strong>${escape(text(video.hook, route.signature_hook))}</p>
+            <div class="route-review">
+              <div><strong>${escape(copy[locale].whyWorks)}</strong><p>${escape(text(route.selection_reason, review.why_it_may_work, review.reason, strengths.join("；"), route.best_for, route.positioning, video.hook))}</p></div>
+              <div class="quality-score"><strong>${escape(copy[locale].qualityScore)}</strong><b>${routeScore === null ? escape(copy[locale].scorePending) : `${routeScore}<small>/100</small>`}</b></div>
+            </div>
+            <div class="advice-box"><strong>${escape(copy[locale].improvements)}</strong><span>${escape(improvements.join("；") || copy[locale].noImprovement)}</span></div>
+            <button type="button" class="route-select" data-select-route="${index}" aria-pressed="${selected}">${escape(selected ? copy[locale].routeSelected : copy[locale].chooseRoute)}</button>
+          </article>`;
+      }).join("") + flowFooter("prep", copy[locale].nextToPrep);
+    } else if (activeTab === "prep") {
+      const videos = list(result.videos);
+      const video = videos[selectedVideoIndex] || videos[0] || {};
+      const route = routeFor(video, selectedVideoIndex);
+      const checklist = list(result.next_step?.checklist).length
+        ? list(result.next_step.checklist)
+        : list(result.next_actions);
+      content.innerHTML = `
+        <article class="result-card prep-hero"><span>${escape(copy[locale].selectedRouteLabel)}</span><h3>${escape(text(route.name, video.angle, video.title))}</h3><p><strong>${escape(copy[locale].hookLabel)}：</strong>${escape(video.hook)}</p><p>${escape(video.script)}</p><div class="tag-row">${[video.cover_text, video.background_music].filter(Boolean).map((item) => `<b>${escape(item)}</b>`).join("")}</div></article>
+        <article class="result-card"><span>${escape(copy[locale].prepChecklist)}</span><ol class="shot-list prep-list">${list(video.shots).map((shot) => `<li><b>${escape(shot.seconds)}</b><span>${escape(shot.visual)}</span><span>${escape(shot.voiceover)}</span>${shot.filming_tip ? `<small><strong>${escape(copy[locale].filmingTip)}：</strong>${escape(shot.filming_tip)}</small>` : ""}</li>`).join("")}</ol></article>
+        ${checklist.length ? `<article class="result-card"><span>${escape(copy[locale].prepChecklist)}</span><ul class="check-list">${checklist.map((item) => `<li>${escape(item)}</li>`).join("")}</ul></article>` : ""}
+        ${video.call_to_action ? `<article class="result-card action-card"><span>${escape(copy[locale].callToAction)}</span><h3>${escape(video.call_to_action)}</h3></article>` : ""}
+        ${flowFooter("live", copy[locale].nextToLive)}`;
     } else if (activeTab === "live") {
-      content.innerHTML = result.livestream.map((section, index) => `<article class="result-card"><span>${escape(copy[locale].liveLabel)} 0${index + 1}</span><h3>${escape(section.section)}</h3><div class="tag-row">${section.talking_points.map((item) => `<b>${escape(item)}</b>`).join("")}</div></article>`).join("");
+      content.innerHTML = list(result.livestream).map((section, index) => `<article class="result-card"><span>${escape(copy[locale].liveLabel)} ${String(index + 1).padStart(2, "0")}</span><h3>${escape(section.section)}</h3><div class="tag-row">${list(section.talking_points).map((item) => `<b>${escape(item)}</b>`).join("")}</div></article>`).join("") + flowFooter("calendar", copy[locale].nextToCalendar);
     } else {
-      content.innerHTML = `<ol class="day-list">${result.seven_day_plan.map((day) => `<li><b>0${day.day}</b><div><strong>${escape(day.objective)}</strong><span>${escape(day.content)}</span><span>→ ${escape(day.action)}</span></div></li>`).join("")}</ol>`;
+      content.innerHTML = `<ol class="day-list">${list(result.seven_day_plan).map((day) => `<li><b>${String(day.day).padStart(2, "0")}</b><div><strong>${escape(day.objective)}</strong><span>${escape(day.content)}</span><span>→ ${escape(day.action)}</span></div></li>`).join("")}</ol><div class="flow-next final"><span>${escape(copy[locale].workflowHint)}</span><button type="button" data-save-plan>${escape(copy[locale].nextToLibrary)} <b>→</b></button></div>`;
     }
   }
 
@@ -305,10 +554,10 @@
       document.querySelector("#open-saved-plan").hidden = true;
       document.querySelector("#save-result").textContent = copy[locale].saveResult;
       document.querySelector("#result-product").textContent = payload.product_name;
-      document.querySelector("#provider-meta").textContent = `${result.provider} · ${result.model} · ${result.latency_ms}ms`;
-      loading.hidden = true; resultState.hidden = false; activeTab = "strategy";
-      document.querySelectorAll(".result-tabs button").forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === activeTab));
-      render();
+      document.querySelector("#provider-meta").textContent = [result.provider, result.model, Number.isFinite(result.latency_ms) ? `${result.latency_ms}ms` : ""].filter(Boolean).join(" · ");
+      loading.hidden = true; resultState.hidden = false;
+      selectedVideoIndex = recommendedIndex();
+      setActiveTab("strategy", false);
       if (submittedDemo) setDemoStatus("ready", caseName);
       document.querySelector("#result-panel").scrollIntoView({behavior:"smooth",block:"start"});
     } catch (error) {
@@ -322,11 +571,23 @@
     }
   });
 
-  document.querySelectorAll(".result-tabs button").forEach((tab) => tab.addEventListener("click", () => {
-    activeTab = tab.dataset.tab;
-    document.querySelectorAll(".result-tabs button").forEach((item) => item.classList.toggle("active", item === tab));
-    render();
-  }));
+  document.querySelectorAll(".result-tabs button").forEach((tab) => tab.addEventListener("click", () => setActiveTab(tab.dataset.tab)));
+  content.addEventListener("click", (event) => {
+    const routeButton = event.target.closest("[data-select-route]");
+    if (routeButton) {
+      selectedVideoIndex = Number(routeButton.dataset.selectRoute);
+      render();
+      return;
+    }
+    const nextButton = event.target.closest("[data-next-tab]");
+    if (nextButton) {
+      setActiveTab(nextButton.dataset.nextTab);
+      return;
+    }
+    if (event.target.closest("[data-save-plan]")) {
+      document.querySelector("#save-result").click();
+    }
+  });
   document.querySelector("#reset-result").addEventListener("click", () => form.scrollIntoView({behavior:"smooth"}));
   document.querySelector("#copy-result").addEventListener("click", async () => {
     await navigator.clipboard.writeText(content.innerText);
@@ -337,8 +598,9 @@
   document.querySelector("#save-result").addEventListener("click", async () => {
     if (!result || !lastPayload) return;
     const token = localStorage.getItem("heyu_token") || "";
+    const platformName = text(result.strategy?.platform_name, lastPayload.platform);
     const snapshot = {
-      title: `${lastPayload.product_name} · ${result.strategy.platform_name}`,
+      title: `${lastPayload.product_name} · ${platformName}`,
       request_payload: lastPayload,
       content: result,
       change_summary: copy[locale].initialSaveSummary
