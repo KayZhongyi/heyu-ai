@@ -453,7 +453,9 @@ async function main() {
       versionedMarketingPlan.current_version.content.product_profile.one_line_value,
       updatedPositioning,
     );
-    assert.equal(await page.locator("#marketing-plan-versions button").count(), 2);
+    const marketingPlanVersionButtons = page.locator("#marketing-plan-versions button");
+    await marketingPlanVersionButtons.nth(1).waitFor();
+    assert.equal(await marketingPlanVersionButtons.count(), 2);
 
     const versionOneButton = page.locator(
       '#marketing-plan-versions button:has(b:text-is("v1"))',
