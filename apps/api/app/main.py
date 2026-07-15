@@ -1,30 +1,48 @@
 import base64
 import binascii
 import hashlib
+import json
 import secrets
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.abuse import enforce_limit, network_subject, normalize_identifier
 from app.config import Settings, get_settings
 from app.database import Base, engine, get_db
+from app.document_import import (
+    PDF_MEDIA_TYPE,
+    PPTX_MEDIA_TYPE,
+    DocumentImportError,
+    extract_document_text,
+)
 from app.models import (
     AuditEvent,
+    Brand,
+    ContentVersion,
     KnowledgeSource,
     Membership,
     Organization,
     OrganizationInvitation,
+    Product,
     Role,
     User,
+)
+from app.presentation_export import (
+    ContentItem,
+    PresentationInput,
+    ReviewMetadata,
+    generate_presentation_pptx,
 )
 from app.schemas import (
     Actor,
@@ -54,6 +72,7 @@ from app.schemas import (
     ContentReview,
     ContentVersionCreate,
     ContentVersionRead,
+    DocumentImportPreviewRead,
     GenerationRead,
     GenerationRunRead,
     GenerationSourceRead,
@@ -935,6 +954,65 @@ def add_knowledge_source(
     return create_knowledge_source(db, actor, data)
 
 
+MAX_DOCUMENT_UPLOAD_BYTES = 15 * 1024 * 1024
+
+
+@app.post(
+    "/v1/document-imports/preview",
+    response_model=DocumentImportPreviewRead,
+)
+async def preview_document_import(
+    file: UploadFile = File(...),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.product_manager, Role.creator)
+    ),
+) -> DocumentImportPreviewRead:
+    del actor
+    filename = Path(file.filename or "document").name
+    content = await file.read(MAX_DOCUMENT_UPLOAD_BYTES + 1)
+    if len(content) > MAX_DOCUMENT_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail={
+                "code": "document_too_large",
+                "message": "PDF and PPTX files must be 15 MB or smaller.",
+            },
+        )
+    try:
+        extraction = await run_in_threadpool(
+            extract_document_text,
+            content,
+            media_type=file.content_type,
+            filename=filename,
+        )
+    except DocumentImportError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": exc.detail},
+        ) from exc
+
+    media_type = PDF_MEDIA_TYPE if extraction.document_kind == "pdf" else PPTX_MEDIA_TYPE
+    sections = [
+        {
+            "kind": fragment.kind,
+            "number": fragment.number,
+            "label": (
+                f"Page {fragment.number}" if fragment.kind == "page" else f"Slide {fragment.number}"
+            ),
+            "text": fragment.text,
+        }
+        for fragment in extraction.fragments
+    ]
+    return DocumentImportPreviewRead(
+        filename=filename,
+        media_type=media_type,
+        content_sha256=hashlib.sha256(content).hexdigest(),
+        text=extraction.full_text,
+        sections=sections,
+        warnings=list(extraction.warnings),
+    )
+
+
 @app.get("/v1/knowledge", response_model=list[KnowledgeSourceRead])
 def get_knowledge_sources(
     db: Session = Depends(get_db), actor: Actor = Depends(current_actor)
@@ -1001,11 +1079,158 @@ def post_campaign_package(
     return create_campaign_package(db, actor, data)
 
 
+def _presentation_content_text(content: object) -> str:
+    if not content:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, dict):
+        preferred_keys = (
+            "hook",
+            "headline",
+            "title",
+            "body",
+            "script",
+            "caption",
+            "message",
+            "call_to_action",
+            "cta",
+        )
+        preferred = [
+            _presentation_content_text(content[key]) for key in preferred_keys if key in content
+        ]
+        if any(preferred):
+            return "\n".join(value for value in preferred if value)
+    try:
+        return json.dumps(content, ensure_ascii=False, indent=2)
+    except TypeError:
+        return str(content)
+
+
+def _campaign_presentation_input(
+    db: Session,
+    actor: Actor,
+    campaign: CampaignPackageRead,
+) -> PresentationInput:
+    brand = db.scalar(
+        select(Brand).where(
+            Brand.id == campaign.brand_id,
+            Brand.organization_id == actor.organization_id,
+        )
+    )
+    product = db.scalar(
+        select(Product).where(
+            Product.id == campaign.product_id,
+            Product.organization_id == actor.organization_id,
+        )
+    )
+    if brand is None or product is None:
+        raise HTTPException(status_code=404, detail="Campaign assets not found.")
+
+    brief = campaign.current_brief_revision
+    content_items: list[ContentItem] = []
+    has_unapproved_content = False
+    for item in campaign.items:
+        version_id = item.approved_version_id or item.latest_version_id
+        version = None
+        if version_id:
+            version = db.scalar(
+                select(ContentVersion).where(
+                    ContentVersion.id == version_id,
+                    ContentVersion.organization_id == actor.organization_id,
+                )
+            )
+        project = item.project
+        version_status = (
+            getattr(version.status, "value", str(version.status)) if version else "not_started"
+        )
+        has_unapproved_content = has_unapproved_content or version_status != "approved"
+        content_items.append(
+            ContentItem(
+                title=project.title,
+                channel=project.platform or campaign.platform,
+                format=getattr(project.content_type, "value", str(project.content_type)),
+                message=_presentation_content_text(version.content if version else ""),
+                call_to_action=(brief.desired_action if brief else ""),
+                status=version_status,
+            )
+        )
+
+    provenance: list[str] = []
+    if brief:
+        provenance.append(f"Campaign brief revision {brief.revision_number} · {brief.status.value}")
+    if campaign.current_supply_snapshot:
+        supply = campaign.current_supply_snapshot
+        provenance.append(
+            f"Supply snapshot revision {supply.revision_number} · {supply.status.value}"
+        )
+    if campaign.current_farmer_evidence_snapshot:
+        evidence = campaign.current_farmer_evidence_snapshot
+        provenance.append(
+            f"Farmer evidence revision {evidence.revision_number} · {evidence.status.value}"
+        )
+
+    is_draft = (
+        campaign.status.value == "draft"
+        or brief is None
+        or brief.status.value != "approved"
+        or not campaign.items
+        or has_unapproved_content
+    )
+    review_status = "draft" if is_draft else "approved"
+    review_notes = brief.review_note if brief else ""
+    reviewer = brief.reviewed_by if brief and brief.reviewed_by else ""
+    return PresentationInput(
+        locale=brief.locale if brief else "zh-CN",
+        campaign_title=campaign.title,
+        brand=brand.name,
+        product=product.name,
+        audience=brief.target_audience if brief else campaign.target_audience,
+        objective=brief.objective if brief else campaign.objective,
+        core_message=brief.core_message if brief else campaign.extra_requirements,
+        proof_points=(brief.proof_points if brief else product.selling_points),
+        content_items=content_items,
+        provenance=provenance,
+        is_draft=is_draft,
+        review_metadata=ReviewMetadata(
+            source_labels=provenance,
+            generated_by="禾语 AI / Heyu AI",
+            generated_at=datetime.now(UTC),
+            reviewer=reviewer,
+            review_status=review_status,
+            review_notes=review_notes,
+        ),
+    )
+
+
 @app.get("/v1/campaign-packages", response_model=list[CampaignPackageRead])
 def get_campaign_packages(
     db: Session = Depends(get_db), actor: Actor = Depends(current_actor)
 ) -> list[CampaignPackageRead]:
     return list_campaign_packages(db, actor)
+
+
+@app.get("/v1/campaign-packages/{campaign_id}/presentation")
+def download_campaign_presentation(
+    campaign_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> Response:
+    campaign = get_campaign_package(db, actor, campaign_id)
+    payload = _campaign_presentation_input(db, actor, campaign)
+    content = generate_presentation_pptx(payload)
+    filename = f"{campaign.title}.pptx"
+    return Response(
+        content=content,
+        media_type=PPTX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="heyu-campaign.pptx"; '
+                f"filename*=UTF-8''{quote(filename, safe='')}"
+            ),
+            "Cache-Control": "private, no-store",
+        },
+    )
 
 
 @app.get("/v1/campaign-packages/{campaign_id}", response_model=CampaignPackageRead)

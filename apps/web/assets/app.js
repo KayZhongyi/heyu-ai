@@ -29,17 +29,20 @@ const invalidateSession=()=>{
 const apiErrorMessage=(detail,fallback)=>{
   if(typeof detail==="string")return detail;
   if(!detail||typeof detail!=="object")return fallback;
+  if(typeof detail.message==="string"&&detail.message)return detail.message;
   const code=detail.code?briefBlockerLabel(String(detail.code).toLowerCase()):"";
   const blockers=Array.isArray(detail.blockers)?detail.blockers.map(briefBlockerLabel):[];
   return [code,...blockers].filter(Boolean).join(fieldSeparator())||fallback;
 };
-const api=async(path,options={})=>{const headers={"Content-Type":"application/json",...(options.headers||{})};if(state.token)headers.Authorization=`Bearer ${state.token}`;const response=await fetch(path,{...options,headers});if(!response.ok){let message=response.status===429?t("error.tooManyRequests"):t("error.requestFailed",{status:response.status});try{const body=await response.json();if(response.status!==429)message=apiErrorMessage(body.detail,message)}catch{}if(response.status===401&&state.token){invalidateSession();message=t("auth.sessionExpired")}throw new Error(message)}return response.status===204?null:response.json()};
+const requestHeaders=options=>{const headers={...(options.headers||{})};if(!(options.body instanceof FormData))headers["Content-Type"]="application/json";if(state.token)headers.Authorization=`Bearer ${state.token}`;return headers};
+const api=async(path,options={})=>{const response=await fetch(path,{...options,headers:requestHeaders(options)});if(!response.ok){let message=response.status===429?t("error.tooManyRequests"):t("error.requestFailed",{status:response.status});try{const body=await response.json();if(response.status!==429)message=apiErrorMessage(body.detail,message)}catch{}if(response.status===401&&state.token){invalidateSession();message=t("auth.sessionExpired")}throw new Error(message)}return response.status===204?null:response.json()};
+const apiFile=async(path,options={})=>{const response=await fetch(path,{...options,headers:requestHeaders(options)});if(!response.ok){let message=t("error.requestFailed",{status:response.status});try{const body=await response.json();message=apiErrorMessage(body.detail,message)}catch{}if(response.status===401&&state.token)invalidateSession();throw new Error(message)}return response};
 const formData=form=>Object.fromEntries(new FormData(form));
 const lines=value=>value.split("\n").map(v=>v.trim()).filter(Boolean);
 const toast=(message,error=false)=>{const el=$("#toast");el.textContent=message;el.className=`show${error?" error":""}`;clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.className="",3000)};
 const escapeHtml=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const fileBaseName=name=>name.replace(/\.(txt|md|markdown|csv)$/i,"");
-const knowledgeMediaType=file=>file.type||({txt:"text/plain",md:"text/markdown",markdown:"text/markdown",csv:"text/csv"}[file.name.split(".").pop().toLowerCase()]||"text/plain");
+const fileBaseName=name=>name.replace(/\.(txt|md|markdown|csv|pdf|pptx)$/i,"");
+const knowledgeMediaType=file=>file.type||({txt:"text/plain",md:"text/markdown",markdown:"text/markdown",csv:"text/csv",pdf:"application/pdf",pptx:"application/vnd.openxmlformats-officedocument.presentationml.presentation"}[file.name.split(".").pop().toLowerCase()]||"text/plain");
 const request=async(fn,success)=>{try{await fn();if(success)toast(success)}catch(error){toast(error.message,true)}};
 const resultContent=()=>state.currentVersion?.content||null;
 const resultText=()=>HeyuContent.renderContent(resultContent(),{t:HeyuI18n.t,locale:HeyuI18n.getLocale()});
@@ -58,6 +61,15 @@ const downloadResult=(content,type)=>{
   const body=isJson?JSON.stringify(content,null,2):HeyuContent.renderContent(content,{t:HeyuI18n.t,locale:HeyuI18n.getLocale()});
   const blob=new Blob([body],{type:isJson?"application/json;charset=utf-8":"text/plain;charset=utf-8"});
   const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download=`${basename}.${isJson?"json":"txt"}`;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),0);
+};
+const downloadCampaignPresentation=async campaign=>{
+  const response=await apiFile(`/v1/campaign-packages/${campaign.id}/presentation`);
+  const blob=await response.blob();
+  const link=document.createElement("a");
+  link.href=URL.createObjectURL(blob);
+  link.download=`${HeyuContent.safeFilename(campaign.title||"heyu-campaign")}.pptx`;
+  link.click();
+  setTimeout(()=>URL.revokeObjectURL(link.href),0);
 };
 const workspacePages=["overview","assets","knowledge","campaigns","studio","operations","review","audit","members"];
 const pageFromLocation=()=>{const page=location.pathname.split("/").filter(Boolean)[1]||"overview";return workspacePages.includes(page)?page:"overview"};
@@ -177,7 +189,7 @@ function renderCampaigns(){
     }).join("");
     const readiness=`<div class="campaign-readiness"><span class="readiness-chip ${progress.brief_ready?"ready":""}">${escapeHtml(t(progress.brief_ready?"campaignBrief.ready":"campaignBrief.missing"))}</span><span class="readiness-chip ${progress.supply_ready?"ready":""}">${escapeHtml(t(progress.supply_ready?"farmerEvidence.supplyReady":"farmerEvidence.supplyMissing"))}</span><span class="readiness-chip ${progress.farmer_evidence_ready?"ready":""}">${escapeHtml(t(progress.farmer_evidence_ready?"farmerEvidence.ready":"farmerEvidence.missing"))}</span><button data-open-campaign-brief="${campaign.id}">${escapeHtml(t("campaignBrief.open"))}</button></div>`;
     const generationBlockers=progress.generation_ready||!progress.generation_blockers?.length?"":`<div class="campaign-generation-blockers"><strong>${escapeHtml(t("campaign.generationBlocked"))}</strong><ul>${progress.generation_blockers.map(code=>`<li>${escapeHtml(campaignGenerationBlockerLabel(code))}</li>`).join("")}</ul></div>`;
-    return `<article class="campaign-card"><div class="panel-heading"><div><span class="badge ${campaign.status==="completed"?"approved":"pending_review"}">${escapeHtml(campaignStatusLabel(campaign.status))}</span><h3>${escapeHtml(campaign.title)}</h3></div><strong>${progress.required_approved}/${progress.required}</strong></div><p>${escapeHtml(campaign.platform)} · ${escapeHtml(campaign.target_audience)}</p>${readiness}${generationBlockers}<div class="campaign-progress"><i style="width:${progress.required?Math.round(progress.required_approved/progress.required*100):0}%"></i></div><ul>${items}</ul></article>`;
+    return `<article class="campaign-card"><div class="panel-heading"><div><span class="badge ${campaign.status==="completed"?"approved":"pending_review"}">${escapeHtml(campaignStatusLabel(campaign.status))}</span><h3>${escapeHtml(campaign.title)}</h3></div><strong>${progress.required_approved}/${progress.required}</strong></div><p>${escapeHtml(campaign.platform)} · ${escapeHtml(campaign.target_audience)}</p>${readiness}${generationBlockers}<div class="campaign-progress"><i style="width:${progress.required?Math.round(progress.required_approved/progress.required*100):0}%"></i></div><ul>${items}</ul><div class="row-actions"><button data-download-campaign-pptx="${campaign.id}">${escapeHtml(t("campaign.presentation.download"))}</button></div></article>`;
   }).join("")||`<p>${escapeHtml(t("campaign.empty"))}</p>`;
   renderCampaignBriefOptions();
   renderSupplyCampaignOptions();
@@ -513,18 +525,38 @@ $("#knowledge-file").addEventListener("change",async event=>{
   const status=$("#knowledge-file-status");
   if(!file){status.textContent=t("sourceImport.idle");return}
   const extension=file.name.split(".").pop().toLowerCase();
-  if(!["txt","md","markdown","csv"].includes(extension)){event.target.value="";toast(t("sourceImport.unsupportedType"),true);return}
-  if(file.size>1024*1024){event.target.value="";toast(t("sourceImport.fileTooLarge"),true);return}
-  status.textContent=t("sourceImport.reading");
+  const localTextTypes=["txt","md","markdown","csv"];
+  const documentTypes=["pdf","pptx"];
+  if(![...localTextTypes,...documentTypes].includes(extension)){event.target.value="";toast(t("sourceImport.unsupportedType"),true);return}
+  const sizeLimit=documentTypes.includes(extension)?15*1024*1024:1024*1024;
+  if(file.size>sizeLimit){event.target.value="";toast(t(documentTypes.includes(extension)?"sourceImport.documentTooLarge":"sourceImport.fileTooLarge"),true);return}
+  status.textContent=t(documentTypes.includes(extension)?"sourceImport.extracting":"sourceImport.reading");
   try{
-    const content=await file.text();
+    let content="";
+    let mediaType=knowledgeMediaType(file);
+    let sectionCount=0;
+    let warnings=[];
+    if(localTextTypes.includes(extension)){
+      content=await file.text();
+    }else{
+      const body=new FormData();
+      body.append("file",file);
+      const preview=await api("/v1/document-imports/preview",{method:"POST",body});
+      content=preview.text;
+      mediaType=preview.media_type;
+      sectionCount=preview.sections.length;
+      warnings=preview.warnings||[];
+    }
     if(!content.trim())throw new Error(t("sourceImport.emptyFile"));
     if(!form.elements.title.value)form.elements.title.value=fileBaseName(file.name);
     form.elements.content.value=content;
     form.elements.source_filename.value=file.name;
-    form.elements.media_type.value=knowledgeMediaType(file);
+    form.elements.media_type.value=mediaType;
     if(!form.elements.citation_label.value)form.elements.citation_label.value=fileBaseName(file.name);
-    status.textContent=t("sourceImport.readSuccess",{filename:file.name,size:(file.size/1024).toFixed(1)});
+    status.textContent=documentTypes.includes(extension)
+      ?t("sourceImport.extractSuccess",{filename:file.name,count:sectionCount,warnings:warnings.length})
+      :t("sourceImport.readSuccess",{filename:file.name,size:(file.size/1024).toFixed(1)});
+    if(warnings.length)toast(t("sourceImport.extractWarnings",{count:warnings.length}),true);
   }catch(error){
     event.target.value="";
     status.textContent=t("sourceImport.readFailed");
@@ -624,6 +656,22 @@ document.addEventListener("click",event=>{
 document.addEventListener("change",event=>{
   const sourceType=event.target.closest('[data-claim-field="source_type"]');
   if(sourceType)refreshClaimRow(sourceType.closest(".claim-row"));
+});
+document.addEventListener("click",event=>{
+  const button=event.target.closest("[data-download-campaign-pptx]");
+  if(!button)return;
+  const campaign=state.campaigns.find(item=>item.id===button.dataset.downloadCampaignPptx);
+  if(!campaign)return;
+  request(async()=>{
+    button.disabled=true;
+    button.textContent=t("campaign.presentation.downloading");
+    try{
+      await downloadCampaignPresentation(campaign);
+    }finally{
+      button.disabled=false;
+      button.textContent=t("campaign.presentation.download");
+    }
+  },t("campaign.presentation.downloaded"));
 });
 document.addEventListener("click",event=>{
   const submit=event.target.closest("[data-submit-supply]");

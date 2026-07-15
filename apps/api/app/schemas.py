@@ -187,6 +187,22 @@ class KnowledgeSourceRead(ORMModel):
     review_note: str
 
 
+class DocumentFragmentRead(BaseModel):
+    kind: str
+    number: int
+    label: str
+    text: str
+
+
+class DocumentImportPreviewRead(BaseModel):
+    filename: str
+    media_type: str
+    content_sha256: str
+    text: str
+    sections: list[DocumentFragmentRead]
+    warnings: list[str]
+
+
 class KnowledgeReview(BaseModel):
     status: ReviewStatus
     note: str = Field(default="", max_length=2000)

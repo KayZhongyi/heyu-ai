@@ -148,11 +148,11 @@
               <h2>录入可信资料</h2>
               <div class="file-import">
                 <div>
-                  <p class="eyebrow">LOCAL TEXT IMPORT</p>
-                  <strong>从本地文本资料开始</strong>
-                  <small>支持 UTF-8 TXT、Markdown、CSV，最大 1 MB。原文件不会上传，只保存文本和来源指纹。</small>
+                  <p class="eyebrow">DOCUMENT IMPORT</p>
+                  <strong>从本地资料建立可信知识</strong>
+                  <small>支持 TXT、Markdown、CSV、PDF 与 PPTX。系统先抽取文字供你确认，不会把原文件永久保存。</small>
                 </div>
-                <label class="file-picker">选择文件<input id="knowledge-file" type="file" accept=".txt,.md,.markdown,.csv,text/plain,text/markdown,text/csv"></label>
+                <label class="file-picker">选择文件<input id="knowledge-file" type="file" accept=".txt,.md,.markdown,.csv,.pdf,.pptx,text/plain,text/markdown,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation"></label>
                 <span id="knowledge-file-status" class="file-status">也可以直接在下方手工录入</span>
               </div>
               <input name="source_filename" type="hidden">
