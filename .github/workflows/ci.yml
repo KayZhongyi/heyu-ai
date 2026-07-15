@@ -173,7 +173,7 @@ jobs:
         shell: powershell
         run: |
           ./scripts/build-windows-portable.ps1 `
-            -Python (Get-Command python).Source `
+            -Python (Resolve-Path ".venv\Scripts\python.exe").Path `
             -OutputDirectory "$env:RUNNER_TEMP\heyu-portable"
       - name: Start and verify standalone Windows portable package
         shell: powershell

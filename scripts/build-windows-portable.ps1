@@ -36,6 +36,11 @@ Assert-ChildPath -Parent $OutputDirectory -Child $portableDirectory
 New-Item -ItemType Directory -Force -Path $OutputDirectory, $workDirectory, $specDirectory |
     Out-Null
 
+& $Python -c "import app.main, alembic, fastapi, sqlalchemy, uvicorn"
+if ($LASTEXITCODE -ne 0) {
+    throw "The selected Python environment does not contain the installed Heyu AI application."
+}
+
 & $Python -m pip install --disable-pip-version-check "pyinstaller==6.21.0"
 if ($LASTEXITCODE -ne 0) {
     throw "Unable to install the Windows packaging tool."
@@ -51,6 +56,8 @@ if ($LASTEXITCODE -ne 0) {
     --add-data "$root\apps\web;web" `
     --add-data "$root\apps\api\migrations;migrations" `
     --add-data "$root\apps\api\alembic.ini;." `
+    --hidden-import "app.main" `
+    --collect-submodules "app" `
     --collect-all "pwdlib" `
     --collect-all "argon2" `
     --distpath $OutputDirectory `
