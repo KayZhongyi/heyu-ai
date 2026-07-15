@@ -169,6 +169,55 @@ jobs:
           name: heyu-windows-acceptance
           path: ${{ runner.temp }}/heyu-windows-acceptance.json
           if-no-files-found: error
+      - name: Build standalone Windows portable package
+        shell: powershell
+        run: |
+          ./scripts/build-windows-portable.ps1 `
+            -Python (Resolve-Path ".venv\Scripts\python.exe").Path `
+            -OutputDirectory "$env:RUNNER_TEMP\heyu-portable"
+      - name: Start and verify standalone Windows portable package
+        shell: powershell
+        run: |
+          $portableRoot = "$env:RUNNER_TEMP\heyu-portable\heyu-ai-windows-portable"
+          $executable = Join-Path $portableRoot "HeyuAI.exe"
+          $process = Start-Process -FilePath $executable `
+            -ArgumentList @("--port", "8766", "--no-browser") `
+            -WorkingDirectory $portableRoot `
+            -WindowStyle Hidden `
+            -PassThru
+          try {
+            for ($attempt = 0; $attempt -lt 120; $attempt++) {
+              Start-Sleep -Milliseconds 500
+              if ($process.HasExited) {
+                throw "Portable launcher exited with code $($process.ExitCode)."
+              }
+              try {
+                $health = Invoke-RestMethod http://127.0.0.1:8766/health -TimeoutSec 1
+                if ($health.status -eq "ok") {
+                  break
+                }
+              } catch {
+                # Continue until the startup deadline.
+              }
+            }
+            if (-not $health -or $health.status -ne "ok") {
+              throw "Portable launcher did not become healthy."
+            }
+            python scripts/acceptance-smoke.py `
+              --base-url http://127.0.0.1:8766 `
+              --output "$env:RUNNER_TEMP\heyu-portable-acceptance.json"
+            if (-not (Test-Path -LiteralPath (Join-Path $portableRoot "data\heyu.db"))) {
+              throw "Portable launcher did not create its local database."
+            }
+          } finally {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+          }
+      - name: Upload standalone Windows portable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: heyu-ai-windows-portable
+          path: ${{ runner.temp }}/heyu-portable/heyu-ai-windows-portable.zip
+          if-no-files-found: error
       - name: Upload Windows source package
         shell: powershell
         run: |
