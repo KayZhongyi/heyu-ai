@@ -9,9 +9,14 @@ $root = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $dataDirectory = [System.IO.Path]::GetFullPath((Join-Path $root "data"))
 $databasePath = [System.IO.Path]::GetFullPath((Join-Path $dataDirectory "heyu.db"))
 $expectedPrefix = $dataDirectory.TrimEnd("\", "/") + [System.IO.Path]::DirectorySeparatorChar
+$stopScript = Join-Path $PSScriptRoot "stop-windows.ps1"
 
 if (-not $databasePath.StartsWith($expectedPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Refusing to reset a database outside the project data directory: $databasePath"
+}
+
+if (Test-Path -LiteralPath $stopScript -PathType Leaf) {
+    & $stopScript
 }
 
 if (-not (Test-Path -LiteralPath $databasePath -PathType Leaf)) {

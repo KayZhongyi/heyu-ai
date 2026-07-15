@@ -163,6 +163,18 @@ jobs:
           python scripts/acceptance-smoke.py `
             --base-url http://127.0.0.1:8765 `
             --output "$env:RUNNER_TEMP\heyu-windows-acceptance.json"
+      - name: Stop the source workspace with the user-facing script
+        shell: powershell
+        run: |
+          ./scripts/stop-windows.ps1 -Port 8765
+          try {
+            Invoke-RestMethod http://127.0.0.1:8765/health -TimeoutSec 1 | Out-Null
+            throw "The source workspace is still running."
+          } catch {
+            if ($_.Exception.Message -eq "The source workspace is still running.") {
+              throw
+            }
+          }
       - name: Upload Windows acceptance report
         if: always()
         uses: actions/upload-artifact@v4

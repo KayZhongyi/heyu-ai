@@ -87,16 +87,26 @@ async function expectReadOnlyNotice(page, locale) {
   return noticeText;
 }
 
-async function expectSimpleModeLocale(page, locale, expectedCases) {
+async function expectSimpleModeLocale(page, locale, expectedCases, expectedPlatforms) {
   await page.goto(`${baseUrl}/create/?lang=${locale}`, { waitUntil: "networkidle" });
   assert.equal(await page.locator("[data-demo-case]").count(), 3);
   for (const label of expectedCases) {
     await page.getByText(label, { exact: true }).waitFor();
   }
+  for (const label of expectedPlatforms) {
+    await page.getByText(label, { exact: true }).waitFor();
+  }
   await expectNoHorizontalOverflow(page, `simple mode ${locale}`);
 }
 
-async function generateDemoCase(page, caseId, expectedProduct) {
+async function generateDemoCase(
+  page,
+  caseId,
+  expectedProduct,
+  expectedPlatformValue,
+  expectedPlatformName,
+  expectedNextActionsLabel,
+) {
   const responsePromise = page.waitForResponse(
     (response) =>
       response.url() === `${baseUrl}/v1/marketing/preview` &&
@@ -114,6 +124,26 @@ async function generateDemoCase(page, caseId, expectedProduct) {
     true,
     `${caseId} demo button was not marked active`,
   );
+  assert.equal(
+    await page.locator(`[name="platform"][value="${expectedPlatformValue}"]`).isChecked(),
+    true,
+    `${caseId} did not select ${expectedPlatformValue}`,
+  );
+  const strategyCards = page.locator("#result-content .result-card");
+  assert.equal(await strategyCards.count(), 4);
+  await strategyCards.nth(1).getByText(expectedPlatformName, { exact: false }).waitFor();
+  assert.equal(
+    (await strategyCards.nth(3).locator("span").first().textContent()).trim(),
+    expectedNextActionsLabel,
+  );
+  const nextActions = strategyCards.nth(3).locator("li");
+  assert.ok(
+    (await nextActions.count()) >= 3 && (await nextActions.count()) <= 6,
+    `${caseId} next actions must contain 3 to 6 items`,
+  );
+  for (let index = 0; index < await nextActions.count(); index += 1) {
+    assert.ok((await nextActions.nth(index).innerText()).trim(), "next action must not be empty");
+  }
 
   await page.locator('[data-tab="videos"]').click();
   assert.equal(await page.locator("#result-content .result-card").count(), 3);
@@ -121,6 +151,33 @@ async function generateDemoCase(page, caseId, expectedProduct) {
   assert.ok(await page.locator("#result-content .result-card").count());
   await page.locator('[data-tab="calendar"]').click();
   assert.equal(await page.locator("#result-content .day-list > li").count(), 7);
+}
+
+async function expectLocalizedClaimError(page, locale, riskyDescription, expectedMessage) {
+  await page.goto(`${baseUrl}/create/?lang=${locale}`, { waitUntil: "networkidle" });
+  await page.locator('[name="product_name"]').fill(
+    locale === "en" ? "Risk check tomatoes" : "宣传检查番茄",
+  );
+  await page.locator('[name="product_description"]').fill(riskyDescription);
+
+  let dialogMessage = "";
+  const dialogHandled = new Promise((resolve) => {
+    page.once("dialog", async (dialog) => {
+      dialogMessage = dialog.message();
+      await dialog.accept();
+      resolve();
+    });
+  });
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.url() === `${baseUrl}/v1/marketing/preview` &&
+      response.request().method() === "POST",
+  );
+  await page.locator('#marketing-form [type="submit"]').click();
+  const response = await responsePromise;
+  assert.equal(response.status(), 422, `${locale} risky claim was not rejected`);
+  await dialogHandled;
+  assert.equal(dialogMessage, expectedMessage, `${locale} claim error was not localized`);
 }
 
 async function main() {
@@ -157,40 +214,54 @@ async function main() {
       await screenshot(page, filename);
     }
 
-    for (const [locale, cases] of [
+    for (const [locale, cases, platforms, nextActionsLabel] of [
       [
         "zh-CN",
         [
-          ["tomato", "番茄", "当季番茄"],
-          ["tea", "高山茶叶", "高山云雾茶"],
-          ["fruit", "当季水果", "岭南当季水果礼盒"],
+          ["tomato", "番茄", "当季番茄", "douyin", "抖音"],
+          ["tea", "高山茶叶", "高山云雾茶", "xiaohongshu", "小红书"],
+          ["fruit", "当季水果", "岭南当季水果礼盒", "wechat-channels", "视频号"],
         ],
+        ["抖音", "小红书", "视频号", "快手"],
+        "接下来就这样做",
       ],
       [
         "zh-HK",
         [
-          ["tomato", "番茄", "時令番茄"],
-          ["tea", "高山茶葉", "高山雲霧茶"],
-          ["fruit", "時令水果", "嶺南時令水果禮盒"],
+          ["tomato", "番茄", "時令番茄", "douyin", "抖音"],
+          ["tea", "高山茶葉", "高山雲霧茶", "xiaohongshu", "小紅書"],
+          ["fruit", "時令水果", "嶺南時令水果禮盒", "wechat-channels", "視頻號"],
         ],
+        ["抖音", "小紅書", "視頻號", "快手"],
+        "接下來就這樣做",
       ],
       [
         "en",
         [
-          ["tomato", "Tomatoes", "Seasonal tomatoes"],
-          ["tea", "High-mountain tea", "High-mountain mist tea"],
-          ["fruit", "Seasonal fruit", "Lingnan seasonal fruit box"],
+          ["tomato", "Tomatoes", "Seasonal tomatoes", "douyin", "Douyin"],
+          ["tea", "High-mountain tea", "High-mountain mist tea", "xiaohongshu", "Xiaohongshu"],
+          ["fruit", "Seasonal fruit", "Lingnan seasonal fruit box", "wechat-channels", "WeChat Channels"],
         ],
+        ["Douyin", "Xiaohongshu", "WeChat Channels", "Kuaishou"],
+        "What to do next",
       ],
     ]) {
       await expectSimpleModeLocale(
         page,
         locale,
         cases.map(([, label]) => label),
+        platforms,
       );
       await screenshot(page, `simple-mode-${locale}.png`);
-      for (const [caseId, , product] of cases) {
-        await generateDemoCase(page, caseId, product);
+      for (const [caseId, , product, platformValue, platformName] of cases) {
+        await generateDemoCase(
+          page,
+          caseId,
+          product,
+          platformValue,
+          platformName,
+          nextActionsLabel,
+        );
         await screenshot(
           page,
           locale === "zh-CN"
@@ -201,7 +272,14 @@ async function main() {
     }
 
     await page.goto(`${baseUrl}/create/?lang=zh-CN`, { waitUntil: "networkidle" });
-    await generateDemoCase(page, "tomato", "当季番茄");
+    await generateDemoCase(
+      page,
+      "tomato",
+      "当季番茄",
+      "douyin",
+      "抖音",
+      "接下来就这样做",
+    );
     const productBeforeLocaleSwitch = await page.locator("#result-product").textContent();
     for (const [locale, tabLabel] of [
       ["zh-HK", "短影片"],
@@ -217,6 +295,26 @@ async function main() {
       await page.getByRole("button", { name: tabLabel, exact: true }).waitFor();
     }
 
+    for (const [locale, description, message] of [
+      [
+        "zh-CN",
+        "自然成熟的番茄，可以降血糖，适合每天食用。",
+        "输入中包含需要核验的医疗、认证或绝对化宣传，请修改后再生成。",
+      ],
+      [
+        "zh-HK",
+        "自然成熟的番茄，可以降血糖，適合每天食用。",
+        "輸入中包含需要核實的醫療、認證或絕對化宣傳，請修改後再生成。",
+      ],
+      [
+        "en",
+        "Naturally ripened tomatoes that treat cancer and suit everyday meals.",
+        "The brief contains a medical, certification or absolute claim that must be verified before generation.",
+      ],
+    ]) {
+      await expectLocalizedClaimError(page, locale, description, message);
+    }
+
     const simpleMobileContext = await browser.newContext({
       viewport: { width: 390, height: 844 },
     });
@@ -226,11 +324,36 @@ async function main() {
     await simpleMobilePage.goto(`${baseUrl}/create/?lang=zh-CN`, {
       waitUntil: "networkidle",
     });
-    await generateDemoCase(simpleMobilePage, "tomato", "当季番茄");
+    await generateDemoCase(
+      simpleMobilePage,
+      "tomato",
+      "当季番茄",
+      "douyin",
+      "抖音",
+      "接下来就这样做",
+    );
     await expectNoHorizontalOverflow(simpleMobilePage, "simple mode 390px");
     await screenshot(simpleMobilePage, "simple-mode-390px.png");
     assert.deepEqual(simpleMobileErrors, [], `simple mode page errors: ${simpleMobileErrors}`);
     await simpleMobileContext.close();
+
+    const englishMobileContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+    });
+    const englishMobilePage = await englishMobileContext.newPage();
+    await englishMobilePage.goto(`${baseUrl}/create/?lang=en`, { waitUntil: "networkidle" });
+    await generateDemoCase(
+      englishMobilePage,
+      "fruit",
+      "Lingnan seasonal fruit box",
+      "wechat-channels",
+      "WeChat Channels",
+      "What to do next",
+    );
+    await englishMobilePage.locator('[data-tab="strategy"]').click();
+    await expectNoHorizontalOverflow(englishMobilePage, "English fruit strategy 390px");
+    await screenshot(englishMobilePage, "simple-mode-en-fruit-strategy-390px.png");
+    await englishMobileContext.close();
 
     await page.goto(`${baseUrl}/workspace/?lang=zh-CN`, { waitUntil: "networkidle" });
     const bootstrap = page.locator("#bootstrap-form");
@@ -923,6 +1046,11 @@ async function main() {
     await screenshot(invitePage, "workspace-390px.png");
     await inviteContext.close();
     assert.deepEqual(pageErrors, [], `browser page errors: ${pageErrors.join("\n")}`);
+    assert.deepEqual(
+      await page.evaluate(() => window.__heyuUnhandledRejections || []),
+      [],
+      "browser unhandled promise rejections",
+    );
     await context.tracing.stop({ path: path.join(outputDir, "trace.zip") });
     await context.close();
 

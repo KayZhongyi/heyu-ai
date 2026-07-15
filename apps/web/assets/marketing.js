@@ -202,7 +202,14 @@
   async function readApiError(response) {
     try {
       const payload = await response.json();
-      const detail = typeof payload?.detail === "string" ? payload.detail : "";
+      const detail = Array.isArray(payload?.detail)
+        ? payload.detail
+            .map((item) => item?.msg || item?.message || "")
+            .filter(Boolean)
+            .join(" ")
+        : typeof payload?.detail === "string"
+          ? payload.detail
+          : "";
       if (/high-risk medical, certification, or absolute/i.test(detail)) {
         return copy[locale].claimError;
       }
