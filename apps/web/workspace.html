@@ -23,7 +23,7 @@
         <button class="nav active" data-page="overview" data-index="01">经营概览</button>
         <span class="nav-label">智能资产</span>
         <button class="nav" data-page="assets" data-index="02">品牌与农产品</button>
-        <button class="nav" data-page="knowledge" data-index="03">可信知识库</button>
+        <button class="nav" data-page="knowledge" data-index="03">内容资料库</button>
         <button class="nav" data-page="campaigns" data-index="04" data-i18n="campaign.page">营销活动包</button>
         <button class="nav" data-page="studio" data-index="05">内容创作台</button>
         <button class="nav" data-page="operations" data-index="06">发布与运营</button>
@@ -33,7 +33,7 @@
         <button class="nav member-nav" data-page="members" data-index="09" hidden>团队与权限</button>
       </nav>
       <div class="sidebar-note">
-        <b><i></i>可信引擎运行中</b>
+        <b><i></i>内容工作台运行中</b>
         <span>生成内容保留知识来源、模型参数与版本记录。</span>
       </div>
     </aside>
@@ -58,7 +58,7 @@
         <div>
           <span class="pill">本地工作空间</span>
           <h2>进入禾语内容工作台</h2>
-          <p>管理品牌与产品资料、审核知识来源，并创建可追溯的营销内容。</p>
+          <p>管理品牌与产品资料，协作生产短视频、直播与新媒体营销内容。</p>
         </div>
         <div class="auth-forms">
         <div class="auth-tabs" role="tablist" aria-label="进入工作台方式">
@@ -110,14 +110,14 @@
             <div class="hero-status"><span>今日工作焦点</span><strong><i></i><span id="focus-status">工作空间已就绪</span></strong><small id="focus-detail">先完善知识，再开始创作</small></div>
           </div>
           <div class="metric-grid">
-            <article class="metric-primary"><span>可信知识</span><strong id="knowledge-count">0</strong><small>已审核、可用于生成</small></article>
+            <article class="metric-primary"><span>可用资料</span><strong id="knowledge-count">0</strong><small>已审核、可用于生成</small></article>
             <article><span>品牌资产</span><strong id="brand-count">0</strong><small>已建档品牌</small></article>
             <article><span>农产品</span><strong id="product-count">0</strong><small>结构化产品档案</small></article>
             <article><span>内容项目</span><strong id="project-count">0</strong><small>脚本与直播话术</small></article>
           </div>
           <div class="overview-stage">
             <section class="journey-panel">
-              <div class="panel-heading"><div><p class="eyebrow">VALUE JOURNEY</p><h2>可信内容生产链</h2></div><span class="quiet-meta">从事实到发布</span></div>
+              <div class="panel-heading"><div><p class="eyebrow">VALUE JOURNEY</p><h2>内容生产与运营流程</h2></div><span class="quiet-meta">从资料到经营</span></div>
               <div class="flow">
                 <article><b>01</b><h3>品牌建档</h3><p>沉淀故事、产品参数与禁止表述。</p></article>
                 <article><b>02</b><h3>知识审核</h3><p>仅通过审核的事实进入 AI 上下文。</p></article>
@@ -128,7 +128,7 @@
             <aside class="next-action" id="next-action">
               <span>NEXT / 01</span>
               <h2 id="next-action-title">从最关键的资料开始。</h2>
-              <p id="next-action-copy">先建立品牌和产品档案，再录入一条经过审核的事实，AI 才能生成可信内容。</p>
+              <p id="next-action-copy">先建立品牌和产品档案，再添加一条可用资料，开始生成第一份内容。</p>
               <button class="light-action jump" id="next-action-button" data-target="assets">建立第一份档案 <b>→</b></button>
             </aside>
           </div>
@@ -145,11 +145,11 @@
         <section class="page" data-page-panel="knowledge">
           <div class="two-col">
             <form class="panel" id="knowledge-form" data-write-scope="content">
-              <h2>录入可信资料</h2>
+              <h2>添加产品与品牌资料</h2>
               <div class="file-import">
                 <div>
                   <p class="eyebrow">DOCUMENT IMPORT</p>
-                  <strong>从本地资料建立可信知识</strong>
+                  <strong>从本地资料建立内容资产</strong>
                   <small>支持 TXT、Markdown、CSV、PDF 与 PPTX。系统先抽取文字供你确认，不会把原文件永久保存。</small>
                 </div>
                 <label class="file-picker">选择文件<input id="knowledge-file" type="file" accept=".txt,.md,.markdown,.csv,.pdf,.pptx,text/plain,text/markdown,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation"></label>
@@ -371,7 +371,7 @@
         <section class="page" data-page-panel="studio">
           <div class="two-col studio-grid">
             <form class="panel" id="project-form" data-write-scope="content"><input name="id" type="hidden"><h2 id="project-form-title">创建内容任务</h2><label>任务名称<input name="title" placeholder="番茄采摘季首发视频" required></label><label>品牌<select name="brand_id" class="brand-select" required></select></label><label>产品<select name="product_id" class="product-select" required></select></label><label>内容类型<select name="content_type"><option value="short_video_30s">30 秒短视频</option><option value="short_video_60s">60 秒短视频</option><option value="mobile_shooting_checklist">手机拍摄清单</option><option value="livestream_opening">直播开场</option><option value="livestream_product_pitch">直播产品讲解</option><option value="livestream_interaction">直播互动</option><option value="comment_reply">评论回复</option><option value="social_post">社交媒体文案</option><option value="title_and_cover">标题与封面文案</option></select></label><div class="form-grid"><label>发布平台<input name="platform" value="抖音"></label><label>内容语气<input name="tone" value="真诚、有烟火气"></label></div><label>目标受众<textarea name="target_audience"></textarea></label><label>传播目标<textarea name="objective"></textarea></label><label>额外要求<textarea name="extra_requirements"></textarea></label><button class="primary" id="project-save-button">创建任务</button><button class="ghost wide" id="project-edit-cancel" type="button" hidden>取消编辑</button></form>
-            <div class="panel result-panel"><div class="panel-heading"><div><p class="eyebrow">AI STUDIO</p><h2>生成结果</h2></div><span class="pill">可信来源限定</span></div><label>选择任务<select id="project-select"></select></label><button class="primary wide" id="generate-button" data-write-scope="content">生成内容脚本</button><div class="content-toolbar" id="content-toolbar" hidden><button type="button" data-result-mode="preview" class="active">阅读稿</button><button type="button" data-result-mode="json">结构化 JSON</button><button type="button" id="copy-content">复制阅读稿</button><button type="button" id="download-content">下载 TXT</button><button type="button" id="download-json">下载 JSON</button></div><div id="generation-preview" data-business-data class="generation-preview">请先建立品牌、产品和至少一条审核通过的知识资料。</div><pre id="generation-output" data-business-data hidden></pre><div id="edit-version" data-write-scope="content" hidden><label>人工修改版本<textarea id="version-editor" rows="12"></textarea></label><label>修改说明<input id="change-summary" value="人工优化脚本表达"></label><button class="primary wide" id="save-version-button" type="button">保存为新版本</button></div><div class="generation-history"><div class="panel-heading"><div><p class="eyebrow">PROVENANCE HISTORY</p><h2>生成记录</h2></div><span class="quiet-meta">持久化记录</span></div><div id="generation-history-list" data-business-data class="stack empty">选择任务后查看生成历史</div></div></div>
+            <div class="panel result-panel"><div class="panel-heading"><div><p class="eyebrow">AI STUDIO</p><h2>生成结果</h2></div><span class="pill">使用已审核资料</span></div><label>选择任务<select id="project-select"></select></label><button class="primary wide" id="generate-button" data-write-scope="content">生成内容脚本</button><div class="content-toolbar" id="content-toolbar" hidden><button type="button" data-result-mode="preview" class="active">阅读稿</button><button type="button" data-result-mode="json">结构化 JSON</button><button type="button" id="copy-content">复制阅读稿</button><button type="button" id="download-content">下载 TXT</button><button type="button" id="download-json">下载 JSON</button></div><div id="generation-preview" data-business-data class="generation-preview">请先建立品牌、产品和至少一条审核通过的知识资料。</div><pre id="generation-output" data-business-data hidden></pre><div id="edit-version" data-write-scope="content" hidden><label>人工修改版本<textarea id="version-editor" rows="12"></textarea></label><label>修改说明<input id="change-summary" value="人工优化脚本表达"></label><button class="primary wide" id="save-version-button" type="button">保存为新版本</button></div><div class="generation-history"><div class="panel-heading"><div><p class="eyebrow">PROVENANCE HISTORY</p><h2>生成记录</h2></div><span class="quiet-meta">持久化记录</span></div><div id="generation-history-list" data-business-data class="stack empty">选择任务后查看生成历史</div></div></div>
           </div>
           <div class="section-head"><div><p class="eyebrow">CONTENT BRIEFS</p><h2>已有内容任务</h2></div><span class="quiet-meta">修改只影响后续生成</span></div>
 <div id="project-list" class="card-list empty" data-business-data>暂无内容任务</div>

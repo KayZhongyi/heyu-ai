@@ -26,6 +26,13 @@ from app.document_import import (
     DocumentImportError,
     extract_document_text,
 )
+from app.marketing import (
+    MarketingPlanRequest,
+    MarketingPlanResponse,
+    MarketingProviderError,
+    generate_marketing_plan,
+    generate_marketing_preview,
+)
 from app.models import (
     AuditEvent,
     Brand,
@@ -72,6 +79,7 @@ from app.schemas import (
     ContentReview,
     ContentVersionCreate,
     ContentVersionRead,
+    DocumentFragmentRead,
     DocumentImportPreviewRead,
     GenerationRead,
     GenerationRunRead,
@@ -184,7 +192,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="Agri Content Platform API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Heyu AI Platform API", version="0.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[item.strip() for item in get_settings().cors_origins.split(",") if item.strip()],
@@ -276,6 +284,7 @@ def find_web_dir(module_file: Path = Path(__file__)) -> Path:
 web_dir = find_web_dir()
 web_index = web_dir / "index.html"
 web_workspace = web_dir / "workspace.html"
+web_create = web_dir / "create.html"
 web_assets = web_dir / "assets"
 workspace_pages = {
     "overview",
@@ -307,6 +316,12 @@ def landing_page() -> FileResponse:
     return web_file(web_index)
 
 
+@app.get("/create", include_in_schema=False)
+@app.get("/create/", include_in_schema=False)
+def create_page() -> FileResponse:
+    return web_file(web_create)
+
+
 @app.get("/workspace", include_in_schema=False)
 @app.get("/workspace/", include_in_schema=False)
 @app.get("/workspace/{page}", include_in_schema=False)
@@ -321,6 +336,27 @@ def workspace(page: str | None = None) -> FileResponse:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.post("/v1/marketing/preview", response_model=MarketingPlanResponse)
+def preview_marketing_plan(payload: MarketingPlanRequest) -> MarketingPlanResponse:
+    """Generate a deterministic, zero-cost plan for the public/local demo."""
+    return generate_marketing_preview(payload)
+
+
+@app.post("/v1/marketing/generate", response_model=MarketingPlanResponse)
+def create_marketing_plan(
+    payload: MarketingPlanRequest,
+    _: Actor = Depends(current_actor),
+) -> MarketingPlanResponse:
+    """Generate with the configured provider for an authenticated team member."""
+    try:
+        return generate_marketing_plan(payload)
+    except MarketingProviderError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The configured marketing model could not produce a valid plan.",
+        ) from exc
 
 
 @app.get("/ready")
@@ -510,7 +546,8 @@ def invitation_by_token(
     row = db.execute(statement).one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="Invitation not found")
-    return row
+    invitation, organization = row
+    return invitation, organization
 
 
 @app.post("/v1/invitations", response_model=InvitationCreated, status_code=201)
@@ -601,6 +638,8 @@ def create_invitation(
             detail="An active invitation already exists",
         ) from error
     organization = db.get(Organization, actor.organization_id)
+    if organization is None:
+        raise HTTPException(status_code=409, detail="Organization is unavailable")
     return InvitationCreated(
         **invitation_view(invitation, organization).model_dump(),
         token=token,
@@ -613,6 +652,8 @@ def get_invitations(
     actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
 ) -> list[InvitationRead]:
     organization = db.get(Organization, actor.organization_id)
+    if organization is None:
+        raise HTTPException(status_code=409, detail="Organization is unavailable")
     invitations = db.scalars(
         select(OrganizationInvitation)
         .where(OrganizationInvitation.organization_id == actor.organization_id)
@@ -663,6 +704,8 @@ def revoke_invitation(
     )
     db.commit()
     organization = db.get(Organization, actor.organization_id)
+    if organization is None:
+        raise HTTPException(status_code=409, detail="Organization is unavailable")
     return invitation_view(invitation, organization)
 
 
@@ -821,6 +864,8 @@ def update_member_role(
     previous_role = membership.role
     membership.role = data.role
     user = db.get(User, membership.user_id)
+    if user is None:
+        raise HTTPException(status_code=409, detail="Member account is unavailable")
     audit(
         db,
         actor,
@@ -993,14 +1038,14 @@ async def preview_document_import(
 
     media_type = PDF_MEDIA_TYPE if extraction.document_kind == "pdf" else PPTX_MEDIA_TYPE
     sections = [
-        {
-            "kind": fragment.kind,
-            "number": fragment.number,
-            "label": (
+        DocumentFragmentRead(
+            kind=fragment.kind,
+            number=fragment.number,
+            label=(
                 f"Page {fragment.number}" if fragment.kind == "page" else f"Slide {fragment.number}"
             ),
-            "text": fragment.text,
-        }
+            text=fragment.text,
+        )
         for fragment in extraction.fragments
     ]
     return DocumentImportPreviewRead(

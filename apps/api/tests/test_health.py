@@ -269,7 +269,7 @@ def test_landing_and_workspace_are_served(client):
     response = client.get("/")
     assert response.status_code == 200
     assert "禾语 AI" in response.text
-    assert "让土地里的认真" in response.text
+    assert "让土地里的好产品" in response.text
     assert "hero-field-fallback.svg" in response.text
     assert 'href="/workspace/"' in response.text
 
@@ -294,7 +294,7 @@ def test_landing_and_workspace_are_served(client):
 def test_workspace_files_are_utf8(client):
     response = client.get("/")
     assert response.encoding == "utf-8"
-    assert "让土地里的认真" in response.text
+    assert "让土地里的好产品" in response.text
 
     workspace = client.get("/workspace/")
     assert workspace.encoding == "utf-8"

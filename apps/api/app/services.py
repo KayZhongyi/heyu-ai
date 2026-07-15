@@ -1,7 +1,8 @@
 import hashlib
 import re
 import time
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from typing import TypedDict
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -47,8 +48,10 @@ from app.schemas import (
     BrandCreate,
     BrandUpdate,
     CampaignBriefRevisionCreate,
+    CampaignBriefRevisionRead,
     CampaignClaimEvidenceMapRead,
     CampaignFarmerEvidenceSnapshotCreate,
+    CampaignFarmerEvidenceSnapshotRead,
     CampaignItemCreate,
     CampaignItemLink,
     CampaignItemUpdate,
@@ -58,7 +61,9 @@ from app.schemas import (
     CampaignPackageUpdate,
     CampaignProgress,
     CampaignSupplySnapshotCreate,
+    CampaignSupplySnapshotRead,
     ContentProjectCreate,
+    ContentProjectRead,
     ContentProjectUpdate,
     ContentReview,
     ContentVersionCreate,
@@ -73,6 +78,20 @@ from app.schemas import (
     PublicationCreate,
     VideoDiagnosisCreate,
 )
+
+
+class ContentFreshness(TypedDict):
+    brief_current: bool
+    supply_current: bool
+    farmer_evidence_current: bool
+    content_current: bool
+    stale_reasons: list[str]
+
+
+class ContentAvailability(ContentFreshness):
+    publishable: bool
+    publication_blockers: list[str]
+
 
 FARMER_CLAIM_PATTERNS: dict[str, tuple[str, ...]] = {
     "general_support": (
@@ -494,12 +513,12 @@ def _reset_asset_review(asset: Brand | Product) -> None:
     asset.reviewed_at = None
 
 
-def _submit_asset(
+def _submit_asset[AssetT: (Brand, Product)](
     db: Session,
     actor: Actor,
-    asset: Brand | Product,
+    asset: AssetT,
     entity_type: str,
-) -> Brand | Product:
+) -> AssetT:
     if asset.status != ReviewStatus.draft:
         raise HTTPException(
             status_code=409,
@@ -512,13 +531,13 @@ def _submit_asset(
     return asset
 
 
-def _review_asset(
+def _review_asset[AssetT: (Brand, Product)](
     db: Session,
     actor: Actor,
-    asset: Brand | Product,
+    asset: AssetT,
     entity_type: str,
     data: AssetReview,
-) -> Brand | Product:
+) -> AssetT:
     if data.status not in {ReviewStatus.approved, ReviewStatus.rejected}:
         raise HTTPException(status_code=422, detail="Review must approve or reject")
     if asset.status != ReviewStatus.pending_review:
@@ -943,7 +962,7 @@ def _content_version_freshness(
     current_supply: CampaignSupplySnapshot | None = None,
     current_farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
     current_brief: CampaignBriefRevision | None = None,
-) -> dict:
+) -> ContentFreshness:
     campaign = campaign or _campaign_for_project(db, version.project_id, organization_id)
     stale_reasons: list[str] = []
     if campaign is None:
@@ -954,7 +973,10 @@ def _content_version_freshness(
         brief_current = bool(current_brief and version.brief_revision_id == current_brief.id)
         if not brief_current:
             stale_reasons.append("brief_missing" if current_brief is None else "brief_replaced")
-        elif not _campaign_claim_evidence_map(db, campaign, current_brief).complete:
+        elif (
+            current_brief is not None
+            and not _campaign_claim_evidence_map(db, campaign, current_brief).complete
+        ):
             brief_current = False
             stale_reasons.append("claim_evidence_stale")
         current_supply = current_supply or _current_campaign_supply(
@@ -1000,7 +1022,13 @@ def _content_version_freshness(
                 stale_reasons.append("farmer_claims_unauthorized")
 
     content_claims_current = True
-    if campaign and brief_current and supply_current:
+    if (
+        campaign
+        and brief_current
+        and supply_current
+        and current_brief is not None
+        and current_supply is not None
+    ):
         content_claim_blockers = _campaign_content_claim_blockers(
             db,
             campaign,
@@ -1033,7 +1061,7 @@ def _publication_blockers(
     current_supply: CampaignSupplySnapshot | None = None,
     current_farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
     current_brief: CampaignBriefRevision | None = None,
-    freshness: dict | None = None,
+    freshness: ContentFreshness | None = None,
 ) -> list[str]:
     freshness = freshness or _content_version_freshness(
         db,
@@ -1098,7 +1126,7 @@ def _content_version_availability(
     current_supply: CampaignSupplySnapshot | None = None,
     current_farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
     current_brief: CampaignBriefRevision | None = None,
-) -> dict:
+) -> ContentAvailability:
     freshness = _content_version_freshness(
         db,
         organization_id,
@@ -1180,7 +1208,7 @@ def _campaign_item_view(
     )
     publication = publications[0] if publications else None
 
-    def version_availability(version: ContentVersion | None) -> dict | None:
+    def version_availability(version: ContentVersion | None) -> ContentAvailability | None:
         if version is None:
             return None
         return _content_version_availability(
@@ -1209,7 +1237,7 @@ def _campaign_item_view(
     publication_current = bool(
         publication and published_availability and published_availability["publishable"]
     )
-    latest_availability = (
+    latest_availability: ContentAvailability = (
         _content_version_availability(
             db,
             item.organization_id,
@@ -1226,6 +1254,8 @@ def _campaign_item_view(
             "farmer_evidence_current": False,
             "content_current": False,
             "stale_reasons": [],
+            "publishable": False,
+            "publication_blockers": ["content_missing"],
         }
     )
     return CampaignPackageItemRead(
@@ -1233,12 +1263,14 @@ def _campaign_item_view(
             column.name: getattr(item, column.name)
             for column in CampaignPackageItem.__table__.columns
         },
-        project=project,
+        project=ContentProjectRead.model_validate(project),
         latest_version_id=latest.id if latest else None,
         latest_version_status=latest.status if latest else None,
-        approved_version_id=approved.id if approved_current else None,
+        approved_version_id=approved.id if approved is not None and approved_current else None,
         approved_version_count=len(approved_versions),
-        publication_id=publication.id if publication_current else None,
+        publication_id=(
+            publication.id if publication is not None and publication_current else None
+        ),
         publication_count=len(publications),
         supply_current=latest_availability["supply_current"],
         farmer_evidence_current=latest_availability["farmer_evidence_current"],
@@ -1430,9 +1462,17 @@ def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRea
             column.name: getattr(campaign, column.name)
             for column in CampaignPackage.__table__.columns
         },
-        current_brief_revision=current_brief,
-        current_supply_snapshot=current_supply,
-        current_farmer_evidence_snapshot=current_farmer_evidence,
+        current_brief_revision=(
+            CampaignBriefRevisionRead.model_validate(current_brief) if current_brief else None
+        ),
+        current_supply_snapshot=(
+            CampaignSupplySnapshotRead.model_validate(current_supply) if current_supply else None
+        ),
+        current_farmer_evidence_snapshot=(
+            CampaignFarmerEvidenceSnapshotRead.model_validate(current_farmer_evidence)
+            if current_farmer_evidence
+            else None
+        ),
         items=items,
         progress=progress,
     )
@@ -1725,7 +1765,7 @@ def _normalized_text(value: object) -> str:
 def _date_variants(value: object) -> set[str]:
     if isinstance(value, datetime):
         value = value.date()
-    if not hasattr(value, "year"):
+    if not isinstance(value, date):
         return set()
     return {
         value.isoformat(),

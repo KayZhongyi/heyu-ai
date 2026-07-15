@@ -21,6 +21,7 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
+      - run: mypy app
       - run: |
           export DATABASE_URL=sqlite:////tmp/heyu-migration.db
           alembic upgrade head

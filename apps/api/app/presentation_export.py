@@ -12,6 +12,7 @@ from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE
 from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE, PP_ALIGN
+from pptx.presentation import Presentation as PresentationDocument
 from pptx.util import Inches, Pt
 
 SLIDE_WIDTH = Inches(13.333333)
@@ -265,7 +266,7 @@ def _labels(locale: str) -> dict[str, str]:
     }
 
 
-def _new_slide(presentation: Presentation):
+def _new_slide(presentation: PresentationDocument):
     slide = presentation.slides.add_slide(presentation.slide_layouts[6])
     background = slide.background.fill
     background.solid()
@@ -290,7 +291,11 @@ def _add_circle(slide, x: float, y: float, size: float, color: RGBColor) -> None
     shape.line.fill.background()
 
 
-def _add_cover(presentation: Presentation, data: PresentationInput, labels: dict[str, str]):
+def _add_cover(
+    presentation: PresentationDocument,
+    data: PresentationInput,
+    labels: dict[str, str],
+):
     slide = _new_slide(presentation)
     accent = slide.shapes.add_shape(
         MSO_AUTO_SHAPE_TYPE.ROUNDED_RECTANGLE,
@@ -352,7 +357,11 @@ def _add_cover(presentation: Presentation, data: PresentationInput, labels: dict
     return slide
 
 
-def _add_summary(presentation: Presentation, data: PresentationInput, labels: dict[str, str]):
+def _add_summary(
+    presentation: PresentationDocument,
+    data: PresentationInput,
+    labels: dict[str, str],
+):
     slide = _new_slide(presentation)
     _add_slide_title(slide, labels["summary"], f"{data.brand} · {data.product}")
 
@@ -390,7 +399,7 @@ def _add_summary(presentation: Presentation, data: PresentationInput, labels: di
 
 
 def _add_selling_points(
-    presentation: Presentation,
+    presentation: PresentationDocument,
     data: PresentationInput,
     labels: dict[str, str],
 ):
@@ -445,7 +454,7 @@ def _add_selling_points(
 
 
 def _add_content_matrix(
-    presentation: Presentation,
+    presentation: PresentationDocument,
     data: PresentationInput,
     labels: dict[str, str],
 ):
@@ -473,7 +482,8 @@ def _add_content_matrix(
     if not shown_items:
         shown_items = [ContentItem(title=labels["not_provided"])]
 
-    for row_index, item in enumerate(shown_items, start=1):
+    for row_index, raw_item in enumerate(shown_items, start=1):
+        item = _coerce_content_item(raw_item)
         title_and_message = _truncate(item.title, 80, labels["not_provided"])
         if item.message:
             title_and_message += "\n" + _truncate(item.message, 130)
@@ -509,13 +519,25 @@ def _add_content_matrix(
 
 
 def _add_provenance_review(
-    presentation: Presentation,
+    presentation: PresentationDocument,
     data: PresentationInput,
     labels: dict[str, str],
 ):
     slide = _new_slide(presentation)
     _add_slide_title(slide, labels["provenance"], data.campaign_title)
-    review = data.review_metadata
+    review_value = data.review_metadata
+    review = (
+        review_value
+        if isinstance(review_value, ReviewMetadata)
+        else ReviewMetadata(
+            source_labels=_string_sequence(_read(review_value, "source_labels", ())),
+            generated_by=_text_value(_read(review_value, "generated_by", "")),
+            generated_at=_read(review_value, "generated_at", ""),
+            reviewer=_text_value(_read(review_value, "reviewer", "")),
+            review_status=_text_value(_read(review_value, "review_status", "")),
+            review_notes=_text_value(_read(review_value, "review_notes", "")),
+        )
+    )
     source_values = tuple(
         dict.fromkeys(source for source in (*data.provenance, *review.source_labels) if source)
     )
@@ -718,7 +740,7 @@ def _style_cell(
     run.font.color.rgb = font_color
 
 
-def _add_footer(slide, presentation: Presentation, slide_number: int) -> None:
+def _add_footer(slide, presentation: PresentationDocument, slide_number: int) -> None:
     _add_text(slide, f"{slide_number:02d}", 12.05, 7.02, 0.5, 0.2, 9, MUTED, align=PP_ALIGN.RIGHT)
     line = slide.shapes.add_shape(
         MSO_AUTO_SHAPE_TYPE.RECTANGLE,

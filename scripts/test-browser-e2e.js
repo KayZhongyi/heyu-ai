@@ -87,6 +87,42 @@ async function expectReadOnlyNotice(page, locale) {
   return noticeText;
 }
 
+async function expectSimpleModeLocale(page, locale, expectedCases) {
+  await page.goto(`${baseUrl}/create/?lang=${locale}`, { waitUntil: "networkidle" });
+  assert.equal(await page.locator("[data-demo-case]").count(), 3);
+  for (const label of expectedCases) {
+    await page.getByText(label, { exact: true }).waitFor();
+  }
+  await expectNoHorizontalOverflow(page, `simple mode ${locale}`);
+}
+
+async function generateDemoCase(page, caseId, expectedProduct) {
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.url() === `${baseUrl}/v1/marketing/preview` &&
+      response.request().method() === "POST",
+  );
+  await page.locator(`[data-demo-case="${caseId}"]`).click();
+  const response = await responsePromise;
+  assert.equal(response.status(), 200, `${caseId} preview request failed`);
+  await page.locator("#result-state").waitFor({ state: "visible" });
+  assert.equal((await page.locator("#result-product").textContent()).trim(), expectedProduct);
+  assert.equal(
+    await page.locator(`[data-demo-case="${caseId}"]`).evaluate((node) =>
+      node.classList.contains("active"),
+    ),
+    true,
+    `${caseId} demo button was not marked active`,
+  );
+
+  await page.locator('[data-tab="videos"]').click();
+  assert.equal(await page.locator("#result-content .result-card").count(), 3);
+  await page.locator('[data-tab="live"]').click();
+  assert.ok(await page.locator("#result-content .result-card").count());
+  await page.locator('[data-tab="calendar"]').click();
+  assert.equal(await page.locator("#result-content .day-list > li").count(), 7);
+}
+
 async function main() {
   const browser = await chromium.launch({
     ...(executablePath ? { executablePath } : {}),
@@ -111,15 +147,90 @@ async function main() {
     });
 
     for (const [locale, expected, filename] of [
-      ["zh-CN", "进入工作台", "landing-zh-CN.png"],
-      ["zh-HK", "進入工作區", "landing-zh-HK.png"],
-      ["en", "Open workspace", "landing-en.png"],
+      ["zh-CN", "生成第一份内容方案", "landing-zh-CN.png"],
+      ["zh-HK", "產生第一份內容方案", "landing-zh-HK.png"],
+      ["en", "Create your first content plan", "landing-en.png"],
     ]) {
       await page.goto(`${baseUrl}/?lang=${locale}`, { waitUntil: "networkidle" });
       await assert.doesNotReject(() => page.getByText(expected, { exact: false }).first().waitFor());
       await expectNoHorizontalOverflow(page, `landing ${locale}`);
       await screenshot(page, filename);
     }
+
+    for (const [locale, cases] of [
+      [
+        "zh-CN",
+        [
+          ["tomato", "番茄", "当季番茄"],
+          ["tea", "高山茶叶", "高山云雾茶"],
+          ["fruit", "当季水果", "岭南当季水果礼盒"],
+        ],
+      ],
+      [
+        "zh-HK",
+        [
+          ["tomato", "番茄", "時令番茄"],
+          ["tea", "高山茶葉", "高山雲霧茶"],
+          ["fruit", "時令水果", "嶺南時令水果禮盒"],
+        ],
+      ],
+      [
+        "en",
+        [
+          ["tomato", "Tomatoes", "Seasonal tomatoes"],
+          ["tea", "High-mountain tea", "High-mountain mist tea"],
+          ["fruit", "Seasonal fruit", "Lingnan seasonal fruit box"],
+        ],
+      ],
+    ]) {
+      await expectSimpleModeLocale(
+        page,
+        locale,
+        cases.map(([, label]) => label),
+      );
+      await screenshot(page, `simple-mode-${locale}.png`);
+      for (const [caseId, , product] of cases) {
+        await generateDemoCase(page, caseId, product);
+        await screenshot(
+          page,
+          locale === "zh-CN"
+            ? `simple-mode-${caseId}.png`
+            : `simple-mode-${locale}-${caseId}.png`,
+        );
+      }
+    }
+
+    await page.goto(`${baseUrl}/create/?lang=zh-CN`, { waitUntil: "networkidle" });
+    await generateDemoCase(page, "tomato", "当季番茄");
+    const productBeforeLocaleSwitch = await page.locator("#result-product").textContent();
+    for (const [locale, tabLabel] of [
+      ["zh-HK", "短影片"],
+      ["en", "Videos"],
+      ["zh-CN", "短视频"],
+    ]) {
+      await selectLocale(page, locale);
+      assert.equal(
+        await page.locator("#result-product").textContent(),
+        productBeforeLocaleSwitch,
+        `locale switch to ${locale} changed the generated product`,
+      );
+      await page.getByRole("button", { name: tabLabel, exact: true }).waitFor();
+    }
+
+    const simpleMobileContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+    });
+    const simpleMobilePage = await simpleMobileContext.newPage();
+    const simpleMobileErrors = [];
+    simpleMobilePage.on("pageerror", (error) => simpleMobileErrors.push(error.message));
+    await simpleMobilePage.goto(`${baseUrl}/create/?lang=zh-CN`, {
+      waitUntil: "networkidle",
+    });
+    await generateDemoCase(simpleMobilePage, "tomato", "当季番茄");
+    await expectNoHorizontalOverflow(simpleMobilePage, "simple mode 390px");
+    await screenshot(simpleMobilePage, "simple-mode-390px.png");
+    assert.deepEqual(simpleMobileErrors, [], `simple mode page errors: ${simpleMobileErrors}`);
+    await simpleMobileContext.close();
 
     await page.goto(`${baseUrl}/workspace/?lang=zh-CN`, { waitUntil: "networkidle" });
     const bootstrap = page.locator("#bootstrap-form");
@@ -210,6 +321,17 @@ async function main() {
     });
     assert.equal(projectResponse.status(), 201);
     const project = await projectResponse.json();
+    const secondProjectResponse = await context.request.post(`${baseUrl}/v1/content-projects`, {
+      headers: { Authorization: `Bearer ${ownerToken}` },
+      data: {
+        brand_id: brand.id,
+        product_id: product.id,
+        title: `Project switch regression ${unique}`,
+        content_type: "title_and_cover",
+      },
+    });
+    assert.equal(secondProjectResponse.status(), 201);
+    const secondProject = await secondProjectResponse.json();
 
     await page.reload({ waitUntil: "networkidle" });
     await page.locator("#workspace").waitFor({ state: "visible" });
@@ -233,6 +355,16 @@ async function main() {
     await page.locator("#project-select").selectOption(project.id);
     await page.locator("#generate-button").click();
     await page.locator("#content-toolbar").waitFor({ state: "visible" });
+    await page.locator("#edit-version").waitFor({ state: "visible" });
+    assert.notEqual(await page.locator("#version-editor").inputValue(), "");
+
+    await page.locator("#project-select").selectOption(secondProject.id);
+    await page.locator("#content-toolbar").waitFor({ state: "hidden" });
+    await page.locator("#edit-version").waitFor({ state: "hidden" });
+    assert.equal(await page.locator("#version-editor").inputValue(), "");
+    assert.equal(await page.locator("#generation-output").textContent(), "");
+    assert.equal(await page.locator("#generation-provenance").count(), 0);
+    await page.locator("#project-select").selectOption(project.id);
 
     await page.locator('[data-page="assets"]').click();
     const productCard = page.locator("#asset-list article", {

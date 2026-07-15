@@ -15,16 +15,21 @@ Desktop, and a paid API are not prerequisites.
 
 ```mermaid
 flowchart LR
-  Web["Homepage and workspace"] --> I18n["zh-CN / zh-HK / en dictionaries"]
+  Web["Homepage, farmer creator, and workspace"] --> I18n["zh-CN / zh-HK / en dictionaries"]
   Web --> API["FastAPI API"]
   API --> Auth["Identity, membership, RBAC"]
   Auth --> Abuse["Database-backed abuse limits"]
   Auth --> Invite["Hashed, expiring, single-use invitations"]
+  API --> Farmer["Farmer marketing workflow"]
+  Farmer --> Plan["Product profile, platform strategy, videos, livestream, seven-day plan"]
   API --> Domain["Brands, products, knowledge, content, operations"]
   Domain --> DB["SQLite or PostgreSQL"]
-  Domain --> Gateway["AI provider gateway"]
+  Farmer --> Gateway["AI provider gateway"]
+  Domain --> Gateway
   Gateway --> Deterministic["DeterministicProvider"]
   Gateway --> External["Configured OpenAI-compatible provider"]
+  Gateway --> Cache["Bounded TTL cache"]
+  External -. "explicit failure fallback" .-> Deterministic
   Domain --> Audit["Audit and generation provenance"]
   Domain --> Publication["Publication and raw snapshots"]
   Publication --> Diagnosis["Human evidence-led diagnosis"]
@@ -34,6 +39,14 @@ flowchart LR
 
 Long-running ingestion, media processing, and provider calls are future worker
 candidates. Premature microservice decomposition is intentionally avoided.
+
+The public farmer preview always uses the deterministic provider so that a
+shared demo cannot consume an API key without a bound. Authenticated farmer
+generation can use the configured OpenAI-compatible provider. Repeated
+requests use a bounded in-process TTL cache; provider failures can return an
+explicitly marked deterministic result when fallback is enabled. This cache
+is a single-process MVP optimization, not a substitute for a shared production
+cache when multiple application instances are deployed.
 
 ## Tenant isolation
 

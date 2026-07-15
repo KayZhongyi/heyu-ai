@@ -54,6 +54,18 @@ const renderGenerationResult=content=>{
   $("#generation-preview").hidden=false;
   $("#generation-output").hidden=true;
 };
+const resetGenerationWorkspace=()=>{
+  state.currentVersion=null;
+  $("#version-editor").value="";
+  $("#change-summary").value="";
+  $("#edit-version").hidden=true;
+  $("#generation-preview").textContent="";
+  $("#generation-preview").hidden=false;
+  $("#generation-output").textContent="";
+  $("#generation-output").hidden=true;
+  $("#content-toolbar").hidden=true;
+  $("#generation-provenance")?.remove();
+};
 const downloadResult=(content,type)=>{
   const project=state.projects.find(item=>item.id===state.currentVersion?.project_id);
   const basename=HeyuContent.safeFilename(project?.title||"heyu-content");
@@ -603,7 +615,10 @@ $("#copy-content").addEventListener("click",()=>request(async()=>{if(!resultCont
 $("#download-content").addEventListener("click",()=>request(async()=>{if(!resultContent())throw new Error(t("content.generateFirst"));downloadResult(resultContent(),"txt")},t("content.downloaded")));
 $("#download-json").addEventListener("click",()=>request(async()=>{if(!resultContent())throw new Error(t("content.generateFirst"));downloadResult(resultContent(),"json")},t("content.jsonDownloaded")));
 $("#review-project-select").addEventListener("change",event=>request(()=>renderReviews(event.target.value)));
-$("#project-select").addEventListener("change",event=>request(()=>loadGenerationRuns(event.target.value)));
+$("#project-select").addEventListener("change",event=>request(async()=>{
+  resetGenerationWorkspace();
+  await loadGenerationRuns(event.target.value);
+}));
 $("#publication-project-select").addEventListener("change",event=>request(async()=>{
   const select=$("#publication-version-select");
   if(!event.target.value){select.innerHTML=`<option value="">${escapeHtml(t("publication.selectProjectFirst"))}</option>`;return}

@@ -19,6 +19,7 @@ data/
 uploads/
 work/
 outputs/
+.tmp/
 apps/web/assets/hero-field-local.png
 .idea/
 .vscode/

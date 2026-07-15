@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import ipaddress
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import HTTPException, Request, status
 from sqlalchemy import delete
@@ -86,6 +87,7 @@ def enforce_limit(
     # roll back business objects staged by the request handler's session.
     with Session(bind=db.get_bind()) as limiter_db:
         dialect_name = limiter_db.get_bind().dialect.name
+        insert_factory: Any
         if dialect_name == "postgresql":
             insert_factory = postgresql_insert
         elif dialect_name == "sqlite":

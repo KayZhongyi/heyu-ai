@@ -439,8 +439,8 @@
         ["audit.action.membership.created","创建团队成员"],["audit.action.membership.role_changed","调整成员角色"],["audit.action.brand.created","创建品牌"],["audit.action.brand.updated","更新品牌"],["audit.action.product.created","创建农产品"],["audit.action.product.updated","更新农产品"],["audit.action.knowledge.created","录入资料"],["audit.action.knowledge.revised","创建资料修订版"],["audit.action.knowledge.submitted","资料已提交审核"],["audit.action.knowledge.approved","资料审核通过"],["audit.action.knowledge.rejected","资料已退回修改"],["audit.action.content_project.created","创建内容任务"],["audit.action.content_project.updated","更新内容任务"],["audit.action.content.generated","生成内容初稿"],["audit.action.content_version.created","创建内容版本"],["audit.action.content_version.submitted","内容已提交审核"],["audit.action.content_version.approved","内容审核通过"],["audit.action.content_version.rejected","内容已退回修改"],["audit.action.publication.created","登记发布内容"],["audit.action.performance_snapshot.created","录入运营数据快照"],["audit.action.video_diagnosis.created","创建人工视频诊断"],["audit.action.improvement_brief.created","创建改进 Brief"],["audit.action.improvement_brief.draft_created","从改进 Brief 创建后继草稿"]
       ]),
 
-      "meta.landing.description": "\u79be\u8bed AI\uff1a\u628a\u7ecf\u8fc7\u5ba1\u6838\u7684\u519c\u4ea7\u54c1\u8d44\u6599\u8f6c\u5316\u4e3a\u6765\u6e90\u53ef\u67e5\u3001\u7248\u672c\u53ef\u5ba1\u7684\u8425\u9500\u5185\u5bb9\u3002",
-      "meta.landing.title": "\u79be\u8bed AI \u00b7 \u519c\u4ea7\u54c1\u667a\u80fd\u5185\u5bb9\u5e73\u53f0",
+      "meta.landing.description": "\u79be\u8bed AI\uff1a\u9762\u5411\u519c\u6237\u3001\u5408\u4f5c\u793e\u4e0e\u4e61\u6751\u8fd0\u8425\u56e2\u961f\u7684\u4e00\u7ad9\u5f0f AI \u65b0\u5a92\u4f53\u5185\u5bb9\u751f\u4ea7\u4e0e\u7ecf\u8425\u5e73\u53f0\u3002",
+      "meta.landing.title": "\u79be\u8bed AI \u00b7 \u519c\u4ea7\u54c1\u65b0\u5a92\u4f53\u5185\u5bb9\u7ecf\u8425\u5e73\u53f0",
       "meta.workspace.description": "\u79be\u8bed AI \u519c\u4ea7\u54c1\u667a\u80fd\u5185\u5bb9\u4e0e\u8fd0\u8425\u5e73\u53f0",
       "meta.workspace.title": "\u79be\u8bed AI \u00b7 \u519c\u4ea7\u54c1\u667a\u80fd\u5185\u5bb9\u5de5\u4f5c\u53f0",
     },

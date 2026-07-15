@@ -965,7 +965,7 @@ class DeterministicProvider:
         farmer_evidence: CampaignFarmerEvidenceSnapshot | None,
         locale: str = "zh-CN",
     ) -> dict:
-        if locale in {"zh-HK", "en"}:
+        if locale == "zh-HK":
             return DeterministicProvider._localized_shooting_checklist_content(
                 project,
                 brand,
@@ -974,7 +974,18 @@ class DeterministicProvider:
                 selling_points,
                 supply,
                 farmer_evidence,
-                locale,
+                "zh-HK",
+            )
+        if locale == "en":
+            return DeterministicProvider._localized_shooting_checklist_content(
+                project,
+                brand,
+                product,
+                fact_text,
+                selling_points,
+                supply,
+                farmer_evidence,
+                "en",
             )
         product_origin = product.origin or "已审核资料记录的产地"
         supply_task = (

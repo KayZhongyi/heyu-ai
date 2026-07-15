@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from itertools import islice
 from pathlib import PurePath
-from typing import Literal
+from typing import Any, Literal
 from zipfile import BadZipFile, ZipFile
 
 from pptx import Presentation
@@ -223,14 +223,14 @@ def _validate_pptx_archive(data: bytes) -> None:
             raise InvalidDocumentError("The PPTX document has an unsafe compression ratio.")
 
 
-def _extract_slide_text(slide: object) -> str:
+def _extract_slide_text(slide: Any) -> str:
     parts: list[str] = []
     for shape in slide.shapes:
         parts.extend(_extract_shape_text(shape))
     return "\n".join(part for part in parts if part).strip()
 
 
-def _extract_shape_text(shape: object) -> list[str]:
+def _extract_shape_text(shape: Any) -> list[str]:
     if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
         parts: list[str] = []
         for child in shape.shapes:
