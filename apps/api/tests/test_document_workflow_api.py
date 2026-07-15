@@ -258,7 +258,122 @@ def test_campaign_presentation_marks_stale_approved_content_as_draft(
         headers=auth,
     )
     assert stale_campaign.status_code == 200, stale_campaign.text
+    assert all(item["approved_version_id"] is None for item in stale_campaign.json()["items"]), (
+        stale_campaign.json()
+    )
+
+    stale_download = client.get(
+        f"/v1/campaign-packages/{campaign['id']}/presentation",
+        headers=auth,
+    )
+    assert stale_download.status_code == 200, stale_download.text
+    stale_deck = Presentation(BytesIO(stale_download.content))
+    stale_text = "\n".join(
+        shape.text
+        for slide in stale_deck.slides
+        for shape in slide.shapes
+        if getattr(shape, "has_text_frame", False)
+    )
+    assert "请勿直接发布" in stale_text
+
+
+def test_campaign_presentation_marks_unmapped_approved_claims_as_draft(
+    client: TestClient,
+    auth: dict[str, str],
+    db: Session,
+) -> None:
+    brand, product = create_assets(client, auth)
+    initial_product_payload = {
+        key: product[key]
+        for key in (
+            "brand_id",
+            "name",
+            "origin",
+            "specification",
+            "price_display",
+            "shelf_life",
+            "storage_method",
+            "selling_points",
+            "prohibited_claims",
+        )
+    }
+    initial_product_payload["origin"] = "Yunnan"
+    updated_product = client.put(
+        f"/v1/products/{product['id']}",
+        headers=auth,
+        json=initial_product_payload,
+    )
+    assert updated_product.status_code == 200, updated_product.text
+    approve_campaign_assets(client, auth, brand, product)
+
+    payload = campaign_payload(brand, product)
+    payload["create_default_items"] = True
+    campaign_response = client.post(
+        "/v1/campaign-packages",
+        headers=auth,
+        json=payload,
+    )
+    assert campaign_response.status_code == 201, campaign_response.text
+    campaign = campaign_response.json()
+    supply = create_approved_supply(client, auth, campaign, brand, product)
+
+    for item in campaign["items"]:
+        db.add(
+            ContentVersion(
+                organization_id=campaign["organization_id"],
+                project_id=item["project"]["id"],
+                brief_revision_id=campaign["current_brief_revision"]["id"],
+                supply_snapshot_id=supply["id"],
+                version_number=1,
+                content={
+                    "headline": "Verified seasonal produce",
+                    "body": f"{product['name']} from Yunnan is ready for this campaign.",
+                },
+                status=ReviewStatus.approved,
+                created_by=campaign["created_by"],
+                reviewed_by=campaign["created_by"],
+                review_note="Current evidence verified",
+            )
+        )
+    db.commit()
+
+    activated = client.patch(
+        f"/v1/campaign-packages/{campaign['id']}/status",
+        headers=auth,
+        json={"status": "active"},
+    )
+    assert activated.status_code == 200, activated.text
+
+    revised_product_payload = dict(initial_product_payload)
+    revised_product_payload["origin"] = "Sichuan"
+    revised_product = client.put(
+        f"/v1/products/{product['id']}",
+        headers=auth,
+        json=revised_product_payload,
+    )
+    assert revised_product.status_code == 200, revised_product.text
+    submitted_product = client.post(
+        f"/v1/products/{product['id']}/submit",
+        headers=auth,
+    )
+    assert submitted_product.status_code == 200, submitted_product.text
+    reviewed_product = client.post(
+        f"/v1/products/{product['id']}/review",
+        headers=auth,
+        json={"status": "approved", "note": "Revised product facts checked"},
+    )
+    assert reviewed_product.status_code == 200, reviewed_product.text
+
+    stale_campaign = client.get(
+        f"/v1/campaign-packages/{campaign['id']}",
+        headers=auth,
+    )
+    assert stale_campaign.status_code == 200, stale_campaign.text
     assert all(item["approved_version_id"] is None for item in stale_campaign.json()["items"])
+    assert all(
+        "content_claims_unmapped" in item["stale_reasons"]
+        for item in stale_campaign.json()["items"]
+    )
 
     stale_download = client.get(
         f"/v1/campaign-packages/{campaign['id']}/presentation",

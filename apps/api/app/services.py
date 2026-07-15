@@ -1180,28 +1180,21 @@ def _campaign_item_view(
     )
     publication = publications[0] if publications else None
 
-    def farmer_evidence_current(version: ContentVersion | None) -> bool:
-        return bool(
-            version
-            and _content_version_availability(
-                db,
-                item.organization_id,
-                version,
-                campaign=campaign,
-                current_brief=current_brief,
-                current_supply=current_supply,
-                current_farmer_evidence=current_farmer_evidence,
-            )["farmer_evidence_current"]
+    def version_availability(version: ContentVersion | None) -> dict | None:
+        if version is None:
+            return None
+        return _content_version_availability(
+            db,
+            item.organization_id,
+            version,
+            campaign=campaign,
+            current_brief=current_brief,
+            current_supply=current_supply,
+            current_farmer_evidence=current_farmer_evidence,
         )
 
-    approved_current = bool(
-        approved
-        and current_brief
-        and approved.brief_revision_id == current_brief.id
-        and current_supply
-        and approved.supply_snapshot_id == current_supply.id
-        and farmer_evidence_current(approved)
-    )
+    approved_availability = version_availability(approved)
+    approved_current = bool(approved_availability and approved_availability["publishable"])
     published_version = (
         db.scalar(
             select(ContentVersion).where(
@@ -1212,14 +1205,9 @@ def _campaign_item_view(
         if publication
         else None
     )
+    published_availability = version_availability(published_version)
     publication_current = bool(
-        publication
-        and current_brief
-        and published_version
-        and published_version.brief_revision_id == current_brief.id
-        and current_supply
-        and published_version.supply_snapshot_id == current_supply.id
-        and farmer_evidence_current(published_version)
+        publication and published_availability and published_availability["publishable"]
     )
     latest_availability = (
         _content_version_availability(
