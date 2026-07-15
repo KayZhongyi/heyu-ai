@@ -128,7 +128,14 @@
             <button type="button" data-tab="calendar" data-copy="tabCalendar">7天计划</button>
           </nav>
           <div id="result-content" class="result-content"></div>
-          <div class="result-meta"><span id="provider-meta"></span><button type="button" id="copy-result" data-copy="copyResult">复制当前方案</button></div>
+          <div class="result-meta">
+            <span id="provider-meta"></span>
+            <div class="result-actions">
+              <button type="button" id="copy-result" data-copy="copyResult">复制当前方案</button>
+              <button type="button" id="save-result" class="save-result" data-copy="saveResult">保存到团队工作台</button>
+              <a id="open-saved-plan" href="/workspace/plans" hidden data-copy="openSavedPlan">打开已保存方案</a>
+            </div>
+          </div>
         </div>
       </aside>
     </section>

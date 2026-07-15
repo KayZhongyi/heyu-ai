@@ -97,6 +97,11 @@ from app.schemas import (
     KnowledgeSourceRead,
     KnowledgeSourceRevisionCreate,
     LoginRequest,
+    MarketingPlanCopyCreate,
+    MarketingPlanCreate,
+    MarketingPlanDetailRead,
+    MarketingPlanRead,
+    MarketingPlanVersionCreate,
     MemberRead,
     MemberRoleUpdate,
     PerformanceSnapshotCreate,
@@ -120,6 +125,7 @@ from app.security import (
 )
 from app.services import (
     audit,
+    copy_marketing_plan,
     create_brand,
     create_campaign_brief_revision,
     create_campaign_farmer_evidence_snapshot,
@@ -131,6 +137,7 @@ from app.services import (
     create_draft_from_improvement_brief,
     create_improvement_brief,
     create_knowledge_source,
+    create_marketing_plan_version,
     create_performance_snapshot,
     create_product,
     create_publication,
@@ -138,6 +145,7 @@ from app.services import (
     generate_content,
     get_campaign_claim_evidence_map,
     get_campaign_package,
+    get_marketing_plan,
     get_publication_detail,
     link_campaign_item,
     list_brands,
@@ -150,6 +158,7 @@ from app.services import (
     list_generation_runs,
     list_improvement_briefs,
     list_knowledge_sources,
+    list_marketing_plans,
     list_performance_snapshots,
     list_products,
     list_publications,
@@ -176,6 +185,9 @@ from app.services import (
     update_campaign_status,
     update_content_project,
     update_product,
+)
+from app.services import (
+    create_marketing_plan as create_saved_marketing_plan,
 )
 
 
@@ -291,6 +303,7 @@ workspace_pages = {
     "assets",
     "knowledge",
     "campaigns",
+    "plans",
     "studio",
     "operations",
     "review",
@@ -357,6 +370,70 @@ def create_marketing_plan(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="The configured marketing model could not produce a valid plan.",
         ) from exc
+
+
+@app.post(
+    "/v1/marketing-plans",
+    response_model=MarketingPlanDetailRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_marketing_plan(
+    data: MarketingPlanCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> MarketingPlanDetailRead:
+    return create_saved_marketing_plan(db, actor, data)
+
+
+@app.get("/v1/marketing-plans", response_model=list[MarketingPlanRead])
+def get_marketing_plans(
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> list[MarketingPlanRead]:
+    return list_marketing_plans(db, actor)
+
+
+@app.get("/v1/marketing-plans/{plan_id}", response_model=MarketingPlanDetailRead)
+def get_marketing_plan_detail(
+    plan_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> MarketingPlanDetailRead:
+    return get_marketing_plan(db, actor, plan_id)
+
+
+@app.post(
+    "/v1/marketing-plans/{plan_id}/versions",
+    response_model=MarketingPlanDetailRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_marketing_plan_version(
+    plan_id: str,
+    data: MarketingPlanVersionCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> MarketingPlanDetailRead:
+    return create_marketing_plan_version(db, actor, plan_id, data)
+
+
+@app.post(
+    "/v1/marketing-plans/{plan_id}/copy",
+    response_model=MarketingPlanDetailRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_marketing_plan_copy(
+    plan_id: str,
+    data: MarketingPlanCopyCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> MarketingPlanDetailRead:
+    return copy_marketing_plan(db, actor, plan_id, data)
 
 
 @app.get("/ready")

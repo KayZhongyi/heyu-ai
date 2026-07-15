@@ -21,8 +21,9 @@
       <nav>
         <span class="nav-label">工作空间</span>
         <button class="nav active" data-page="overview" data-index="01">经营概览</button>
+        <button class="nav" data-page="plans" data-index="02" data-i18n="workspace.page.plans">经营方案库</button>
         <span class="nav-label">智能资产</span>
-        <button class="nav" data-page="assets" data-index="02">品牌与农产品</button>
+        <button class="nav" data-page="assets" data-index="03">品牌与农产品</button>
         <button class="nav" data-page="knowledge" data-index="03">内容资料库</button>
         <button class="nav" data-page="campaigns" data-index="04" data-i18n="campaign.page">营销活动包</button>
         <button class="nav" data-page="studio" data-index="05">内容创作台</button>
@@ -131,6 +132,66 @@
               <p id="next-action-copy">先建立品牌和产品档案，再添加一条可用资料，开始生成第一份内容。</p>
               <button class="light-action jump" id="next-action-button" data-target="assets">建立第一份档案 <b>→</b></button>
             </aside>
+          </div>
+        </section>
+
+        <section class="page" data-page-panel="plans">
+          <div class="plans-hero">
+            <div>
+              <p class="eyebrow">MARKETING PLAN LIBRARY</p>
+              <h2 data-i18n="marketingPlans.heading">把每次生成，变成可继续经营的方案</h2>
+              <p data-i18n="marketingPlans.intro">保存简单模式生成的完整内容包，随时再次打开、调整、复制，并保留每一次修改。</p>
+            </div>
+            <a class="primary plans-create-link" href="/create/" data-write-scope="content" data-i18n="marketingPlans.create">生成新方案</a>
+          </div>
+          <div id="marketing-plan-import" class="pending-plan-banner" data-business-data hidden>
+            <div>
+              <strong data-i18n="marketingPlans.pendingImport">刚才生成的方案还没有保存</strong>
+              <span data-i18n="marketingPlans.pendingImportCopy">登录成功后可将它保存到当前团队工作台。</span>
+            </div>
+            <button class="primary" id="import-marketing-plan" data-write-scope="content" data-i18n="marketingPlans.importNow">立即保存</button>
+          </div>
+          <div class="plan-library-layout">
+            <aside class="panel plan-library-sidebar">
+              <div class="panel-heading">
+                <div><p class="eyebrow">SAVED PLANS</p><h2 data-i18n="marketingPlans.saved">已保存方案</h2></div>
+                <span class="pill" id="marketing-plan-count">0</span>
+              </div>
+              <div id="marketing-plan-list" class="plan-list empty" data-business-data></div>
+            </aside>
+            <section class="panel plan-detail-panel">
+              <div id="marketing-plan-empty" class="plan-empty-state">
+                <span class="plan-empty-orbit" aria-hidden="true"></span>
+                <h2 data-i18n="marketingPlans.emptyTitle">从一份可执行的经营方案开始</h2>
+                <p data-i18n="marketingPlans.empty">这里会集中保存视频脚本、直播话术与七天运营计划。</p>
+              </div>
+              <div id="marketing-plan-detail" hidden>
+                <div class="panel-heading plan-detail-heading">
+                  <div>
+                    <p class="eyebrow" data-i18n="marketingPlans.current">CURRENT PLAN</p>
+                    <h2 id="marketing-plan-title"></h2>
+                    <div id="marketing-plan-meta" class="source-meta"></div>
+                  </div>
+                  <div class="row-actions">
+                    <button id="copy-marketing-plan" data-write-scope="content" data-i18n="marketingPlans.copy">复制方案</button>
+                  </div>
+                </div>
+                <div id="marketing-plan-preview" class="marketing-plan-preview" data-business-data></div>
+                <details class="plan-editor-wrap" data-write-scope="content">
+                  <summary data-i18n="marketingPlans.edit">调整并保存新版本</summary>
+                  <label><span data-i18n="marketingPlans.contentJson">结构化内容</span><textarea id="marketing-plan-editor" rows="18" spellcheck="false"></textarea></label>
+                  <label><span data-i18n="marketingPlans.changeSummary">本次调整说明</span><input id="marketing-plan-change-summary" maxlength="255" data-i18n-placeholder="marketingPlans.changeSummaryPlaceholder"></label>
+                  <button class="primary wide" id="save-marketing-plan-version" data-i18n="marketingPlans.saveVersion">保存为新版本</button>
+                </details>
+                <section class="plan-history">
+                  <div class="panel-heading">
+                    <div><p class="eyebrow">VERSION HISTORY</p><h3 data-i18n="marketingPlans.versionHistory">版本记录</h3></div>
+                    <span class="pill" id="marketing-plan-version-count">0</span>
+                  </div>
+                  <div id="marketing-plan-versions" class="version-timeline"></div>
+                </section>
+              </div>
+            </section>
           </div>
         </section>
 

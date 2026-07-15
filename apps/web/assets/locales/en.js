@@ -1021,7 +1021,62 @@
       "0 条邀请": "0 invitations",
       "查看邀请状态，并在链接尚未使用且未过期时主动撤销。邀请令牌不会在列表中再次显示。": "Track invitation status and revoke an unused link before it expires. Invitation tokens are never shown in this list.",
       "暂无邀请记录": "No invitations yet",
-
+      "workspace.page.plans": "Marketing plan library",
+      "marketingPlans.heading": "Turn every generation into a plan your team can keep building on",
+      "marketingPlans.intro": "Save complete content packages from Simple Mode, reopen and refine them at any time, create copies, and keep every revision.",
+      "marketingPlans.create": "Generate a new plan",
+      "marketingPlans.saved": "Saved plans",
+      "marketingPlans.current": "Current plan",
+      "marketingPlans.emptyTitle": "Start with a marketing plan you can act on",
+      "marketingPlans.empty": "Your video scripts, livestream talking points, and seven-day operating plans will live here.",
+      "marketingPlans.pendingImport": "Your latest generated plan has not been saved",
+      "marketingPlans.pendingImportCopy": "Save it to this team workspace after signing in.",
+      "marketingPlans.importNow": "Save now",
+      "marketingPlans.imported": "Plan saved to the team workspace",
+      "marketingPlans.noPending": "There is no pending plan to save",
+      "marketingPlans.copy": "Duplicate plan",
+      "marketingPlans.copied": "Plan duplicate created",
+      "marketingPlans.copySuffix": " (Copy)",
+      "marketingPlans.edit": "Refine and save a new version",
+      "marketingPlans.contentJson": "Structured content",
+      "marketingPlans.changeSummary": "What changed",
+      "marketingPlans.changeSummaryPlaceholder": "For example: sharpened the second video's opening and music direction",
+      "marketingPlans.saveVersion": "Save as a new version",
+      "marketingPlans.versionSaved": "New version saved",
+      "marketingPlans.versionHistory": "Version history",
+      "marketingPlans.noChangeSummary": "No change summary",
+      "marketingPlans.selectFirst": "Select a plan first",
+      "marketingPlans.degraded": "Automatic fallback used",
+      "marketingPlans.positioning": "Product positioning",
+      "marketingPlans.strategy": "Platform strategy",
+      "marketingPlans.trend": "Trend integration",
+      "marketingPlans.noTrend": "No trend specified",
+      "marketingPlans.videos": "Three short videos",
+      "marketingPlans.livestream": "Livestream talking points",
+      "marketingPlans.sevenDays": "Seven-day operating plan",
+      "marketingPlans.nextActions": "Do this next",
+      "marketingPlans.duration": "Recommended length",
+      "marketingPlans.conversion": "Conversion action",
+      "marketingPlans.videoNumber": "Video {number}",
+      "marketingPlans.openScript": "Open script and shot list",
+      "marketingPlans.day": "Day {day}",
+      "content_renderer.positioning": "Product positioning",
+      "content_renderer.platformStrategy": "Platform strategy",
+      "content_renderer.trendPlan": "Trend integration",
+      "content_renderer.videoScripts": "Short video scripts",
+      "content_renderer.livestreamPlan": "Livestream talking points",
+      "content_renderer.sevenDayPlan": "Seven-day operating plan",
+      "content_renderer.nextActions": "Next actions",
     },
   };
+  for (const key of Object.keys(root.HeyuLocales.en.phrases)) {
+    if (
+      key === "workspace.page.plans" ||
+      key.startsWith("marketingPlans.") ||
+      key.startsWith("content_renderer.")
+    ) {
+      root.HeyuLocales.en.messages[key] = root.HeyuLocales.en.phrases[key];
+      delete root.HeyuLocales.en.phrases[key];
+    }
+  }
 })(globalThis);

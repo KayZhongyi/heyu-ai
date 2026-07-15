@@ -1,8 +1,9 @@
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from app.marketing import MarketingPlanRequest, MarketingPlanResponse
 from app.models import (
     CampaignStatus,
     ContentType,
@@ -237,6 +238,75 @@ class ContentProjectRead(ORMModel):
     tone: str
     extra_requirements: str
     created_by: str
+
+
+class MarketingPlanCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str = Field(min_length=1, max_length=255)
+    request_payload: MarketingPlanRequest
+    content: MarketingPlanResponse
+    change_summary: str = Field(default="", max_length=255)
+
+
+class MarketingPlanVersionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    request_payload: MarketingPlanRequest
+    content: MarketingPlanResponse
+    change_summary: str = Field(default="", max_length=255)
+
+
+class MarketingPlanCopyCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+
+
+class MarketingPlanVersionRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    organization_id: str
+    marketing_plan_id: str
+    version_number: int
+    request_payload: MarketingPlanRequest
+    content: MarketingPlanResponse
+    provider: str
+    model: str
+    degraded: bool
+    change_summary: str
+    created_by: str
+    created_at: datetime
+
+    @field_validator("created_at")
+    @classmethod
+    def ensure_created_at_timezone(cls, value: datetime) -> datetime:
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+class MarketingPlanRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    organization_id: str
+    title: str
+    locale: str
+    product_name: str
+    platform: str
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+    current_version: MarketingPlanVersionRead
+
+    @field_validator("created_at", "updated_at")
+    @classmethod
+    def ensure_plan_timestamp_timezone(cls, value: datetime) -> datetime:
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+class MarketingPlanDetailRead(MarketingPlanRead):
+    versions: list[MarketingPlanVersionRead]
 
 
 class CampaignPackageCreate(BaseModel):

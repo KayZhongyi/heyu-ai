@@ -2,7 +2,7 @@ import hashlib
 import re
 import time
 from datetime import UTC, date, datetime
-from typing import TypedDict
+from typing import Literal, TypedDict, overload
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -34,6 +34,8 @@ from app.models import (
     GenerationStatus,
     ImprovementBrief,
     KnowledgeSource,
+    MarketingPlan,
+    MarketingPlanVersion,
     PerformanceSnapshot,
     Product,
     Publication,
@@ -72,6 +74,12 @@ from app.schemas import (
     KnowledgeReview,
     KnowledgeSourceCreate,
     KnowledgeSourceRevisionCreate,
+    MarketingPlanCopyCreate,
+    MarketingPlanCreate,
+    MarketingPlanDetailRead,
+    MarketingPlanRead,
+    MarketingPlanVersionCreate,
+    MarketingPlanVersionRead,
     PerformanceSnapshotCreate,
     ProductCreate,
     ProductUpdate,
@@ -426,6 +434,253 @@ def create_brand(db: Session, actor: Actor, data: BrandCreate) -> Brand:
     db.commit()
     db.refresh(brand)
     return brand
+
+
+def _marketing_plan_version_read(version: MarketingPlanVersion) -> MarketingPlanVersionRead:
+    return MarketingPlanVersionRead(
+        id=version.id,
+        organization_id=version.organization_id,
+        marketing_plan_id=version.marketing_plan_id,
+        version_number=version.version_number,
+        request_payload=version.request_payload,
+        content=version.content,
+        provider=version.provider,
+        model=version.model,
+        degraded=version.degraded,
+        change_summary=version.change_summary,
+        created_by=version.created_by,
+        created_at=version.created_at,
+    )
+
+
+def _tenant_marketing_plan(db: Session, actor: Actor, plan_id: str) -> MarketingPlan:
+    plan = db.scalar(
+        select(MarketingPlan).where(
+            MarketingPlan.id == plan_id,
+            MarketingPlan.organization_id == actor.organization_id,
+        )
+    )
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Marketing plan not found")
+    return plan
+
+
+def _marketing_plan_versions(db: Session, plan: MarketingPlan) -> list[MarketingPlanVersion]:
+    return list(
+        db.scalars(
+            select(MarketingPlanVersion)
+            .where(
+                MarketingPlanVersion.marketing_plan_id == plan.id,
+                MarketingPlanVersion.organization_id == plan.organization_id,
+            )
+            .order_by(MarketingPlanVersion.version_number.desc())
+        )
+    )
+
+
+@overload
+def _marketing_plan_read(
+    db: Session,
+    plan: MarketingPlan,
+    *,
+    include_versions: Literal[False] = False,
+) -> MarketingPlanRead: ...
+
+
+@overload
+def _marketing_plan_read(
+    db: Session,
+    plan: MarketingPlan,
+    *,
+    include_versions: Literal[True],
+) -> MarketingPlanDetailRead: ...
+
+
+def _marketing_plan_read(
+    db: Session,
+    plan: MarketingPlan,
+    *,
+    include_versions: bool = False,
+) -> MarketingPlanRead | MarketingPlanDetailRead:
+    versions = _marketing_plan_versions(db, plan)
+    if not versions:
+        raise HTTPException(status_code=409, detail="Marketing plan has no versions")
+    payload = {
+        "id": plan.id,
+        "organization_id": plan.organization_id,
+        "title": plan.title,
+        "locale": plan.locale,
+        "product_name": plan.product_name,
+        "platform": plan.platform,
+        "created_by": plan.created_by,
+        "created_at": plan.created_at,
+        "updated_at": plan.updated_at,
+        "current_version": _marketing_plan_version_read(versions[0]),
+    }
+    if include_versions:
+        return MarketingPlanDetailRead(
+            **payload,
+            versions=[_marketing_plan_version_read(version) for version in versions],
+        )
+    return MarketingPlanRead(**payload)
+
+
+def _new_marketing_plan_version(
+    actor: Actor,
+    plan: MarketingPlan,
+    data: MarketingPlanCreate | MarketingPlanVersionCreate,
+    version_number: int,
+) -> MarketingPlanVersion:
+    return MarketingPlanVersion(
+        organization_id=actor.organization_id,
+        marketing_plan_id=plan.id,
+        version_number=version_number,
+        request_payload=data.request_payload.model_dump(mode="json"),
+        content=data.content.model_dump(mode="json"),
+        provider=data.content.provider,
+        model=data.content.model,
+        degraded=data.content.degraded,
+        change_summary=data.change_summary,
+        created_by=actor.user_id,
+    )
+
+
+def create_marketing_plan(
+    db: Session, actor: Actor, data: MarketingPlanCreate
+) -> MarketingPlanDetailRead:
+    plan = MarketingPlan(
+        organization_id=actor.organization_id,
+        title=data.title,
+        locale=data.request_payload.locale,
+        product_name=data.request_payload.product_name,
+        platform=data.request_payload.platform,
+        created_by=actor.user_id,
+    )
+    db.add(plan)
+    db.flush()
+    version = _new_marketing_plan_version(actor, plan, data, 1)
+    db.add(version)
+    db.flush()
+    audit(
+        db,
+        actor,
+        "marketing_plan.created",
+        "marketing_plan",
+        plan.id,
+        {"version_id": version.id, "version_number": version.version_number},
+    )
+    db.commit()
+    db.refresh(plan)
+    return _marketing_plan_read(db, plan, include_versions=True)
+
+
+def list_marketing_plans(db: Session, actor: Actor) -> list[MarketingPlanRead]:
+    plans = db.scalars(
+        select(MarketingPlan)
+        .where(MarketingPlan.organization_id == actor.organization_id)
+        .order_by(MarketingPlan.updated_at.desc(), MarketingPlan.created_at.desc())
+    )
+    return [_marketing_plan_read(db, plan) for plan in plans]
+
+
+def get_marketing_plan(db: Session, actor: Actor, plan_id: str) -> MarketingPlanDetailRead:
+    return _marketing_plan_read(
+        db,
+        _tenant_marketing_plan(db, actor, plan_id),
+        include_versions=True,
+    )
+
+
+def create_marketing_plan_version(
+    db: Session,
+    actor: Actor,
+    plan_id: str,
+    data: MarketingPlanVersionCreate,
+) -> MarketingPlanDetailRead:
+    plan = _tenant_marketing_plan(db, actor, plan_id)
+    max_version = db.scalar(
+        select(func.max(MarketingPlanVersion.version_number)).where(
+            MarketingPlanVersion.marketing_plan_id == plan.id,
+            MarketingPlanVersion.organization_id == actor.organization_id,
+        )
+    )
+    version = _new_marketing_plan_version(actor, plan, data, (max_version or 0) + 1)
+    plan.locale = data.request_payload.locale
+    plan.product_name = data.request_payload.product_name
+    plan.platform = data.request_payload.platform
+    plan.updated_at = utc_now()
+    db.add(version)
+    flush_or_conflict(
+        db,
+        "A newer marketing plan version was created concurrently; refresh and try again",
+    )
+    audit(
+        db,
+        actor,
+        "marketing_plan.version_created",
+        "marketing_plan",
+        plan.id,
+        {
+            "version_id": version.id,
+            "version_number": version.version_number,
+            "change_summary": version.change_summary,
+        },
+    )
+    db.commit()
+    db.refresh(plan)
+    return _marketing_plan_read(db, plan, include_versions=True)
+
+
+def copy_marketing_plan(
+    db: Session,
+    actor: Actor,
+    plan_id: str,
+    data: MarketingPlanCopyCreate,
+) -> MarketingPlanDetailRead:
+    source = _tenant_marketing_plan(db, actor, plan_id)
+    source_versions = _marketing_plan_versions(db, source)
+    if not source_versions:
+        raise HTTPException(status_code=409, detail="Marketing plan has no versions")
+    source_version = source_versions[0]
+    copied = MarketingPlan(
+        organization_id=actor.organization_id,
+        title=data.title or f"{source.title} (copy)",
+        locale=source.locale,
+        product_name=source.product_name,
+        platform=source.platform,
+        created_by=actor.user_id,
+    )
+    db.add(copied)
+    db.flush()
+    copied_version = MarketingPlanVersion(
+        organization_id=actor.organization_id,
+        marketing_plan_id=copied.id,
+        version_number=1,
+        request_payload=source_version.request_payload,
+        content=source_version.content,
+        provider=source_version.provider,
+        model=source_version.model,
+        degraded=source_version.degraded,
+        change_summary=source_version.change_summary,
+        created_by=actor.user_id,
+    )
+    db.add(copied_version)
+    db.flush()
+    audit(
+        db,
+        actor,
+        "marketing_plan.copied",
+        "marketing_plan",
+        copied.id,
+        {
+            "source_plan_id": source.id,
+            "source_version_id": source_version.id,
+            "version_id": copied_version.id,
+        },
+    )
+    db.commit()
+    db.refresh(copied)
+    return _marketing_plan_read(db, copied, include_versions=True)
 
 
 def list_brands(db: Session, actor: Actor) -> list[Brand]:

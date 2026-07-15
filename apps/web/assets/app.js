@@ -1,6 +1,6 @@
 const inviteFragment=new URLSearchParams(location.hash.replace(/^#/,"")).get("invite")||"";
 if(inviteFragment)history.replaceState(null,"","/workspace/");
-const state={token:localStorage.getItem("heyu_token")||"",actor:null,members:[],invitations:[],brands:[],products:[],knowledge:[],campaigns:[],campaignBriefRevisions:[],campaignBriefMaps:{},campaignSupplySnapshots:[],campaignFarmerEvidenceSnapshots:[],projects:[],versions:[],generationRuns:[],publications:[],audit:[],currentVersion:null,inviteToken:inviteFragment};
+const state={token:localStorage.getItem("heyu_token")||"",actor:null,members:[],invitations:[],brands:[],products:[],knowledge:[],campaigns:[],campaignBriefRevisions:[],campaignBriefMaps:{},campaignSupplySnapshots:[],campaignFarmerEvidenceSnapshots:[],marketingPlans:[],currentMarketingPlan:null,selectedMarketingVersion:null,projects:[],versions:[],generationRuns:[],publications:[],audit:[],currentVersion:null,inviteToken:inviteFragment};
 const t=(key,variables={})=>HeyuI18n.t(key,variables);
 const roleLabel=role=>t(`role.${role}`)===`role.${role}`?role:t(`role.${role}`);
 const enumLabel=(prefix,value)=>{const key=`${prefix}.${value}`;const label=t(key);return label===key?value:label};
@@ -83,7 +83,7 @@ const downloadCampaignPresentation=async campaign=>{
   link.click();
   setTimeout(()=>URL.revokeObjectURL(link.href),0);
 };
-const workspacePages=["overview","assets","knowledge","campaigns","studio","operations","review","audit","members"];
+const workspacePages=["overview","plans","assets","knowledge","campaigns","studio","operations","review","audit","members"];
 const pageFromLocation=()=>{const page=location.pathname.split("/").filter(Boolean)[1]||"overview";return workspacePages.includes(page)?page:"overview"};
 
 function showWorkspace(){
@@ -116,11 +116,19 @@ function navigate(page,push=true){
 async function refresh(){
   state.actor=await api("/v1/me");
   const canManageMembers=["owner","admin"].includes(state.actor.role);
-  [state.brands,state.products,state.knowledge,state.campaigns,state.projects,state.publications,state.audit]=await Promise.all([api("/v1/brands"),api("/v1/products"),api("/v1/knowledge"),api("/v1/campaign-packages"),api("/v1/content-projects"),api("/v1/publications"),api("/v1/audit-events")]);
+  [state.brands,state.products,state.knowledge,state.campaigns,state.marketingPlans,state.projects,state.publications,state.audit]=await Promise.all([api("/v1/brands"),api("/v1/products"),api("/v1/knowledge"),api("/v1/campaign-packages"),api("/v1/marketing-plans"),api("/v1/content-projects"),api("/v1/publications"),api("/v1/audit-events")]);
   [state.members,state.invitations]=canManageMembers?await Promise.all([api("/v1/members"),api("/v1/invitations")]):[[],[]];
   $$(".member-nav").forEach(x=>x.hidden=!canManageMembers);
   if(!canManageMembers&&$(".nav.active")?.dataset.page==="members")navigate("overview");
   render();
+  const requestedPlan=new URLSearchParams(location.search).get("plan");
+  const pendingImport=new URLSearchParams(location.search).get("import")==="1";
+  if(pendingImport&&canWriteScope("content")&&pendingMarketingPlan()){
+    await importPendingMarketingPlan();
+    return;
+  }
+  const planId=requestedPlan||state.currentMarketingPlan?.id||state.marketingPlans[0]?.id;
+  if(planId)await openMarketingPlan(planId,false);
 }
 const canWriteScope=scope=>{
   const role=state.actor?.role;
@@ -157,6 +165,71 @@ function renderAssetCard(item,type){
   const reviewButtons=canReview&&item.status==="pending_review"?`<button class="approve" data-review-asset="${item.id}" data-asset-type="${type}" data-status="approved">${escapeHtml(t("asset.approve"))}</button><button class="reject" data-review-asset="${item.id}" data-asset-type="${type}" data-status="rejected">${escapeHtml(t("asset.reject"))}</button>`:"";
   return `<article><div class="panel-heading"><span class="pill">${escapeHtml(t(isBrand?"asset.brand":"asset.product"))}</span><span class="badge ${item.status}">${escapeHtml(contentStatusLabel(item.status))}</span></div><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(description)}</p>${item.review_note?`<p class="review-note">${escapeHtml(t("asset.reviewNote",{note:item.review_note}))}</p>`:""}${editButton||submitButton||reviewButtons?`<div class="row-actions">${editButton}${submitButton}${reviewButtons}</div>`:""}</article>`;
 }
+const pendingMarketingPlan=()=>{
+  const raw=sessionStorage.getItem("heyu_pending_marketing_plan");
+  if(!raw)return null;
+  try{
+    const value=JSON.parse(raw);
+    return value&&value.title&&value.request_payload&&value.content?value:null;
+  }catch{
+    sessionStorage.removeItem("heyu_pending_marketing_plan");
+    return null;
+  }
+};
+const marketingPlanDate=value=>new Intl.DateTimeFormat(HeyuI18n.getLocale(),{dateStyle:"medium",timeStyle:"short"}).format(new Date(value));
+const marketingPlanVersion=()=>state.selectedMarketingVersion||state.currentMarketingPlan?.current_version||null;
+const marketingPlanSection=(title,body,wide=false)=>`<section class="plan-preview-section${wide?" wide":""}"><p class="eyebrow">${escapeHtml(title)}</p>${body}</section>`;
+const marketingPlanListItems=items=>`<ul>${(items||[]).map(item=>`<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+function marketingPlanPreviewHtml(content){
+  if(!content?.product_profile||!content?.strategy||!Array.isArray(content?.videos))return `<pre>${escapeHtml(JSON.stringify(content,null,2))}</pre>`;
+  const profile=content.product_profile;
+  const strategy=content.strategy;
+  const trend=content.trend||{};
+  const videos=content.videos.map((video,index)=>`<article class="plan-video-card"><span>${escapeHtml(t("marketingPlans.videoNumber",{number:index+1}))}</span><h4>${escapeHtml(video.title)}</h4><p>${escapeHtml(video.hook)}</p><small>${escapeHtml(video.angle)}${fieldSeparator()}${escapeHtml(video.background_music)}</small><details><summary>${escapeHtml(t("marketingPlans.openScript"))}</summary><p>${escapeHtml(video.script)}</p><ol>${(video.shots||[]).map(shot=>`<li><b>${escapeHtml(shot.seconds)}</b><span>${escapeHtml(shot.visual)}</span><small>${escapeHtml(shot.voiceover)}</small></li>`).join("")}</ol><strong>${escapeHtml(video.call_to_action)}</strong></details></article>`).join("");
+  const livestream=(content.livestream||[]).map(section=>`<article><h4>${escapeHtml(section.section)}</h4>${marketingPlanListItems(section.talking_points)}</article>`).join("");
+  const calendar=(content.seven_day_plan||[]).map(day=>`<article><b>${escapeHtml(t("marketingPlans.day",{day:day.day}))}</b><h4>${escapeHtml(day.objective)}</h4><p>${escapeHtml(day.content)}</p><small>${escapeHtml(day.action)}</small></article>`).join("");
+  return `<div class="plan-preview-grid">${marketingPlanSection(t("marketingPlans.positioning"),`<h3>${escapeHtml(profile.one_line_value)}</h3><p>${escapeHtml(profile.story_angle)}</p>${marketingPlanListItems(profile.core_selling_points)}`)}${marketingPlanSection(t("marketingPlans.strategy"),`<h3>${escapeHtml(strategy.platform_name)}</h3><p>${escapeHtml(strategy.content_focus)}</p><dl><div><dt>${escapeHtml(t("marketingPlans.duration"))}</dt><dd>${escapeHtml(strategy.recommended_duration)}</dd></div><div><dt>${escapeHtml(t("marketingPlans.conversion"))}</dt><dd>${escapeHtml(strategy.conversion_action)}</dd></div></dl>`)}${marketingPlanSection(t("marketingPlans.trend"),`<h3>${escapeHtml(trend.trend_used||t("marketingPlans.noTrend"))}</h3><p>${escapeHtml(trend.integration_method||"")}</p><small>${escapeHtml(trend.caution||"")}</small>`,true)}${marketingPlanSection(t("marketingPlans.videos"),`<div class="plan-video-grid">${videos}</div>`,true)}${marketingPlanSection(t("marketingPlans.livestream"),`<div class="plan-live-grid">${livestream}</div>`,true)}${marketingPlanSection(t("marketingPlans.sevenDays"),`<div class="plan-calendar">${calendar}</div>`,true)}${marketingPlanSection(t("marketingPlans.nextActions"),marketingPlanListItems(content.next_actions),true)}</div>`;
+}
+function renderMarketingPlans(){
+  const canEdit=canWriteScope("content");
+  const pending=pendingMarketingPlan();
+  $("#marketing-plan-count").textContent=HeyuI18n.formatNumber(state.marketingPlans.length);
+  $("#marketing-plan-import").hidden=!pending;
+  $("#import-marketing-plan").hidden=!canEdit;
+  $("#marketing-plan-list").classList.toggle("empty",state.marketingPlans.length===0);
+  $("#marketing-plan-list").innerHTML=state.marketingPlans.map(plan=>`<button class="plan-list-item${plan.id===state.currentMarketingPlan?.id?" active":""}" data-open-marketing-plan="${plan.id}"><span><b>${escapeHtml(plan.title)}</b><small>${escapeHtml(plan.product_name)}${fieldSeparator()}${escapeHtml(plan.platform)}</small></span><i>v${escapeHtml(plan.current_version.version_number)}</i></button>`).join("")||`<p>${escapeHtml(t("marketingPlans.empty"))}</p>`;
+  const detail=state.currentMarketingPlan;
+  $("#marketing-plan-empty").hidden=Boolean(detail);
+  $("#marketing-plan-detail").hidden=!detail;
+  if(!detail)return;
+  const version=marketingPlanVersion();
+  $("#marketing-plan-title").textContent=detail.title;
+  $("#marketing-plan-meta").innerHTML=`<span>${escapeHtml(detail.product_name)}</span><span>${escapeHtml(detail.platform)}</span><span>${escapeHtml(detail.locale)}</span><span>${escapeHtml(version.provider)} / ${escapeHtml(version.model)}</span>${version.degraded?`<span>${escapeHtml(t("marketingPlans.degraded"))}</span>`:""}`;
+  $("#marketing-plan-preview").innerHTML=marketingPlanPreviewHtml(version.content);
+  $("#marketing-plan-editor").value=JSON.stringify(version.content,null,2);
+  $("#marketing-plan-version-count").textContent=HeyuI18n.formatNumber(detail.versions.length);
+  $("#marketing-plan-versions").innerHTML=[...detail.versions].reverse().map(item=>`<button class="${item.id===version.id?"active":""}" data-open-marketing-version="${item.id}"><b>v${escapeHtml(item.version_number)}</b><span>${escapeHtml(item.change_summary||t("marketingPlans.noChangeSummary"))}</span><small>${escapeHtml(marketingPlanDate(item.created_at))}</small></button>`).join("");
+  $("#copy-marketing-plan").hidden=!canEdit;
+}
+async function openMarketingPlan(planId,push=true){
+  const detail=await api(`/v1/marketing-plans/${encodeURIComponent(planId)}`);
+  state.currentMarketingPlan=detail;
+  state.selectedMarketingVersion=detail.current_version;
+  if(push)history.pushState({page:"plans",plan:planId},"",`/workspace/plans?plan=${encodeURIComponent(planId)}`);
+  renderMarketingPlans();
+}
+async function importPendingMarketingPlan(){
+  const snapshot=pendingMarketingPlan();
+  if(!snapshot)throw new Error(t("marketingPlans.noPending"));
+  const saved=await api("/v1/marketing-plans",{method:"POST",body:JSON.stringify(snapshot)});
+  sessionStorage.removeItem("heyu_pending_marketing_plan");
+  state.marketingPlans=await api("/v1/marketing-plans");
+  state.currentMarketingPlan=saved;
+  state.selectedMarketingVersion=saved.current_version;
+  history.replaceState({page:"plans",plan:saved.id},"",`/workspace/plans?plan=${encodeURIComponent(saved.id)}`);
+  renderMarketingPlans();
+  toast(t("marketingPlans.imported"));
+}
 function render(){
   renderAccessMode();
   const approvedKnowledge=state.knowledge.filter(x=>x.status==="approved").length;
@@ -179,6 +252,7 @@ function render(){
   renderCampaigns();
   renderPublications();
   renderMembers();
+  renderMarketingPlans();
 }
 const campaignStatusLabel=value=>t(`campaign.status.${value}`);
 const campaignGenerationBlockerLabel=code=>{
@@ -765,7 +839,42 @@ async function loadGenerationRuns(projectId){
 }
 $("#logout").addEventListener("click",()=>{localStorage.removeItem("heyu_token");state.token="";state.actor=null;location.href="/workspace/"});
 $$(".jump").forEach(x=>x.addEventListener("click",()=>navigate(x.dataset.target)));
-window.addEventListener("popstate",()=>navigate(pageFromLocation(),false));
+document.addEventListener("click",event=>{
+  const planButton=event.target.closest("[data-open-marketing-plan]");
+  if(planButton)request(()=>openMarketingPlan(planButton.dataset.openMarketingPlan));
+  const versionButton=event.target.closest("[data-open-marketing-version]");
+  if(versionButton&&state.currentMarketingPlan){
+    state.selectedMarketingVersion=state.currentMarketingPlan.versions.find(item=>item.id===versionButton.dataset.openMarketingVersion)||state.currentMarketingPlan.current_version;
+    renderMarketingPlans();
+  }
+});
+$("#import-marketing-plan").addEventListener("click",()=>request(importPendingMarketingPlan));
+$("#save-marketing-plan-version").addEventListener("click",()=>request(async()=>{
+  if(!state.currentMarketingPlan)throw new Error(t("marketingPlans.selectFirst"));
+  let content;
+  try{content=JSON.parse($("#marketing-plan-editor").value)}catch{throw new Error(t("content.invalidJson"))}
+  const base=marketingPlanVersion();
+  const detail=await api(`/v1/marketing-plans/${state.currentMarketingPlan.id}/versions`,{method:"POST",body:JSON.stringify({request_payload:base.request_payload,content,change_summary:$("#marketing-plan-change-summary").value.trim()})});
+  state.currentMarketingPlan=detail;
+  state.selectedMarketingVersion=detail.current_version;
+  state.marketingPlans=await api("/v1/marketing-plans");
+  $("#marketing-plan-change-summary").value="";
+  renderMarketingPlans();
+},t("marketingPlans.versionSaved")));
+$("#copy-marketing-plan").addEventListener("click",()=>request(async()=>{
+  if(!state.currentMarketingPlan)throw new Error(t("marketingPlans.selectFirst"));
+  const detail=await api(`/v1/marketing-plans/${state.currentMarketingPlan.id}/copy`,{method:"POST",body:JSON.stringify({title:`${state.currentMarketingPlan.title}${t("marketingPlans.copySuffix")}`})});
+  state.marketingPlans=await api("/v1/marketing-plans");
+  state.currentMarketingPlan=detail;
+  state.selectedMarketingVersion=detail.current_version;
+  history.pushState({page:"plans",plan:detail.id},"",`/workspace/plans?plan=${encodeURIComponent(detail.id)}`);
+  renderMarketingPlans();
+},t("marketingPlans.copied")));
+window.addEventListener("popstate",()=>{
+  navigate(pageFromLocation(),false);
+  const planId=new URLSearchParams(location.search).get("plan");
+  if(planId&&state.token)request(()=>openMarketingPlan(planId,false));
+});
 document.addEventListener("heyu:localechange",async()=>{
   const projectId=$("#project-select")?.value;
   navigate(pageFromLocation(),false);

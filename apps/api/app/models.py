@@ -205,6 +205,44 @@ class ContentProject(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class MarketingPlan(Base):
+    __tablename__ = "marketing_plans"
+    __table_args__ = (Index("ix_marketing_plans_org_updated", "organization_id", "updated_at"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    locale: Mapped[str] = mapped_column(String(20))
+    product_name: Mapped[str] = mapped_column(String(80))
+    platform: Mapped[str] = mapped_column(String(40))
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class MarketingPlanVersion(Base):
+    __tablename__ = "marketing_plan_versions"
+    __table_args__ = (
+        UniqueConstraint("marketing_plan_id", "version_number"),
+        Index(
+            "ix_marketing_plan_versions_plan_version",
+            "marketing_plan_id",
+            "version_number",
+        ),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    marketing_plan_id: Mapped[str] = mapped_column(ForeignKey("marketing_plans.id"), index=True)
+    version_number: Mapped[int] = mapped_column()
+    request_payload: Mapped[dict] = mapped_column(JSON)
+    content: Mapped[dict] = mapped_column(JSON)
+    provider: Mapped[str] = mapped_column(String(80))
+    model: Mapped[str] = mapped_column(String(120))
+    degraded: Mapped[bool] = mapped_column(default=False)
+    change_summary: Mapped[str] = mapped_column(String(255), default="")
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class CampaignPackage(Base):
     __tablename__ = "campaign_packages"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

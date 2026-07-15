@@ -381,6 +381,132 @@ async function main() {
     await selectLocale(page, "en");
     const ownerToken = await page.evaluate(() => localStorage.getItem("heyu_token"));
     assert.ok(ownerToken, "owner token missing after bootstrap");
+
+    await page.goto(`${baseUrl}/create/?lang=en`, { waitUntil: "networkidle" });
+    await generateDemoCase(
+      page,
+      "tomato",
+      "Seasonal tomatoes",
+      "douyin",
+      "Douyin",
+      "What to do next",
+    );
+    const createMarketingPlanResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() === `${baseUrl}/v1/marketing-plans` &&
+        response.request().method() === "POST",
+    );
+    await page.locator("#save-result").click();
+    const createMarketingPlanResponse = await createMarketingPlanResponsePromise;
+    assert.equal(createMarketingPlanResponse.status(), 201, "owner could not save tomato plan");
+    const savedMarketingPlan = await createMarketingPlanResponse.json();
+    assert.equal(savedMarketingPlan.current_version.version_number, 1);
+    assert.match(savedMarketingPlan.product_name, /tomato/i);
+    await page.locator("#open-saved-plan").waitFor({ state: "visible" });
+    await Promise.all([
+      page.waitForURL(
+        `${baseUrl}/workspace/plans?plan=${encodeURIComponent(savedMarketingPlan.id)}`,
+      ),
+      page.locator("#open-saved-plan").click(),
+    ]);
+    await page.locator("#workspace").waitFor({ state: "visible" });
+    await page.locator('[data-page-panel="plans"]').waitFor({ state: "visible" });
+    await page.locator("#marketing-plan-detail").waitFor({ state: "visible" });
+    await page.locator("#marketing-plan-title", { hasText: /tomato/i }).waitFor();
+    assert.equal(
+      await page.locator("#marketing-plan-preview .plan-video-card").count(),
+      3,
+      "saved plan did not render three video concepts",
+    );
+    assert.equal(
+      await page.locator("#marketing-plan-preview .plan-calendar article").count(),
+      7,
+      "saved plan did not render the seven-day operating plan",
+    );
+
+    const updatedPositioning = `E2E tomato positioning ${unique}`;
+    await page.locator(".plan-editor-wrap").evaluate((element) => {
+      element.open = true;
+    });
+    const initialPlanContent = JSON.parse(
+      await page.locator("#marketing-plan-editor").inputValue(),
+    );
+    initialPlanContent.product_profile.one_line_value = updatedPositioning;
+    await page
+      .locator("#marketing-plan-editor")
+      .fill(JSON.stringify(initialPlanContent, null, 2));
+    await page
+      .locator("#marketing-plan-change-summary")
+      .fill("Browser E2E positioning update");
+    const versionResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() ===
+          `${baseUrl}/v1/marketing-plans/${savedMarketingPlan.id}/versions` &&
+        response.request().method() === "POST",
+    );
+    await page.locator("#save-marketing-plan-version").click();
+    const versionResponse = await versionResponsePromise;
+    assert.equal(versionResponse.status(), 201, "owner could not save marketing plan v2");
+    const versionedMarketingPlan = await versionResponse.json();
+    assert.equal(versionedMarketingPlan.current_version.version_number, 2);
+    assert.equal(
+      versionedMarketingPlan.current_version.content.product_profile.one_line_value,
+      updatedPositioning,
+    );
+    assert.equal(await page.locator("#marketing-plan-versions button").count(), 2);
+
+    const versionOneButton = page.locator(
+      '#marketing-plan-versions button:has(b:text-is("v1"))',
+    );
+    const versionTwoButton = page.locator(
+      '#marketing-plan-versions button:has(b:text-is("v2"))',
+    );
+    await versionOneButton.click();
+    const versionOneContent = JSON.parse(
+      await page.locator("#marketing-plan-editor").inputValue(),
+    );
+    assert.notEqual(
+      versionOneContent.product_profile.one_line_value,
+      updatedPositioning,
+      "saving v2 overwrote v1",
+    );
+    await versionTwoButton.click();
+    assert.equal(
+      JSON.parse(await page.locator("#marketing-plan-editor").inputValue()).product_profile
+        .one_line_value,
+      updatedPositioning,
+      "v2 could not be reopened",
+    );
+
+    const copyResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() ===
+          `${baseUrl}/v1/marketing-plans/${savedMarketingPlan.id}/copy` &&
+        response.request().method() === "POST",
+    );
+    await page.locator("#copy-marketing-plan").click();
+    const copyResponse = await copyResponsePromise;
+    assert.equal(copyResponse.status(), 201, "owner could not copy marketing plan");
+    const copiedMarketingPlan = await copyResponse.json();
+    assert.notEqual(copiedMarketingPlan.id, savedMarketingPlan.id);
+    assert.equal(copiedMarketingPlan.current_version.version_number, 1);
+    await page.waitForURL(
+      `${baseUrl}/workspace/plans?plan=${encodeURIComponent(copiedMarketingPlan.id)}`,
+    );
+    assert.equal(await page.locator("#marketing-plan-version-count").textContent(), "1");
+
+    const localizedPlanHeadings = new Set();
+    for (const locale of ["zh-CN", "zh-HK", "en"]) {
+      await selectLocale(page, locale);
+      const expectedHeading = await page.evaluate(() => HeyuI18n.t("marketingPlans.heading"));
+      const heading = page.locator('[data-i18n="marketingPlans.heading"]');
+      await heading.waitFor({ state: "visible" });
+      assert.equal((await heading.textContent()).trim(), expectedHeading);
+      localizedPlanHeadings.add(expectedHeading);
+    }
+    await screenshot(page, "marketing-plan-owner-v2-copy.png");
+
+    await openWorkspacePage(page, "assets");
     const brandsResponse = await context.request.get(`${baseUrl}/v1/brands`, {
       headers: { Authorization: `Bearer ${ownerToken}` },
     });
@@ -905,6 +1031,17 @@ async function main() {
 
     const inviteContext = await browser.newContext({ viewport: { width: 1050, height: 800 } });
     const invitePage = await inviteContext.newPage();
+    const invitePageErrors = [];
+    invitePage.on("pageerror", (error) => invitePageErrors.push(error.message));
+    await invitePage.addInitScript(() => {
+      window.__heyuUnhandledRejections = [];
+      window.addEventListener("unhandledrejection", (event) => {
+        const reason = event.reason;
+        window.__heyuUnhandledRejections.push(
+          reason instanceof Error ? reason.message : String(reason),
+        );
+      });
+    });
     await invitePage.goto(`${baseUrl}/workspace/#invite=${encodeURIComponent(invitation.token)}`, {
       waitUntil: "networkidle",
     });
@@ -983,6 +1120,59 @@ async function main() {
     assert.equal(viewerResponse.status(), 200);
     assert.equal((await viewerResponse.json()).role, "viewer");
 
+    await openWorkspacePage(invitePage, "plans");
+    await invitePage
+      .locator(
+        `[data-open-marketing-plan="${copiedMarketingPlan.id}"], [data-open-marketing-plan="${savedMarketingPlan.id}"]`,
+      )
+      .first()
+      .click();
+    await invitePage.locator("#marketing-plan-detail").waitFor({ state: "visible" });
+    await invitePage.locator("#marketing-plan-preview", { hasText: /tomato/i }).waitFor();
+    await expectHiddenOrAbsent(
+      invitePage,
+      "#import-marketing-plan",
+      "marketing plan import control",
+    );
+    await expectHiddenOrAbsent(
+      invitePage,
+      "#save-marketing-plan-version",
+      "marketing plan version save control",
+    );
+    await expectHiddenOrAbsent(
+      invitePage,
+      "#copy-marketing-plan",
+      "marketing plan copy control",
+    );
+    await expectHiddenOrAbsent(invitePage, ".plan-editor-wrap", "marketing plan editor");
+
+    const viewerPlanResponse = await inviteContext.request.get(
+      `${baseUrl}/v1/marketing-plans/${savedMarketingPlan.id}`,
+      { headers: { Authorization: `Bearer ${viewerToken}` } },
+    );
+    assert.equal(viewerPlanResponse.status(), 200, "viewer could not read marketing plan");
+    const viewerPlan = await viewerPlanResponse.json();
+    const viewerVersionResponse = await inviteContext.request.post(
+      `${baseUrl}/v1/marketing-plans/${savedMarketingPlan.id}/versions`,
+      {
+        headers: { Authorization: `Bearer ${viewerToken}` },
+        data: {
+          request_payload: viewerPlan.current_version.request_payload,
+          content: viewerPlan.current_version.content,
+          change_summary: "Viewer must not save",
+        },
+      },
+    );
+    assert.equal(viewerVersionResponse.status(), 403, "viewer created a marketing plan version");
+    const viewerCopyResponse = await inviteContext.request.post(
+      `${baseUrl}/v1/marketing-plans/${savedMarketingPlan.id}/copy`,
+      {
+        headers: { Authorization: `Bearer ${viewerToken}` },
+        data: {},
+      },
+    );
+    assert.equal(viewerCopyResponse.status(), 403, "viewer copied a marketing plan");
+
     const readOnlyNotices = {};
     for (const [locale, filename] of [
       ["zh-CN", "viewer-readonly-zh-CN.png"],
@@ -1040,10 +1230,26 @@ async function main() {
     await screenshot(invitePage, "workspace-700px.png");
 
     await invitePage.setViewportSize({ width: 390, height: 844 });
-    await invitePage.reload({ waitUntil: "networkidle" });
+    await invitePage.goto(
+      `${baseUrl}/workspace/plans?plan=${encodeURIComponent(copiedMarketingPlan.id)}&lang=en`,
+      { waitUntil: "networkidle" },
+    );
     await invitePage.locator("#workspace").waitFor({ state: "visible" });
-    await expectNoHorizontalOverflow(invitePage, "workspace 390px");
-    await screenshot(invitePage, "workspace-390px.png");
+    await invitePage.locator('[data-page-panel="plans"]').waitFor({ state: "visible" });
+    await invitePage.locator("#marketing-plan-detail").waitFor({ state: "visible" });
+    await expectNoHorizontalOverflow(invitePage, "marketing plan workspace 390px");
+    await screenshot(invitePage, "marketing-plan-viewer-390px.png");
+    assert.deepEqual(
+      await invitePage.evaluate(() => window.__heyuUnhandledRejections || []),
+      [],
+      "viewer workspace emitted an unhandled promise rejection",
+    );
+    assert.deepEqual(
+      invitePageErrors,
+      [],
+      `viewer workspace page errors: ${invitePageErrors.join("\n")}`,
+    );
+    assert.equal(localizedPlanHeadings.size, 3, "marketing plan heading was not trilingual");
     await inviteContext.close();
     assert.deepEqual(pageErrors, [], `browser page errors: ${pageErrors.join("\n")}`);
     assert.deepEqual(

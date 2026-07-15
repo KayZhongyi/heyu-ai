@@ -10,6 +10,30 @@
       demoMode:"Zero-cost demo",proWorkspace:"Professional workspace ↗",headline:"Turn one farm product brief<br><em>into a week of executable content.</em>",subhead:"Tell Heyu who you are, what you sell and where you plan to publish. The platform structures the value proposition and creates three video directions, a live-selling outline and a seven-day plan.",stepLabel:"Describe the task",resultLabel:"Receive the plan",briefKicker:"OPERATING BRIEF",briefTitle:"Start with the product you know best",demoCasesLabel:"One-click demo cases",demoCasesHint:"Choose a case to fill the full brief and generate its preview.",demoTomato:"Tomatoes",demoTea:"High-mountain tea",demoFruit:"Seasonal fruit",identityTitle:"Who are you and what do you need?",identityLabel:"Your role",personaFarmer:"Farmer / family farm",personaCoop:"Cooperative",personaOperator:"Rural operations team",goalLabel:"Primary goals (up to three)",goalSell:"Sell directly",goalBrand:"Build the brand",goalFans:"Grow an audience",goalTourism:"Attract visits",productTitle:"Which product are we telling?",productLabel:"Product name",originLabel:"Origin",descriptionLabel:"Describe it in your own words",pointsLabel:"Most important selling points",audienceLabel:"Priority audience (optional)",channelTitle:"Where will you publish?",douyinName:"Douyin",douyinHint:"Fast · strong hook",redName:"Xiaohongshu",redHint:"Useful · saveable",channelsName:"WeChat Channels",channelsHint:"Trust · private traffic",kuaishouName:"Kuaishou",kuaishouHint:"Authentic · interactive",toneLabel:"Voice",tonePlain:"Plain and natural",toneWarm:"Warm story",toneLively:"Lively",tonePremium:"Quietly premium",trendLabel:"Trend to use (optional)",costTitle:"This demo uses no model credits",costBody:"The stable Mock provider is active. Signed-in teams can switch to a domestic OpenAI-compatible API.",generate:"Generate the operating plan",emptyTitle:"One brief becomes<br>a practical filming and operating kit.",emptyVideos:"Three distinct short videos",emptyLive:"One live-selling structure",emptyPlan:"Seven-day publishing plan",loadingTitle:"Understanding the product and goal",loadingBody:"Structuring value · matching platform · designing angles · planning seven days",resultKicker:"OPERATING PLAN",editBrief:"Edit brief",tabStrategy:"Strategy",tabVideos:"Videos",tabLive:"Live",tabCalendar:"7 days",copyResult:"Copy this section",positioningLabel:"Product positioning",strategyLabel:"Platform strategy",trendFitLabel:"Trend fit",nextActionsLabel:"What to do next",videoLabel:"Video",liveLabel:"Live segment",hookLabel:"Hook",claimError:"The brief contains a medical, certification or absolute claim that must be verified before generation.",genericError:"Generation failed. Please check the input and try again.",footer:"From a farmer's own words to a week of content operations."
     }
   };
+  Object.assign(copy["zh-CN"], {
+    saveResult: "保存到团队工作台",
+    savingResult: "正在保存…",
+    savedResult: "已保存到工作台",
+    openSavedPlan: "打开已保存方案",
+    saveError: "保存失败，请重新登录后再试。",
+    initialSaveSummary: "从农户简单模式保存完整经营方案"
+  });
+  Object.assign(copy["zh-HK"], {
+    saveResult: "儲存至團隊工作台",
+    savingResult: "正在儲存…",
+    savedResult: "已儲存至工作台",
+    openSavedPlan: "開啟已儲存方案",
+    saveError: "儲存失敗，請重新登入後再試。",
+    initialSaveSummary: "由農戶簡單模式儲存完整營運方案"
+  });
+  Object.assign(copy.en, {
+    saveResult: "Save to team workspace",
+    savingResult: "Saving…",
+    savedResult: "Saved to workspace",
+    openSavedPlan: "Open saved plan",
+    saveError: "Could not save. Please sign in again and retry.",
+    initialSaveSummary: "Saved from the farmer creation flow"
+  });
 
   const demoCases = {
     tomato: {
@@ -122,6 +146,7 @@
     ? requestedLocale
     : localStorage.getItem("heyu-locale") || "zh-CN";
   let result = null;
+  let lastPayload = null;
   let activeTab = "strategy";
   let selectedDemo = null;
 
@@ -276,6 +301,9 @@
       const response = await fetch("/v1/marketing/preview", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
       if (!response.ok) throw new Error(await readApiError(response));
       result = await response.json();
+      lastPayload = payload;
+      document.querySelector("#open-saved-plan").hidden = true;
+      document.querySelector("#save-result").textContent = copy[locale].saveResult;
       document.querySelector("#result-product").textContent = payload.product_name;
       document.querySelector("#provider-meta").textContent = `${result.provider} · ${result.model} · ${result.latency_ms}ms`;
       loading.hidden = true; resultState.hidden = false; activeTab = "strategy";
@@ -305,6 +333,48 @@
     const button = document.querySelector("#copy-result");
     const before = button.textContent; button.textContent = locale === "en" ? "Copied" : "已复制";
     setTimeout(() => button.textContent = before, 1300);
+  });
+  document.querySelector("#save-result").addEventListener("click", async () => {
+    if (!result || !lastPayload) return;
+    const token = localStorage.getItem("heyu_token") || "";
+    const snapshot = {
+      title: `${lastPayload.product_name} · ${result.strategy.platform_name}`,
+      request_payload: lastPayload,
+      content: result,
+      change_summary: copy[locale].initialSaveSummary
+    };
+    if (!token) {
+      sessionStorage.setItem("heyu_pending_marketing_plan", JSON.stringify(snapshot));
+      location.href = "/workspace/plans?import=1";
+      return;
+    }
+    const button = document.querySelector("#save-result");
+    button.disabled = true;
+    button.textContent = copy[locale].savingResult;
+    try {
+      const response = await fetch("/v1/marketing-plans", {
+        method: "POST",
+        headers: {"Content-Type":"application/json", Authorization:`Bearer ${token}`},
+        body: JSON.stringify(snapshot)
+      });
+      if (response.status === 401) {
+        localStorage.removeItem("heyu_token");
+        sessionStorage.setItem("heyu_pending_marketing_plan", JSON.stringify(snapshot));
+        location.href = "/workspace/plans?import=1";
+        return;
+      }
+      if (!response.ok) throw new Error(copy[locale].saveError);
+      const saved = await response.json();
+      button.textContent = copy[locale].savedResult;
+      const link = document.querySelector("#open-saved-plan");
+      link.href = `/workspace/plans?plan=${encodeURIComponent(saved.id)}`;
+      link.hidden = false;
+    } catch (error) {
+      button.textContent = copy[locale].saveResult;
+      alert(error instanceof Error ? error.message : copy[locale].saveError);
+    } finally {
+      button.disabled = false;
+    }
   });
   applyLocale(locale);
 })();

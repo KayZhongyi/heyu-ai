@@ -1026,6 +1026,62 @@
       "0 条邀请": "0 項邀請",
       "查看邀请状态，并在链接尚未使用且未过期时主动撤销。邀请令牌不会在列表中再次显示。": "查看邀請狀態，並在連結尚未使用及未過期時主動撤銷。邀請憑證不會在列表中再次顯示。",
       "暂无邀请记录": "暫無邀請記錄",
+      "workspace.page.plans": "\u71df\u904b\u65b9\u6848\u5eab",
+      "marketingPlans.heading": "\u8b93\u6bcf\u6b21\u751f\u6210\uff0c\u90fd\u6210\u70ba\u53ef\u6301\u7e8c\u71df\u904b\u7684\u65b9\u6848",
+      "marketingPlans.intro": "\u5132\u5b58\u7c21\u55ae\u6a21\u5f0f\u751f\u6210\u7684\u5b8c\u6574\u5167\u5bb9\u5305\uff0c\u96a8\u6642\u91cd\u65b0\u958b\u555f\u3001\u8abf\u6574\u3001\u8907\u88fd\uff0c\u4e26\u4fdd\u7559\u6bcf\u6b21\u4fee\u6539\u3002",
+      "marketingPlans.create": "\u751f\u6210\u65b0\u65b9\u6848",
+      "marketingPlans.saved": "\u5df2\u5132\u5b58\u65b9\u6848",
+      "marketingPlans.current": "\u7576\u524d\u65b9\u6848",
+      "marketingPlans.emptyTitle": "\u5f9e\u4e00\u4efd\u53ef\u57f7\u884c\u7684\u71df\u904b\u65b9\u6848\u958b\u59cb",
+      "marketingPlans.empty": "\u9019\u88cf\u6703\u96c6\u4e2d\u5132\u5b58\u5f71\u7247\u8173\u672c\u3001\u76f4\u64ad\u8a71\u8853\u53ca\u4e03\u65e5\u71df\u904b\u8a08\u5283\u3002",
+      "marketingPlans.pendingImport": "\u525b\u624d\u751f\u6210\u7684\u65b9\u6848\u5c1a\u672a\u5132\u5b58",
+      "marketingPlans.pendingImportCopy": "\u767b\u5165\u5f8c\u53ef\u5c07\u5b83\u5132\u5b58\u81f3\u7576\u524d\u5718\u968a\u5de5\u4f5c\u53f0\u3002",
+      "marketingPlans.importNow": "\u7acb\u5373\u5132\u5b58",
+      "marketingPlans.imported": "\u65b9\u6848\u5df2\u5132\u5b58\u81f3\u5718\u968a\u5de5\u4f5c\u53f0",
+      "marketingPlans.noPending": "\u6c92\u6709\u5f85\u5132\u5b58\u7684\u65b9\u6848",
+      "marketingPlans.copy": "\u8907\u88fd\u65b9\u6848",
+      "marketingPlans.copied": "\u5df2\u5efa\u7acb\u65b9\u6848\u526f\u672c",
+      "marketingPlans.copySuffix": "\uff08\u526f\u672c\uff09",
+      "marketingPlans.edit": "\u8abf\u6574\u4e26\u5132\u5b58\u65b0\u7248\u672c",
+      "marketingPlans.contentJson": "\u7d50\u69cb\u5316\u5167\u5bb9",
+      "marketingPlans.changeSummary": "\u672c\u6b21\u8abf\u6574\u8aaa\u660e",
+      "marketingPlans.changeSummaryPlaceholder": "\u4f8b\u5982\uff1a\u8abf\u6574\u7b2c\u4e8c\u689d\u5f71\u7247\u7684\u958b\u5834\u53ca\u80cc\u666f\u97f3\u6a02",
+      "marketingPlans.saveVersion": "\u5132\u5b58\u70ba\u65b0\u7248\u672c",
+      "marketingPlans.versionSaved": "\u65b0\u7248\u672c\u5df2\u5132\u5b58",
+      "marketingPlans.versionHistory": "\u7248\u672c\u7d00\u9304",
+      "marketingPlans.noChangeSummary": "\u672a\u586b\u5beb\u8abf\u6574\u8aaa\u660e",
+      "marketingPlans.selectFirst": "\u8acb\u5148\u9078\u64c7\u4e00\u4efd\u65b9\u6848",
+      "marketingPlans.degraded": "\u5df2\u81ea\u52d5\u964d\u7d1a",
+      "marketingPlans.positioning": "\u7522\u54c1\u5b9a\u4f4d",
+      "marketingPlans.strategy": "\u5e73\u53f0\u7b56\u7565",
+      "marketingPlans.trend": "\u71b1\u9ede\u878d\u5165",
+      "marketingPlans.noTrend": "\u672a\u6307\u5b9a\u71b1\u9ede",
+      "marketingPlans.videos": "\u4e09\u689d\u77ed\u5f71\u7247",
+      "marketingPlans.livestream": "\u76f4\u64ad\u8a71\u8853",
+      "marketingPlans.sevenDays": "\u4e03\u65e5\u71df\u904b\u8a08\u5283",
+      "marketingPlans.nextActions": "\u73fe\u5728\u5c31\u505a",
+      "marketingPlans.duration": "\u5efa\u8b70\u6642\u9577",
+      "marketingPlans.conversion": "\u8f49\u5316\u884c\u52d5",
+      "marketingPlans.videoNumber": "\u5f71\u7247 {number}",
+      "marketingPlans.openScript": "\u5c55\u958b\u8173\u672c\u53ca\u5206\u93e1",
+      "marketingPlans.day": "\u7b2c {day} \u65e5",
+      "content_renderer.positioning": "\u7522\u54c1\u5b9a\u4f4d",
+      "content_renderer.platformStrategy": "\u5e73\u53f0\u7b56\u7565",
+      "content_renderer.trendPlan": "\u71b1\u9ede\u878d\u5165",
+      "content_renderer.videoScripts": "\u77ed\u5f71\u7247\u8173\u672c",
+      "content_renderer.livestreamPlan": "\u76f4\u64ad\u8a71\u8853",
+      "content_renderer.sevenDayPlan": "\u4e03\u65e5\u71df\u904b\u8a08\u5283",
+      "content_renderer.nextActions": "\u4e0b\u4e00\u6b65\u884c\u52d5",
     },
   };
+  for (const key of Object.keys(root.HeyuLocales["zh-HK"].phrases)) {
+    if (
+      key === "workspace.page.plans" ||
+      key.startsWith("marketingPlans.") ||
+      key.startsWith("content_renderer.")
+    ) {
+      root.HeyuLocales["zh-HK"].messages[key] = root.HeyuLocales["zh-HK"].phrases[key];
+      delete root.HeyuLocales["zh-HK"].phrases[key];
+    }
+  }
 })(globalThis);
