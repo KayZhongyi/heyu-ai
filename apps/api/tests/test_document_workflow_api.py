@@ -4,10 +4,17 @@ from fastapi.testclient import TestClient
 from pptx import Presentation
 from pptx.util import Inches
 from pypdf import PdfWriter
+from sqlalchemy.orm import Session
 
 from app.main import MAX_DOCUMENT_UPLOAD_BYTES
+from app.models import ContentVersion, ReviewStatus
 from tests.conftest import bootstrap, invite_and_accept
-from tests.test_campaign_packages import campaign_payload, create_assets
+from tests.test_campaign_packages import (
+    approve_campaign_assets,
+    campaign_payload,
+    create_approved_supply,
+    create_assets,
+)
 
 
 def make_pdf() -> bytes:
@@ -184,3 +191,85 @@ def test_campaign_presentation_download_is_editable_and_tenant_scoped(
         headers=second_auth,
     )
     assert hidden.status_code == 404
+
+
+def test_campaign_presentation_marks_stale_approved_content_as_draft(
+    client: TestClient,
+    auth: dict[str, str],
+    db: Session,
+) -> None:
+    brand, product = create_assets(client, auth)
+    approve_campaign_assets(client, auth, brand, product)
+    payload = campaign_payload(brand, product)
+    payload["create_default_items"] = True
+    campaign_response = client.post(
+        "/v1/campaign-packages",
+        headers=auth,
+        json=payload,
+    )
+    assert campaign_response.status_code == 201, campaign_response.text
+    campaign = campaign_response.json()
+    supply = create_approved_supply(client, auth, campaign, brand, product)
+
+    for item in campaign["items"]:
+        db.add(
+            ContentVersion(
+                organization_id=campaign["organization_id"],
+                project_id=item["project"]["id"],
+                brief_revision_id=campaign["current_brief_revision"]["id"],
+                supply_snapshot_id=supply["id"],
+                version_number=1,
+                content={
+                    "headline": "Verified seasonal produce",
+                    "body": "Approved campaign content.",
+                },
+                status=ReviewStatus.approved,
+                created_by=campaign["created_by"],
+                reviewed_by=campaign["created_by"],
+                review_note="Current evidence verified",
+            )
+        )
+    db.commit()
+
+    activated = client.patch(
+        f"/v1/campaign-packages/{campaign['id']}/status",
+        headers=auth,
+        json={"status": "active"},
+    )
+    assert activated.status_code == 200, activated.text
+
+    current_download = client.get(
+        f"/v1/campaign-packages/{campaign['id']}/presentation",
+        headers=auth,
+    )
+    assert current_download.status_code == 200, current_download.text
+    current_deck = Presentation(BytesIO(current_download.content))
+    current_text = "\n".join(
+        shape.text
+        for slide in current_deck.slides
+        for shape in slide.shapes
+        if getattr(shape, "has_text_frame", False)
+    )
+    assert "请勿直接发布" not in current_text
+
+    create_approved_supply(client, auth, campaign, brand, product)
+    stale_campaign = client.get(
+        f"/v1/campaign-packages/{campaign['id']}",
+        headers=auth,
+    )
+    assert stale_campaign.status_code == 200, stale_campaign.text
+    assert all(item["approved_version_id"] is None for item in stale_campaign.json()["items"])
+
+    stale_download = client.get(
+        f"/v1/campaign-packages/{campaign['id']}/presentation",
+        headers=auth,
+    )
+    assert stale_download.status_code == 200, stale_download.text
+    stale_deck = Presentation(BytesIO(stale_download.content))
+    stale_text = "\n".join(
+        shape.text
+        for slide in stale_deck.slides
+        for shape in slide.shapes
+        if getattr(shape, "has_text_frame", False)
+    )
+    assert "请勿直接发布" in stale_text

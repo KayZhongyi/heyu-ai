@@ -1129,22 +1129,28 @@ def _campaign_presentation_input(
 
     brief = campaign.current_brief_revision
     content_items: list[ContentItem] = []
-    has_unapproved_content = False
+    has_fallback_or_unapproved_content = False
     for item in campaign.items:
-        version_id = item.approved_version_id or item.latest_version_id
+        uses_fallback = item.approved_version_id is None
+        version_id = item.approved_version_id
+        if uses_fallback:
+            version_id = item.latest_version_id
         version = None
         if version_id:
             version = db.scalar(
                 select(ContentVersion).where(
                     ContentVersion.id == version_id,
                     ContentVersion.organization_id == actor.organization_id,
+                    ContentVersion.project_id == item.content_project_id,
                 )
             )
         project = item.project
         version_status = (
             getattr(version.status, "value", str(version.status)) if version else "not_started"
         )
-        has_unapproved_content = has_unapproved_content or version_status != "approved"
+        has_fallback_or_unapproved_content = (
+            has_fallback_or_unapproved_content or uses_fallback or version_status != "approved"
+        )
         content_items.append(
             ContentItem(
                 title=project.title,
@@ -1172,10 +1178,10 @@ def _campaign_presentation_input(
 
     is_draft = (
         campaign.status.value == "draft"
-        or brief is None
-        or brief.status.value != "approved"
+        or bool(campaign.progress.generation_blockers)
         or not campaign.items
-        or has_unapproved_content
+        or any(item.approved_version_id is None for item in campaign.items)
+        or has_fallback_or_unapproved_content
     )
     review_status = "draft" if is_draft else "approved"
     review_notes = brief.review_note if brief else ""
