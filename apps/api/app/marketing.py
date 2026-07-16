@@ -30,6 +30,7 @@ Platform = Literal["douyin", "xiaohongshu", "wechat-channels", "kuaishou"]
 CreativeRouteId = Literal["practical-hook", "people-story", "playful-contrast"]
 TopicSignalType = Literal["manual-hotspot", "seasonal-farming", "evergreen-pain-point"]
 Recommendation = Literal["recommended", "consider", "skip"]
+MarketingContentModule = Literal["videos", "livestream", "calendar"]
 Goal = Literal[
     "sell",
     "build-brand",
@@ -41,6 +42,10 @@ Goal = Literal[
 
 def _default_goals() -> list[Goal]:
     return ["sell"]
+
+
+def _default_content_modules() -> list[MarketingContentModule]:
+    return ["videos", "livestream", "calendar"]
 
 
 class StrictModel(BaseModel):
@@ -98,10 +103,16 @@ class MarketingPlanRequest(StrictModel):
     tone: Literal["plain", "warm", "lively", "premium"] = "plain"
     trend: str = Field(default="", max_length=240)
     trend_snapshot: TrendSnapshot | None = None
+    content_modules: list[MarketingContentModule] = Field(
+        default_factory=_default_content_modules,
+        min_length=1,
+        max_length=3,
+    )
 
     @model_validator(mode="after")
     def normalize_and_reject_high_risk_claims(self) -> MarketingPlanRequest:
         self.goals = list(dict.fromkeys(self.goals))
+        self.content_modules = list(dict.fromkeys(self.content_modules))
         self.selling_points = [point.strip() for point in self.selling_points if point.strip()]
         if self.trend_snapshot is not None:
             if self.trend and self.trend != self.trend_snapshot.title:
@@ -301,9 +312,14 @@ class MarketingPlanResponse(StrictModel):
     trend: TrendBrief
     creative_routes: list[CreativeRoute] = Field(min_length=3, max_length=3)
     topic_signals: list[TopicSignal] = Field(min_length=3, max_length=3)
-    videos: list[VideoScript] = Field(min_length=3, max_length=3)
-    livestream: list[LivestreamSection] = Field(min_length=4, max_length=8)
-    seven_day_plan: list[DailyPlan] = Field(min_length=7, max_length=7)
+    videos: list[VideoScript] = Field(default_factory=list, max_length=3)
+    livestream: list[LivestreamSection] = Field(default_factory=list, max_length=8)
+    seven_day_plan: list[DailyPlan] = Field(default_factory=list, max_length=7)
+    included_modules: list[MarketingContentModule] = Field(
+        default_factory=_default_content_modules,
+        min_length=1,
+        max_length=3,
+    )
     next_actions: list[str] = Field(min_length=3, max_length=6)
     next_step: NextStep
     provider: str
@@ -315,24 +331,68 @@ class MarketingPlanResponse(StrictModel):
 
     @model_validator(mode="after")
     def validate_complete_distinct_plan(self) -> MarketingPlanResponse:
-        if [item.day for item in self.seven_day_plan] != list(range(1, 8)):
+        self.included_modules = list(dict.fromkeys(self.included_modules))
+        expected_presence = {
+            "videos": bool(self.videos),
+            "livestream": bool(self.livestream),
+            "calendar": bool(self.seven_day_plan),
+        }
+        for module, present in expected_presence.items():
+            if (module in self.included_modules) != present:
+                raise ValueError(f"{module} presence must match included_modules")
+        if self.seven_day_plan and [item.day for item in self.seven_day_plan] != list(range(1, 8)):
             raise ValueError("seven_day_plan must contain ordered days 1 through 7")
-        normalized_angles = {item.angle.strip().casefold() for item in self.videos}
-        normalized_titles = {item.title.strip().casefold() for item in self.videos}
-        if len(normalized_angles) != 3 or len(normalized_titles) != 3:
-            raise ValueError("videos must contain three distinct angles and titles")
         route_ids = [item.route_id for item in self.creative_routes]
         video_route_ids = [item.route_id for item in self.videos]
         if route_ids != ["practical-hook", "people-story", "playful-contrast"]:
             raise ValueError("creative_routes must contain the three supported routes in order")
-        if video_route_ids != route_ids:
-            raise ValueError("videos must map one-to-one to creative_routes")
+        if self.videos:
+            normalized_angles = {item.angle.strip().casefold() for item in self.videos}
+            normalized_titles = {item.title.strip().casefold() for item in self.videos}
+            if len(normalized_angles) != 3 or len(normalized_titles) != 3:
+                raise ValueError("videos must contain three distinct angles and titles")
+            if video_route_ids != route_ids:
+                raise ValueError("videos must map one-to-one to creative_routes")
         if [item.signal_type for item in self.topic_signals] != [
             "manual-hotspot",
             "seasonal-farming",
             "evergreen-pain-point",
         ]:
             raise ValueError("topic_signals must contain manual, seasonal and evergreen signals")
+        return self
+
+
+MarketingRegenerationTarget = Literal["video", "livestream", "calendar"]
+
+
+class MarketingModuleRegenerationRequest(StrictModel):
+    request: MarketingPlanRequest
+    current_plan: MarketingPlanResponse
+    target: MarketingRegenerationTarget
+    route_id: CreativeRouteId | None = None
+    instruction: str = Field(default="", max_length=400)
+    variation_index: int = Field(default=1, ge=1, le=20)
+
+    @model_validator(mode="after")
+    def validate_target_is_available(self) -> MarketingModuleRegenerationRequest:
+        expected_modules = list(self.current_plan.included_modules)
+        if self.request.content_modules != expected_modules:
+            raise ValueError("request content_modules must match current_plan included_modules")
+        if self.target == "video":
+            if "videos" not in expected_modules:
+                raise ValueError("videos must be included before regenerating a video")
+            if self.route_id is None:
+                raise ValueError("route_id is required when target is video")
+            if self.route_id not in {item.route_id for item in self.current_plan.videos}:
+                raise ValueError("route_id is not present in current_plan videos")
+        else:
+            if self.route_id is not None:
+                raise ValueError("route_id is only supported when target is video")
+            required_module: MarketingContentModule = (
+                "livestream" if self.target == "livestream" else "calendar"
+            )
+            if required_module not in expected_modules:
+                raise ValueError(f"{required_module} must be included before regeneration")
         return self
 
 
@@ -2532,9 +2592,226 @@ def _fallback_notice(locale: Locale) -> str:
     }[locale]
 
 
+def select_marketing_modules(
+    result: MarketingPlanResponse,
+    modules: list[MarketingContentModule],
+) -> MarketingPlanResponse:
+    """Return only the deliverables selected by the user.
+
+    Providers may still produce the full structured plan so existing compatible
+    model prompts remain valid. The API response, saved version and exports only
+    contain the modules explicitly requested by the user.
+    """
+
+    selected = list(dict.fromkeys(modules))
+    update: dict[str, object] = {"included_modules": selected}
+    if "videos" not in selected:
+        update["videos"] = []
+    if "livestream" not in selected:
+        update["livestream"] = []
+    if "calendar" not in selected:
+        update["seven_day_plan"] = []
+    return MarketingPlanResponse.model_validate(
+        result.model_copy(update=update).model_dump(mode="python")
+    )
+
+
+def _regenerated_video(
+    request: MarketingPlanRequest,
+    video: VideoScript,
+    variation_index: int,
+) -> VideoScript:
+    variant = (variation_index - 1) % 3
+    copy = {
+        "zh-CN": (
+            ("先看结果，再说原因：", "现场验证版", "你更想看哪一个细节？把答案留在评论区。"),
+            ("给我三秒，只看这个细节：", "三秒开场版", "先收藏，拍摄时照着这条顺序完成。"),
+            ("先做一个选择，再揭晓答案：", "互动选择版", "在评论区选一边，再看下一条现场验证。"),
+        ),
+        "zh-HK": (
+            ("先看結果，再說原因：", "現場驗證版", "你更想看哪一個細節？把答案留在留言區。"),
+            ("給我三秒，只看這個細節：", "三秒開場版", "先收藏，拍攝時照着這個次序完成。"),
+            ("先做一個選擇，再揭曉答案：", "互動選擇版", "在留言區選一邊，再看下一條現場驗證。"),
+        ),
+        "en": (
+            (
+                "See the result first, then the reason: ",
+                "Proof-first cut",
+                "Which detail should we show next? Leave your choice in the comments.",
+            ),
+            (
+                "Give this detail three seconds: ",
+                "Three-second opening",
+                "Save this version and follow the same shot order when filming.",
+            ),
+            (
+                "Make your choice before the answer: ",
+                "Interactive choice cut",
+                "Pick a side in the comments, then watch the next field test.",
+            ),
+        ),
+    }[request.locale][variant]
+    prefix, title_suffix, call_to_action = copy
+    separator = " | " if request.locale == "en" else "｜"
+    hook = f"{prefix}{video.hook}"
+    script = video.script.replace(video.hook, hook, 1)
+    if script == video.script:
+        script = f"{hook}\n{video.script}"
+    shots = [item.model_copy(deep=True) for item in video.shots]
+    if shots:
+        shots[0] = shots[0].model_copy(update={"voiceover": hook})
+    quality = _video_quality_assessment(
+        request,
+        video.route_id,
+        hook=hook,
+        script=script,
+        shots=shots,
+        call_to_action=call_to_action,
+        background_music=video.background_music,
+    )
+    return video.model_copy(
+        update={
+            "title": f"{video.title}{separator}{title_suffix}",
+            "hook": hook,
+            "script": script,
+            "shots": shots,
+            "call_to_action": call_to_action,
+            "quality_assessment": quality,
+        },
+        deep=True,
+    )
+
+
+def _regenerated_livestream(
+    locale: Locale,
+    sections: list[LivestreamSection],
+    variation_index: int,
+) -> list[LivestreamSection]:
+    regenerated = [item.model_copy(deep=True) for item in sections]
+    if not regenerated:
+        return regenerated
+    variants = {
+        "zh-CN": (
+            ("先问后讲", "先请观众选择最关心的产品细节，再进入展示。"),
+            ("现场验证", "先展示一个可见细节，再解释它与产品卖点的关系。"),
+            ("评论互动", "先收集评论区问题，再按出现频率逐一回应。"),
+        ),
+        "zh-HK": (
+            ("先問後講", "先請觀眾選擇最關心的產品細節，再進入展示。"),
+            ("現場驗證", "先展示一個可見細節，再解釋它與產品賣點的關係。"),
+            ("留言互動", "先收集留言區問題，再按出現頻率逐一回應。"),
+        ),
+        "en": (
+            (
+                "Ask before telling",
+                "Let viewers choose the product detail they care about before the demonstration.",
+            ),
+            ("Live proof", "Show one visible detail first, then connect it to the product value."),
+            (
+                "Comment-led flow",
+                "Collect viewer questions first, then answer them in order of frequency.",
+            ),
+        ),
+    }[locale]
+    title, talking_point = variants[(variation_index - 1) % len(variants)]
+    first = regenerated[0]
+    regenerated[0] = first.model_copy(
+        update={
+            "section": f"{title} · {first.section}",
+            "talking_points": [talking_point, *first.talking_points],
+        }
+    )
+    return regenerated
+
+
+def _regenerated_calendar(
+    locale: Locale,
+    days: list[DailyPlan],
+    variation_index: int,
+) -> list[DailyPlan]:
+    regenerated = [item.model_copy(deep=True) for item in days]
+    if not regenerated:
+        return regenerated
+    variants = {
+        "zh-CN": (
+            ("先测互动", "先发布互动型内容，用评论选择下一条拍摄方向。"),
+            ("先建信任", "先发布现场与人物内容，让观众认识产品从哪里来。"),
+            ("先给方法", "先发布可收藏的挑选或使用方法，再承接产品介绍。"),
+        ),
+        "zh-HK": (
+            ("先測互動", "先發佈互動型內容，用留言選擇下一條拍攝方向。"),
+            ("先建信任", "先發佈現場與人物內容，讓觀眾認識產品從哪裏來。"),
+            ("先給方法", "先發佈可收藏的挑選或使用方法，再承接產品介紹。"),
+        ),
+        "en": (
+            (
+                "Test interaction first",
+                "Publish an interactive post and let comments choose the next filming direction.",
+            ),
+            (
+                "Build trust first",
+                "Start with field and people content so viewers understand where the product comes from.",
+            ),
+            (
+                "Lead with utility",
+                "Publish a saveable choosing or usage tip before the product introduction.",
+            ),
+        ),
+    }[locale]
+    objective, action = variants[(variation_index - 1) % len(variants)]
+    regenerated[0] = regenerated[0].model_copy(update={"objective": objective, "action": action})
+    return regenerated
+
+
+def merge_regenerated_marketing_module(
+    payload: MarketingModuleRegenerationRequest,
+    candidate: MarketingPlanResponse,
+) -> MarketingPlanResponse:
+    """Replace only the requested deliverable and preserve the rest of the plan."""
+
+    current = payload.current_plan.model_copy(deep=True)
+    update: dict[str, object] = {
+        "provider": candidate.provider,
+        "model": candidate.model,
+        "latency_ms": candidate.latency_ms,
+        "cache_hit": candidate.cache_hit,
+        "degraded": candidate.degraded,
+        "notice": candidate.notice,
+    }
+    if payload.target == "video":
+        assert payload.route_id is not None
+        candidate_by_route = {item.route_id: item for item in candidate.videos}
+        replacement = candidate_by_route[payload.route_id]
+        replacement = _regenerated_video(
+            payload.request,
+            replacement,
+            payload.variation_index,
+        )
+        update["videos"] = [
+            replacement if item.route_id == payload.route_id else item for item in current.videos
+        ]
+    elif payload.target == "livestream":
+        update["livestream"] = _regenerated_livestream(
+            payload.request.locale,
+            candidate.livestream,
+            payload.variation_index,
+        )
+    else:
+        update["seven_day_plan"] = _regenerated_calendar(
+            payload.request.locale,
+            candidate.seven_day_plan,
+            payload.variation_index,
+        )
+    return MarketingPlanResponse.model_validate(
+        current.model_copy(update=update).model_dump(mode="python")
+    )
+
+
 def generate_marketing_preview(request: MarketingPlanRequest) -> MarketingPlanResponse:
     """Always-free preview used by the public/local demo."""
-    return DeterministicMarketingProvider().generate(request)
+    provider_request = request.model_copy(update={"content_modules": _default_content_modules()})
+    result = DeterministicMarketingProvider().generate(provider_request)
+    return select_marketing_modules(result, request.content_modules)
 
 
 def generate_marketing_plan(request: MarketingPlanRequest) -> MarketingPlanResponse:
@@ -2544,14 +2821,15 @@ def generate_marketing_plan(request: MarketingPlanRequest) -> MarketingPlanRespo
     key = _cache_key(provider, request)
     cached = _marketing_cache.get(key)
     if cached is not None:
-        return cached
+        return select_marketing_modules(cached, request.content_modules)
 
+    provider_request = request.model_copy(update={"content_modules": _default_content_modules()})
     try:
-        result = provider.generate(request)
+        result = provider.generate(provider_request)
     except MarketingProviderError:
         if not settings.marketing_fallback_to_mock:
             raise
-        result = DeterministicMarketingProvider().generate(request)
+        result = DeterministicMarketingProvider().generate(provider_request)
         result.provider = "mock-fallback"
         result.degraded = True
         result.notice = _fallback_notice(request.locale)
@@ -2563,4 +2841,24 @@ def generate_marketing_plan(request: MarketingPlanRequest) -> MarketingPlanRespo
             ttl_seconds=settings.marketing_cache_ttl_seconds,
             max_entries=settings.marketing_cache_max_entries,
         )
-    return result.model_copy(deep=True)
+    return select_marketing_modules(result.model_copy(deep=True), request.content_modules)
+
+
+def regenerate_marketing_preview(
+    payload: MarketingModuleRegenerationRequest,
+) -> MarketingPlanResponse:
+    provider_request = payload.request.model_copy(
+        update={"content_modules": _default_content_modules()}
+    )
+    candidate = DeterministicMarketingProvider().generate(provider_request)
+    return merge_regenerated_marketing_module(payload, candidate)
+
+
+def regenerate_marketing_plan(
+    payload: MarketingModuleRegenerationRequest,
+) -> MarketingPlanResponse:
+    provider_request = payload.request.model_copy(
+        update={"content_modules": _default_content_modules()}
+    )
+    candidate = generate_marketing_plan(provider_request)
+    return merge_regenerated_marketing_module(payload, candidate)

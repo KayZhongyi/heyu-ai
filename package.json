@@ -5,6 +5,7 @@
     "test:i18n": "node scripts/test-i18n.js",
     "test:renderer": "node scripts/test-content-renderer.js",
     "test:demo": "node scripts/test-demo-e2e.js",
+    "test:marketing-modules": "node scripts/test-marketing-modules-e2e.js",
     "test:e2e": "node scripts/test-browser-e2e.js"
   },
   "devDependencies": {

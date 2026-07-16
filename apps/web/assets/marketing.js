@@ -195,7 +195,18 @@
     savedDownloadsTitle: "已保存方案发布包",
     saveToDownload: "请先保存方案，再下载各路线发布包。",
     downloadingPackage: "正在打包…",
-    downloadError: "发布包下载失败，请确认登录状态和发布平台后重试。"
+    downloadError: "发布包下载失败，请确认登录状态和发布平台后重试。",
+    moduleTitle: "选择这次要生成的内容",
+    moduleHint: "按本次经营任务自由组合，之后仍可单独换一个版本。",
+    moduleVideos: "短视频脚本与分镜",
+    moduleLive: "直播话术",
+    moduleCalendar: "七天运营计划",
+    moduleRequired: "请至少选择一项要生成的内容。",
+    regenerateVideo: "换一个版本",
+    regenerateLive: "重新生成直播话术",
+    regenerateCalendar: "重新安排七天计划",
+    regenerating: "正在生成新版本…",
+    regenerateError: "局部生成失败，请稍后重试。"
   });
   Object.assign(copy["zh-HK"], {
     generationModeTitle: "選擇生成方式",
@@ -226,7 +237,18 @@
     savedDownloadsTitle: "已儲存方案發佈包",
     saveToDownload: "請先儲存方案，再下載各路線發佈包。",
     downloadingPackage: "正在打包…",
-    downloadError: "發佈包下載失敗，請確認登入狀態及發佈平台後再試。"
+    downloadError: "發佈包下載失敗，請確認登入狀態及發佈平台後再試。",
+    moduleTitle: "選擇今次要生成的內容",
+    moduleHint: "按今次營運任務自由組合，之後仍可單獨換一個版本。",
+    moduleVideos: "短影片腳本與分鏡",
+    moduleLive: "直播話術",
+    moduleCalendar: "七天營運計劃",
+    moduleRequired: "請至少選擇一項要生成的內容。",
+    regenerateVideo: "換一個版本",
+    regenerateLive: "重新生成直播話術",
+    regenerateCalendar: "重新安排七天計劃",
+    regenerating: "正在生成新版本…",
+    regenerateError: "局部生成失敗，請稍後再試。"
   });
   Object.assign(copy.en, {
     generationModeTitle: "Choose how to generate",
@@ -257,7 +279,18 @@
     savedDownloadsTitle: "Saved-plan publishing kits",
     saveToDownload: "Save the plan before downloading its route publishing kits.",
     downloadingPackage: "Packaging…",
-    downloadError: "Could not download the publishing kit. Check your sign-in and publishing platform, then retry."
+    downloadError: "Could not download the publishing kit. Check your sign-in and publishing platform, then retry.",
+    moduleTitle: "Choose what to generate this time",
+    moduleHint: "Combine the deliverables needed for this task. Each part can be regenerated later.",
+    moduleVideos: "Video scripts and shot lists",
+    moduleLive: "Live-selling talk track",
+    moduleCalendar: "Seven-day operating plan",
+    moduleRequired: "Choose at least one deliverable to generate.",
+    regenerateVideo: "Generate another version",
+    regenerateLive: "Regenerate live talk track",
+    regenerateCalendar: "Rebuild the seven-day plan",
+    regenerating: "Generating a new version…",
+    regenerateError: "Could not regenerate this section. Please retry."
   });
 
   const demoCases = {
@@ -382,8 +415,17 @@
     </fieldset>
   `);
   document.querySelector(".submit-row").insertAdjacentHTML("beforebegin", `
+    <fieldset class="content-module-fieldset">
+      <legend><b>04</b><span data-copy="moduleTitle"></span></legend>
+      <p class="field-hint" data-copy="moduleHint"></p>
+      <div class="content-module-grid">
+        <label><input type="checkbox" name="content_modules" value="videos" checked><span data-copy="moduleVideos"></span></label>
+        <label><input type="checkbox" name="content_modules" value="livestream" checked><span data-copy="moduleLive"></span></label>
+        <label><input type="checkbox" name="content_modules" value="calendar" checked><span data-copy="moduleCalendar"></span></label>
+      </div>
+    </fieldset>
     <fieldset class="feed-source-fieldset">
-      <legend><b>04</b><span data-copy="feedTitle"></span></legend>
+      <legend><b>05</b><span data-copy="feedTitle"></span></legend>
       <label class="field">
         <span data-copy="feedLabel"></span>
         <textarea name="feed_sources" rows="3" maxlength="4000" data-copy-placeholder="feedPlaceholder"></textarea>
@@ -405,6 +447,7 @@
   let selectedDemo = null;
   let lastGenerationMode = "rules";
   let savedPlanId = "";
+  const regenerationCounts = new Map();
   const tabOrder = ["strategy", "topics", "routes", "prep", "live", "calendar"];
 
   function generationMode() {
@@ -559,6 +602,7 @@
 
   function recommendedIndex() {
     const videos = list(result?.videos);
+    if (!videos.length) return 0;
     const explicit = Number(result?.recommended_video_index);
     if (Number.isInteger(explicit) && explicit >= 0 && explicit < videos.length) return explicit;
     if (typeof result?.recommended_video_index === "string") {
@@ -584,13 +628,44 @@
       || {};
   }
 
+  function availableTabs() {
+    const modules = new Set(list(result?.included_modules));
+    return tabOrder.filter((tab) => {
+      if (["routes", "prep"].includes(tab)) return modules.has("videos");
+      if (tab === "live") return modules.has("livestream");
+      if (tab === "calendar") return modules.has("calendar");
+      return true;
+    });
+  }
+
+  function syncVisibleTabs() {
+    const visible = new Set(availableTabs());
+    document.querySelectorAll(".result-tabs button").forEach((tab) => {
+      tab.hidden = !visible.has(tab.dataset.tab);
+    });
+  }
+
   function flowFooter(nextTab, label) {
-    return `<div class="flow-next"><span>${escape(copy[locale].workflowHint)}</span><button type="button" data-next-tab="${escape(nextTab)}">${escape(label)} <b>→</b></button></div>`;
+    const visible = availableTabs();
+    const preferredIndex = tabOrder.indexOf(nextTab);
+    const resolved = visible.find((tab) => tabOrder.indexOf(tab) >= preferredIndex);
+    if (!resolved) {
+      return `<div class="flow-next final"><span>${escape(copy[locale].workflowHint)}</span><button type="button" data-save-plan>${escape(copy[locale].nextToLibrary)} <b>→</b></button></div>`;
+    }
+    const labels = {
+      topics: copy[locale].nextToTopics,
+      routes: copy[locale].nextToRoutes,
+      prep: copy[locale].nextToPrep,
+      live: copy[locale].nextToLive,
+      calendar: copy[locale].nextToCalendar
+    };
+    return `<div class="flow-next"><span>${escape(copy[locale].workflowHint)}</span><button type="button" data-next-tab="${escape(resolved)}">${escape(labels[resolved] || label)} <b>→</b></button></div>`;
   }
 
   function setActiveTab(nextTab, shouldFocus = true) {
-    if (!tabOrder.includes(nextTab)) return;
+    if (!availableTabs().includes(nextTab)) return;
     activeTab = nextTab;
+    syncVisibleTabs();
     document.querySelectorAll(".result-tabs button").forEach((tab) => {
       const active = tab.dataset.tab === activeTab;
       tab.classList.toggle("active", active);
@@ -754,6 +829,8 @@
 
   function render() {
     if (!result) return;
+    syncVisibleTabs();
+    if (!availableTabs().includes(activeTab)) activeTab = "strategy";
     renderProviderMeta();
     renderSavedRouteDownloads();
     if (activeTab === "strategy") {
@@ -843,6 +920,7 @@
             <div class="advice-box"><strong>${escape(copy[locale].improvements)}</strong><span>${escape(improvements.map((item) => String(item).replace(/[。；;.!！?？]+$/u, "")).join("；") || copy[locale].noImprovement)}</span></div>
             <div class="route-card-actions">
               <button type="button" class="route-select" data-select-route="${index}" aria-pressed="${selected}">${escape(selected ? copy[locale].routeSelected : copy[locale].chooseRoute)}</button>
+              <button type="button" class="module-regenerate" data-regenerate-target="video" data-route-id="${escape(routeIdFor(video, index))}">${escape(copy[locale].regenerateVideo)}</button>
               ${routeDownloadButton(routeIdFor(video, index), text(route.name, video.angle))}
             </div>
           </article>`;
@@ -861,9 +939,64 @@
         ${video.call_to_action ? `<article class="result-card action-card"><span>${escape(copy[locale].callToAction)}</span><h3>${escape(video.call_to_action)}</h3></article>` : ""}
         ${flowFooter("live", copy[locale].nextToLive)}`;
     } else if (activeTab === "live") {
-      content.innerHTML = list(result.livestream).map((section, index) => `<article class="result-card"><span>${escape(copy[locale].liveLabel)} ${String(index + 1).padStart(2, "0")}</span><h3>${escape(section.section)}</h3><div class="tag-row">${list(section.talking_points).map((item) => `<b>${escape(item)}</b>`).join("")}</div></article>`).join("") + flowFooter("calendar", copy[locale].nextToCalendar);
+      content.innerHTML = `<div class="module-toolbar"><button type="button" class="module-regenerate" data-regenerate-target="livestream">${escape(copy[locale].regenerateLive)}</button></div>` + list(result.livestream).map((section, index) => `<article class="result-card"><span>${escape(copy[locale].liveLabel)} ${String(index + 1).padStart(2, "0")}</span><h3>${escape(section.section)}</h3><div class="tag-row">${list(section.talking_points).map((item) => `<b>${escape(item)}</b>`).join("")}</div></article>`).join("") + flowFooter("calendar", copy[locale].nextToCalendar);
     } else {
-      content.innerHTML = `<ol class="day-list">${list(result.seven_day_plan).map((day) => `<li><b>${String(day.day).padStart(2, "0")}</b><div><strong>${escape(day.objective)}</strong><span>${escape(day.content)}</span><span>→ ${escape(day.action)}</span></div></li>`).join("")}</ol><div class="flow-next final"><span>${escape(copy[locale].workflowHint)}</span><button type="button" data-save-plan>${escape(copy[locale].nextToLibrary)} <b>→</b></button></div>`;
+      content.innerHTML = `<div class="module-toolbar"><button type="button" class="module-regenerate" data-regenerate-target="calendar">${escape(copy[locale].regenerateCalendar)}</button></div><ol class="day-list">${list(result.seven_day_plan).map((day) => `<li><b>${String(day.day).padStart(2, "0")}</b><div><strong>${escape(day.objective)}</strong><span>${escape(day.content)}</span><span>→ ${escape(day.action)}</span></div></li>`).join("")}</ol><div class="flow-next final"><span>${escape(copy[locale].workflowHint)}</span><button type="button" data-save-plan>${escape(copy[locale].nextToLibrary)} <b>→</b></button></div>`;
+    }
+  }
+
+  function currentPlanForApi() {
+    const {
+      topic_matches: _topicMatches,
+      trend_discovery: _trendDiscovery,
+      recommended_video_index: _recommendedVideoIndex,
+      quality_reviews: _qualityReviews,
+      ...plan
+    } = result || {};
+    return plan;
+  }
+
+  async function regenerateModule(target, routeId, button) {
+    if (!result || !lastPayload) return;
+    const key = `${target}:${routeId || "all"}`;
+    const variationIndex = (regenerationCounts.get(key) || 0) + 1;
+    const before = button.textContent;
+    button.disabled = true;
+    button.textContent = copy[locale].regenerating;
+    try {
+      const token = localStorage.getItem("heyu_token") || "";
+      const endpoint = lastGenerationMode === "model"
+        ? "/v1/marketing/regenerate"
+        : "/v1/marketing/regenerate/preview";
+      const headers = {"Content-Type": "application/json"};
+      if (lastGenerationMode === "model" && token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          request: lastPayload,
+          current_plan: currentPlanForApi(),
+          target,
+          route_id: routeId || null,
+          variation_index: variationIndex
+        })
+      });
+      if (!response.ok) throw new Error(await readApiError(response));
+      const clientMetadata = {
+        topic_matches: result.topic_matches,
+        trend_discovery: result.trend_discovery
+      };
+      result = {...await response.json(), ...clientMetadata};
+      regenerationCounts.set(key, variationIndex);
+      savedPlanId = "";
+      document.querySelector("#open-saved-plan").hidden = true;
+      document.querySelector("#save-result").textContent = copy[locale].saveResult;
+      render();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : copy[locale].regenerateError);
+    } finally {
+      button.disabled = false;
+      button.textContent = before;
     }
   }
 
@@ -889,6 +1022,15 @@
     button.disabled = true; empty.hidden = true; resultState.hidden = true; loading.hidden = false;
     demoButtons.forEach((demoButton) => demoButton.disabled = true);
     const values = new FormData(form);
+    const contentModules = values.getAll("content_modules");
+    if (!contentModules.length) {
+      loading.hidden = true;
+      empty.hidden = false;
+      button.disabled = false;
+      demoButtons.forEach((demoButton) => demoButton.disabled = false);
+      alert(copy[locale].moduleRequired);
+      return;
+    }
     const payload = {
       locale,
       persona: values.get("persona"),
@@ -900,7 +1042,8 @@
       audience: values.get("audience").trim(),
       platform: values.get("platform"),
       tone: values.get("tone"),
-      trend: values.get("trend").trim()
+      trend: values.get("trend").trim(),
+      content_modules: contentModules
     };
     try {
       const feedSources = parseFeedSources(values.get("feed_sources"));
@@ -973,6 +1116,15 @@
 
   document.querySelectorAll(".result-tabs button").forEach((tab) => tab.addEventListener("click", () => setActiveTab(tab.dataset.tab)));
   content.addEventListener("click", (event) => {
+    const regenerateButton = event.target.closest("[data-regenerate-target]");
+    if (regenerateButton) {
+      regenerateModule(
+        regenerateButton.dataset.regenerateTarget,
+        regenerateButton.dataset.routeId || "",
+        regenerateButton
+      );
+      return;
+    }
     const routeButton = event.target.closest("[data-select-route]");
     if (routeButton) {
       selectedVideoIndex = Number(routeButton.dataset.selectRoute);

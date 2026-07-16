@@ -38,11 +38,14 @@ from app.document_import import (
 )
 from app.knowledge_indexing import index_knowledge_source, retrieve_knowledge_context
 from app.marketing import (
+    MarketingModuleRegenerationRequest,
     MarketingPlanRequest,
     MarketingPlanResponse,
     MarketingProviderError,
     generate_marketing_plan,
     generate_marketing_preview,
+    regenerate_marketing_plan,
+    regenerate_marketing_preview,
 )
 from app.marketing_exports import export_saved_marketing_plan
 from app.media_analysis import (
@@ -453,6 +456,29 @@ def create_marketing_plan(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="The configured marketing model could not produce a valid plan.",
+        ) from exc
+
+
+@app.post("/v1/marketing/regenerate/preview", response_model=MarketingPlanResponse)
+def preview_regenerated_marketing_module(
+    payload: MarketingModuleRegenerationRequest,
+) -> MarketingPlanResponse:
+    """Regenerate one selected deliverable in the zero-cost public demo."""
+    return regenerate_marketing_preview(payload)
+
+
+@app.post("/v1/marketing/regenerate", response_model=MarketingPlanResponse)
+def create_regenerated_marketing_module(
+    payload: MarketingModuleRegenerationRequest,
+    _: Actor = Depends(current_actor),
+) -> MarketingPlanResponse:
+    """Regenerate one deliverable with the configured provider."""
+    try:
+        return regenerate_marketing_plan(payload)
+    except MarketingProviderError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The configured marketing model could not regenerate the selected module.",
         ) from exc
 
 
