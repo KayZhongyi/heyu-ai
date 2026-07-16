@@ -88,6 +88,19 @@
 .result-actions a{padding:8px 10px;border:1px solid #ffffff40;color:white;font-size:9px;text-decoration:none}
 @media(max-width:700px){.result-actions{width:100%;justify-content:flex-start}.result-actions>*{flex:1 1 auto;text-align:center}}
 
+/* Keep the photographic landing page and the functional workspace visibly separate. */
+.home-link{display:inline-flex;align-items:center;min-height:34px;padding:0 12px;border:1px solid #17372f24;background:#ffffff80;color:var(--deep);font-size:10px;font-weight:750;backdrop-filter:blur(12px);transition:.18s}
+.home-link:hover{border-color:var(--green);background:#fff;transform:translateY(-1px)}
+.function-breadcrumb{display:flex;align-items:center;gap:9px;margin:0 0 28px;color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.04em}
+.function-breadcrumb a{color:var(--green);border-bottom:1px solid transparent}
+.function-breadcrumb a:hover{border-bottom-color:currentColor}
+.function-breadcrumb strong{color:var(--deep)}
+
+@media(max-width:700px){
+  .home-link{min-height:32px;padding:0 9px}
+  .function-breadcrumb{margin-bottom:22px}
+}
+
 .generation-mode-fieldset{padding-top:22px}
 .generation-mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .generation-mode-grid label{position:relative;cursor:pointer}

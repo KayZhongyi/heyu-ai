@@ -11,6 +11,10 @@
     }
   };
   Object.assign(copy["zh-CN"], {
+    homeLink: "← 返回首页",
+    homeName: "平台首页",
+    createName: "AI 内容工坊",
+    breadcrumbLabel: "当前位置",
     saveResult: "保存到经营方案库",
     savingResult: "正在保存…",
     savedResult: "已保存到经营方案库",
@@ -59,6 +63,10 @@
     recommendationSkip: "谨慎使用"
   });
   Object.assign(copy["zh-HK"], {
+    homeLink: "← 返回首頁",
+    homeName: "平台首頁",
+    createName: "AI 內容工坊",
+    breadcrumbLabel: "目前位置",
     saveResult: "儲存至營運方案庫",
     savingResult: "正在儲存…",
     savedResult: "已儲存至營運方案庫",
@@ -107,6 +115,10 @@
     recommendationSkip: "謹慎使用"
   });
   Object.assign(copy.en, {
+    homeLink: "← Back to home",
+    homeName: "Platform home",
+    createName: "AI Content Studio",
+    breadcrumbLabel: "Current location",
     saveResult: "Save to plan library",
     savingResult: "Saving…",
     savedResult: "Saved to the plan library",
