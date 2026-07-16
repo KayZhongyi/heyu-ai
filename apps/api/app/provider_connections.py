@@ -135,10 +135,7 @@ def validate_provider_url(
     if resolve_dns:
         try:
             port = parsed.port or (443 if parsed.scheme == "https" else 80)
-            addresses = {
-                item[4][0]
-                for item in resolver(hostname, port)
-            }
+            addresses = {item[4][0] for item in resolver(hostname, port)}
         except OSError as exc:
             raise ValueError("Provider hostname could not be resolved") from exc
         if not addresses:

@@ -67,10 +67,7 @@ class CleanupReport:
 
     @property
     def deleted_files(self) -> int:
-        return sum(
-            item.file_result == "deleted"
-            for item in (*self.media, *self.export_packages)
-        )
+        return sum(item.file_result == "deleted" for item in (*self.media, *self.export_packages))
 
     @property
     def failed_records(self) -> int:
@@ -191,9 +188,7 @@ def cleanup_expired_storage(
 
 def export_organization_data(db: Session, actor: Actor) -> dict[str, Any]:
     require_governance_admin(actor)
-    organization = db.scalar(
-        select(Organization).where(Organization.id == actor.organization_id)
-    )
+    organization = db.scalar(select(Organization).where(Organization.id == actor.organization_id))
     if organization is None:
         raise HTTPException(status_code=404, detail="Organization not found")
     policy = get_data_policy(db, actor)
@@ -464,10 +459,7 @@ def _provider_record(row: ProviderConnection) -> dict[str, Any]:
 
 
 def _record(row: Any) -> dict[str, Any]:
-    return {
-        column.name: _json_value(getattr(row, column.name))
-        for column in row.__table__.columns
-    }
+    return {column.name: _json_value(getattr(row, column.name)) for column in row.__table__.columns}
 
 
 def _json_value(value: Any) -> Any:

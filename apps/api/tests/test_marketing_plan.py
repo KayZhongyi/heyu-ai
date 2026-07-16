@@ -387,8 +387,7 @@ def test_public_trend_discovery_returns_ranked_fallback_without_account(
     assert body["used_fallback"] is True
     assert len(body["items"]) >= 2
     assert all(
-        item["candidate"]["source_type"] in {"seasonal", "evergreen"}
-        for item in body["items"]
+        item["candidate"]["source_type"] in {"seasonal", "evergreen"} for item in body["items"]
     )
     assert "不是实时热度" in body["metric_note"]
 

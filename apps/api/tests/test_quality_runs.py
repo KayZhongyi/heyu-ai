@@ -14,6 +14,15 @@ from app.quality_runs import (
 from app.schemas import Actor
 
 
+def test_repository_root_falls_back_safely_when_evaluator_is_not_bundled(
+    monkeypatch,
+    tmp_path: Path,
+):
+    monkeypatch.chdir(tmp_path)
+
+    assert quality_runs._find_repository_root(tmp_path / "app" / "quality_runs.py") == tmp_path
+
+
 def _actor(db: Session, slug: str) -> Actor:
     user = User(
         email=f"{slug}@example.com",

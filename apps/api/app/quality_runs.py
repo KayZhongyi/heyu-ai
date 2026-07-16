@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -16,7 +17,20 @@ from sqlalchemy.orm import Session
 from app.models import EvaluationRun, utc_now
 from app.schemas import Actor
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+
+def _find_repository_root(module_path: Path) -> Path:
+    configured_root = os.getenv("HEYU_REPOSITORY_ROOT", "").strip()
+    if configured_root:
+        return Path(configured_root).expanduser().resolve()
+
+    resolved_module = module_path.resolve()
+    for parent in resolved_module.parents:
+        if (parent / "scripts" / "evaluate-content-quality.py").is_file():
+            return parent
+    return Path.cwd().resolve()
+
+
+REPOSITORY_ROOT = _find_repository_root(Path(__file__))
 EVALUATOR_SCRIPT = REPOSITORY_ROOT / "scripts" / "evaluate-content-quality.py"
 
 

@@ -551,7 +551,10 @@ def _product_film_language(request: MarketingPlanRequest) -> ProductFilmContext:
             contrast_action="把外形更漂亮和更适合现在吃的两份放在一起，请观众先选再揭晓判断方法",
             use_scene="家庭分享、送礼或当季鲜食",
         )
-    if any(token in normalized for token in ("大米", "稻米", "小米", "杂粮", "豆", "菌", "菇", "rice", "grain")):
+    if any(
+        token in normalized
+        for token in ("大米", "稻米", "小米", "杂粮", "豆", "菌", "菇", "rice", "grain")
+    ):
         return ProductFilmContext(
             decision_detail="颗粒、淘洗水和煮熟后的状态",
             practical_hook="同样一把{product}，下锅前先看哪一点？摊开、淘洗，再看颗粒状态。",
@@ -625,9 +628,7 @@ def _simplified_video_blueprints(
     origin = request.origin or "本地农场"
     film = _product_film_language(request)
     music = _simplified_bgm_directions(request.platform)
-    practical_cta = (
-        f"你挑{product}最先看哪一点？把你的判断留在评论区。"
-    )
+    practical_cta = f"你挑{product}最先看哪一点？把你的判断留在评论区。"
     story_cta = f"你更想看{film.story_steps}？留言选一个，下一条带你看。"
     contrast_cta = "你刚才选对了吗？把你选这一边的理由留在评论区。"
     blueprints = [
@@ -675,9 +676,7 @@ def _simplified_video_blueprints(
             "opening_visual": f"左右两份{product}同时入镜，画面中央出现两秒倒计时",
             "bridge": f"先选，不急着听答案；真正要看的，是和“{points[2]}”有关的现场细节。",
             "proof_visual": film.contrast_action,
-            "proof_voice": (
-                f"别只看第一眼，刚才容易忽略的细节，正好能说明{points[2]}。"
-            ),
+            "proof_voice": (f"别只看第一眼，刚才容易忽略的细节，正好能说明{points[2]}。"),
             "context_visual": "用手指向左右两组产品，揭晓后快速回放刚才容易忽略的细节",
             "context_voice": request.product_description.strip(),
             "music": music["playful-contrast"],
@@ -2375,9 +2374,7 @@ def _plan_revision_issues(
             cta=video.call_to_action,
             bgm=video.background_music,
         )
-        important = [
-            issue for issue in evaluation["issues"] if issue["severity"] == "high"
-        ]
+        important = [issue for issue in evaluation["issues"] if issue["severity"] == "high"]
         if evaluation["total_score"] < 78 or important:
             issues.append(
                 {
@@ -2495,9 +2492,7 @@ class OpenAICompatibleMarketingProvider:
                 raise ValueError("Model did not produce a valid marketing plan")
             return max(
                 candidates,
-                key=lambda item: min(
-                    video.quality_assessment.total_score for video in item.videos
-                ),
+                key=lambda item: min(video.quality_assessment.total_score for video in item.videos),
             )
         except (
             httpx.HTTPError,

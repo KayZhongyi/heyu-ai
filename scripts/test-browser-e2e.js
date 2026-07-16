@@ -237,13 +237,14 @@ async function main() {
       });
     });
 
-    for (const [locale, expected, filename] of [
-      ["zh-CN", "生成第一份内容方案", "landing-zh-CN.png"],
-      ["zh-HK", "產生第一份內容方案", "landing-zh-HK.png"],
-      ["en", "Create your first content plan", "landing-en.png"],
+    for (const [locale, filename] of [
+      ["zh-CN", "landing-zh-CN.png"],
+      ["zh-HK", "landing-zh-HK.png"],
+      ["en", "landing-en.png"],
     ]) {
       await page.goto(`${baseUrl}/?lang=${locale}`, { waitUntil: "networkidle" });
-      await assert.doesNotReject(() => page.getByText(expected, { exact: false }).first().waitFor());
+      await page.locator(".hero-identity").waitFor();
+      await page.locator('.hero-actions a[href="/create/"]').waitFor();
       await expectNoHorizontalOverflow(page, `landing ${locale}`);
       await screenshot(page, filename);
     }

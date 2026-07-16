@@ -37,9 +37,7 @@ def upgrade() -> None:
             sa.Column("index_version", sa.Integer(), nullable=False, server_default="0")
         )
         batch_op.add_column(sa.Column("indexed_at", sa.DateTime(timezone=True), nullable=True))
-        batch_op.add_column(
-            sa.Column("index_error", sa.Text(), nullable=False, server_default="")
-        )
+        batch_op.add_column(sa.Column("index_error", sa.Text(), nullable=False, server_default=""))
         batch_op.add_column(
             sa.Column("chunk_count", sa.Integer(), nullable=False, server_default="0")
         )

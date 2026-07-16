@@ -162,9 +162,7 @@ class BackgroundTask(Base):
 
 class EvaluationRun(Base):
     __tablename__ = "evaluation_runs"
-    __table_args__ = (
-        Index("ix_evaluation_runs_org_created", "organization_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_evaluation_runs_org_created", "organization_id", "created_at"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
     evaluation_type: Mapped[str] = mapped_column(String(80))

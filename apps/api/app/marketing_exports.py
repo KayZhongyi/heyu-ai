@@ -107,9 +107,7 @@ def _find_video(content: MarketingPlanResponse, route_id: str) -> VideoScript:
         if video.route_id == normalized:
             return video
     allowed = ", ".join(video.route_id for video in content.videos)
-    raise PlatformValidationError(
-        f"unknown creative route: {route_id}; choose one of {allowed}"
-    )
+    raise PlatformValidationError(f"unknown creative route: {route_id}; choose one of {allowed}")
 
 
 def _platform_for_export(platform: str) -> Platform:
@@ -121,9 +119,7 @@ def _platform_for_export(platform: str) -> Platform:
                 "Kuaishou export is not available yet; choose Douyin, Xiaohongshu "
                 "or WeChat Channels"
             ) from exc
-        raise PlatformValidationError(
-            f"platform export is not available for {platform}"
-        ) from exc
+        raise PlatformValidationError(f"platform export is not available for {platform}") from exc
 
 
 def _subtitle_cues(video: VideoScript) -> tuple[SubtitleCue, ...]:

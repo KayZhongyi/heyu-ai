@@ -160,9 +160,7 @@ def test_manual_source_is_deduplicated_and_limit_is_enforced():
 
     assert len(result.items) == 2
     assert len({item.candidate.title for item in result.items}) == 2
-    manual = next(
-        item.candidate for item in result.items if item.candidate.title == "番茄采摘挑战"
-    )
+    manual = next(item.candidate for item in result.items if item.candidate.title == "番茄采摘挑战")
     assert manual.source_type == "manual"
     assert manual.source_label == "组员手工选题"
     assert manual.source_url == "https://example.test/topic"

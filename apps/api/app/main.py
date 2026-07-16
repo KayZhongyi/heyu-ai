@@ -1392,9 +1392,7 @@ def review_source(
 def reindex_source(
     source_id: str,
     db: Session = Depends(get_db),
-    actor: Actor = Depends(
-        require_roles(Role.owner, Role.admin, Role.product_manager)
-    ),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.product_manager)),
 ) -> KnowledgeSourceRead:
     return index_knowledge_source(db, actor, source_id)
 
@@ -2055,10 +2053,7 @@ def get_publication_tasks(
     db: Session = Depends(get_db),
     actor: Actor = Depends(current_actor),
 ) -> list[PublicationTaskRead]:
-    return [
-        PublicationTaskRead.model_validate(task)
-        for task in list_publication_tasks(db, actor)
-    ]
+    return [PublicationTaskRead.model_validate(task) for task in list_publication_tasks(db, actor)]
 
 
 @app.get("/v1/publication-tasks/{task_id}", response_model=PublicationTaskRead)
@@ -2094,9 +2089,7 @@ def get_publication_task_latest_package(
     db: Session = Depends(get_db),
     actor: Actor = Depends(current_actor),
 ) -> PlatformExportPackageRead:
-    return PlatformExportPackageRead.model_validate(
-        get_latest_export_package(db, actor, task_id)
-    )
+    return PlatformExportPackageRead.model_validate(get_latest_export_package(db, actor, task_id))
 
 
 @app.post(
@@ -2315,9 +2308,7 @@ def run_marketing_quality_evaluation(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
 ) -> EvaluationRunRead:
-    return EvaluationRunRead.model_validate(
-        run_offline_marketing_evaluation(db, actor)
-    )
+    return EvaluationRunRead.model_validate(run_offline_marketing_evaluation(db, actor))
 
 
 @app.get("/v1/evaluation-runs", response_model=list[EvaluationRunRead])
@@ -2325,10 +2316,7 @@ def get_quality_evaluation_runs(
     db: Session = Depends(get_db),
     actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
 ) -> list[EvaluationRunRead]:
-    return [
-        EvaluationRunRead.model_validate(run)
-        for run in list_evaluation_runs(db, actor)
-    ]
+    return [EvaluationRunRead.model_validate(run) for run in list_evaluation_runs(db, actor)]
 
 
 @app.get("/v1/evaluation-runs/{run_id}", response_model=EvaluationRunRead)

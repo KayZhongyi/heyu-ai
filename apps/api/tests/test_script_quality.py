@@ -18,10 +18,7 @@ def test_excellent_chinese_script_scores_high_and_accepts_objects_and_dicts():
         product_name="有机草莓",
         trend="多巴胺配色",
         hook="多巴胺配色的有机草莓，左边和右边你会选哪一盒？",
-        script=(
-            "多巴胺配色不只看颜色。切开有机草莓，近景看果肉和汁水，"
-            "再对比两盒草莓的成熟度。"
-        ),
+        script=("多巴胺配色不只看颜色。切开有机草莓，近景看果肉和汁水，再对比两盒草莓的成熟度。"),
         shots=[
             ShotObject(
                 seconds="0-3s",

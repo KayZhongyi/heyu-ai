@@ -239,12 +239,15 @@ def test_provider_failure_falls_back_and_records_the_real_attempt(client, auth, 
     )
 
     assert response.status_code == 201
-    assert len(
-        client.get(
-            f"/v1/content-projects/{project['id']}/versions",
-            headers=auth,
-        ).json()
-    ) == 1
+    assert (
+        len(
+            client.get(
+                f"/v1/content-projects/{project['id']}/versions",
+                headers=auth,
+            ).json()
+        )
+        == 1
+    )
     runs = client.get(
         f"/v1/content-projects/{project['id']}/generation-runs",
         headers=auth,

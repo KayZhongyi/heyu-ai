@@ -46,6 +46,11 @@ def main() -> None:
             "APP_" + "SECRET: genuinely-secret-production-value-123456",
             root,
         )
+        expect_finding(
+            "quoted.py",
+            'api_' + 'key = "genuinely-secret-production-value-123456"',
+            root,
+        )
 
         safe = root / ".env.example"
         safe.write_text("APP_SECRET=replace-this-in-production\n", encoding="utf-8")
@@ -54,10 +59,15 @@ def main() -> None:
             "APP_SECRET: ${APP_SECRET:-local-development-secret}\n",
             encoding="utf-8",
         )
+        expression = root / "provider.py"
+        expression.write_text(
+            'api_key = temporary_key or os.getenv(secret_reference, "").strip()\n',
+            encoding="utf-8",
+        )
         old_root = MODULE.ROOT
         MODULE.ROOT = root
         try:
-            assert MODULE.audit([".env.example", "compose.yaml"]) == []
+            assert MODULE.audit([".env.example", "compose.yaml", "provider.py"]) == []
         finally:
             MODULE.ROOT = old_root
 

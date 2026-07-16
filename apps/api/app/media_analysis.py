@@ -213,8 +213,7 @@ def save_and_analyze_video(
         observed_at=observed_at or utc_now(),
         title=f"Video review: {safe_name}",
         summary=(
-            "Technical metadata was extracted; content-level findings still require "
-            "human review."
+            "Technical metadata was extracted; content-level findings still require human review."
             if analysis_mode == "partial"
             else "Manual review workspace created; automated video understanding is not connected."
         ),

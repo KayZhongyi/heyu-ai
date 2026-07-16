@@ -326,22 +326,16 @@ class ScriptQualityEvaluator:
         product_terms = _product_terms(product_name)
 
         scores = {
-            "hook_product": self._score_hook_product(
-                hook, product_name, product_terms, issues
-            ),
+            "hook_product": self._score_hook_product(hook, product_name, product_terms, issues),
             "hook_structure": self._score_hook_structure(hook, issues),
             "opening_0_3": self._score_opening(normalized_shots, product_terms, issues),
-            "visual_proof_3_8": self._score_visual_proof(
-                normalized_shots, product_terms, issues
-            ),
+            "visual_proof_3_8": self._score_visual_proof(normalized_shots, product_terms, issues),
             "voice_visual_alignment": self._score_alignment(
                 normalized_shots, product_terms, issues
             ),
             "cta_interaction": self._score_cta(cta, issues),
             "bgm_direction": self._score_bgm(bgm, issues),
-            "trend_integration": self._score_trend(
-                trend, hook, script, normalized_shots, issues
-            ),
+            "trend_integration": self._score_trend(trend, hook, script, normalized_shots, issues),
             "specificity": self._score_specificity(hook, script, cta, issues),
             "filmability": self._score_filmability(normalized_shots, issues),
         }
@@ -428,8 +422,8 @@ class ScriptQualityEvaluator:
         product_visible = any(term in visual for term in product_terms)
         has_action = _contains_any(action_text, _ACTION_MARKERS)
         timing_ok = not shot.timing or _covers_window(shot.timing, 0, 3)
-        score = (45 if product_visible else 0) + (40 if has_action else 0) + (
-            15 if timing_ok else 0
+        score = (
+            (45 if product_visible else 0) + (40 if has_action else 0) + (15 if timing_ok else 0)
         )
         if not product_visible:
             _issue(
@@ -623,8 +617,7 @@ class ScriptQualityEvaluator:
             "trend_not_integrated",
             "trend_integration",
             "high",
-            f"Trend {trend!r} is supplied but not meaningfully used in the hook, script, "
-            "or shots.",
+            f"Trend {trend!r} is supplied but not meaningfully used in the hook, script, or shots.",
         )
         return 0
 
@@ -803,9 +796,7 @@ def _concepts(value: str, product_terms: tuple[str, ...]) -> set[str]:
         ("choice", _CHOICE_MARKERS),
         ("interaction", _INTERACTION_MARKERS),
     ):
-        concepts.update(
-            f"{label}:{marker}" for marker in markers if _contains_marker(text, marker)
-        )
+        concepts.update(f"{label}:{marker}" for marker in markers if _contains_marker(text, marker))
     concepts.update(f"term:{term}" for term in _meaningful_terms(value))
     return concepts
 

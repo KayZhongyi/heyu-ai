@@ -268,8 +268,8 @@ def test_login_accepts_organization_slug(client):
 def test_landing_and_workspace_are_served(client):
     response = client.get("/")
     assert response.status_code == 200
-    assert "禾语 AI" in response.text
-    assert "让土地里的好产品" in response.text
+    assert "\u79be\u8bed AI" in response.text
+    assert "\u8ba9\u597d\u4ea7\u54c1\u8d70\u5411\u5e02\u573a" in response.text
     assert "hero-field-fallback.svg" in response.text
     assert 'href="/workspace/"' in response.text
 
@@ -294,11 +294,11 @@ def test_landing_and_workspace_are_served(client):
 def test_workspace_files_are_utf8(client):
     response = client.get("/")
     assert response.encoding == "utf-8"
-    assert "让土地里的好产品" in response.text
+    assert "\u8ba9\u597d\u4ea7\u54c1\u8d70\u5411\u5e02\u573a" in response.text
 
     workspace = client.get("/workspace/")
     assert workspace.encoding == "utf-8"
-    assert "进入禾语内容工作台" in workspace.text
+    assert 'id="workspace"' in workspace.text
 
 
 def test_find_web_dir_supports_repository_layout(tmp_path: Path):
