@@ -966,6 +966,11 @@
     input.addEventListener("change", syncGenerationMode);
   });
 
+  const requestedDemo = new URLSearchParams(window.location.search).get("demo");
+  if (requestedDemo && demoCases[requestedDemo]) {
+    window.setTimeout(() => fillDemoCase(requestedDemo), 0);
+  }
+
   document.querySelectorAll(".result-tabs button").forEach((tab) => tab.addEventListener("click", () => setActiveTab(tab.dataset.tab)));
   content.addEventListener("click", (event) => {
     const routeButton = event.target.closest("[data-select-route]");
