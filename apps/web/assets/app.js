@@ -1,7 +1,23 @@
 const inviteFragment=new URLSearchParams(location.hash.replace(/^#/,"")).get("invite")||"";
 if(inviteFragment)history.replaceState(null,"","/workspace/");
-const state={token:localStorage.getItem("heyu_token")||"",actor:null,members:[],invitations:[],brands:[],products:[],knowledge:[],campaigns:[],campaignBriefRevisions:[],campaignBriefMaps:{},campaignSupplySnapshots:[],campaignFarmerEvidenceSnapshots:[],marketingPlans:[],currentMarketingPlan:null,selectedMarketingVersion:null,projects:[],versions:[],generationRuns:[],publications:[],performanceReviews:{},operationImportFile:null,operationImportPreview:null,audit:[],currentVersion:null,inviteToken:inviteFragment};
+const state={token:localStorage.getItem("heyu_token")||"",actor:null,members:[],invitations:[],providers:[],brands:[],products:[],knowledge:[],campaigns:[],campaignBriefRevisions:[],campaignBriefMaps:{},campaignSupplySnapshots:[],campaignFarmerEvidenceSnapshots:[],marketingPlans:[],currentMarketingPlan:null,selectedMarketingVersion:null,projects:[],versions:[],generationRuns:[],publications:[],performanceReviews:{},operationImportFile:null,operationImportPreview:null,audit:[],currentVersion:null,inviteToken:inviteFragment};
 const t=(key,variables={})=>HeyuI18n.t(key,variables);
+const providerMessages={
+  "zh-CN":{
+    pageTitle:"模型连接",heading:"连接国产与 OpenAI-compatible 模型",intro:"平台默认保留无密钥规则 Demo；需要真实生成时，由管理员配置服务地址与模型名称，并使用临时密钥先测试连接。",create:"添加模型连接",edit:"编辑模型连接",serverSecret:"服务端密钥引用",name:"连接名称",namePlaceholder:"例如：国内生产模型",baseUrl:"API Base URL",chatModel:"对话模型",chatModelPlaceholder:"模型标识",embeddingModel:"向量模型（可选）",embeddingModelPlaceholder:"Embedding 模型标识",secretReference:"环境变量名",secretNote:"这里只保存环境变量名，不把 API Key 写入数据库或浏览器。",enabled:"启用连接",primary:"设为主模型",fallback:"设为备用模型",save:"保存连接",saveChanges:"保存修改",cancel:"取消编辑",list:"已配置连接",testIntro:"测试连接时可输入一次性临时 API Key；密钥只随本次测试请求发送，不会保存。",empty:"还没有配置真实模型，规则 Demo 仍可正常使用。",configured:"服务端密钥已配置",notConfigured:"服务端密钥未配置",test:"测试连接",testing:"正在测试…",temporaryKey:"临时 API Key（可选）",editAction:"编辑",deleteAction:"删除",deleteConfirm:"确定删除这个模型连接吗？",saved:"模型连接已保存。",deleted:"模型连接已删除。",testSucceeded:"连接成功：{model}，耗时 {latency} ms",testFailed:"连接失败：{error}",statusNever:"尚未测试",statusSucceeded:"最近测试成功",statusFailed:"最近测试失败",primaryBadge:"主模型",fallbackBadge:"备用模型",disabledBadge:"已停用"
+  },
+  "zh-HK":{
+    pageTitle:"模型連接",heading:"連接國產與 OpenAI-compatible 模型",intro:"平台預設保留無密鑰規則 Demo；需要真實生成時，由管理員設定服務地址與模型名稱，並使用臨時密鑰先測試連接。",create:"新增模型連接",edit:"編輯模型連接",serverSecret:"伺服器密鑰引用",name:"連接名稱",namePlaceholder:"例如：國內生產模型",baseUrl:"API Base URL",chatModel:"對話模型",chatModelPlaceholder:"模型識別名稱",embeddingModel:"向量模型（可選）",embeddingModelPlaceholder:"Embedding 模型識別名稱",secretReference:"環境變數名稱",secretNote:"這裏只保存環境變數名稱，不會把 API Key 寫入資料庫或瀏覽器。",enabled:"啟用連接",primary:"設為主要模型",fallback:"設為備用模型",save:"保存連接",saveChanges:"保存修改",cancel:"取消編輯",list:"已設定連接",testIntro:"測試連接時可輸入一次性臨時 API Key；密鑰只會隨本次測試請求傳送，不會保存。",empty:"尚未設定真實模型，規則 Demo 仍可正常使用。",configured:"伺服器密鑰已設定",notConfigured:"伺服器密鑰未設定",test:"測試連接",testing:"正在測試…",temporaryKey:"臨時 API Key（可選）",editAction:"編輯",deleteAction:"刪除",deleteConfirm:"確定刪除這個模型連接嗎？",saved:"模型連接已保存。",deleted:"模型連接已刪除。",testSucceeded:"連接成功：{model}，耗時 {latency} ms",testFailed:"連接失敗：{error}",statusNever:"尚未測試",statusSucceeded:"最近測試成功",statusFailed:"最近測試失敗",primaryBadge:"主要模型",fallbackBadge:"備用模型",disabledBadge:"已停用"
+  },
+  en:{
+    pageTitle:"Model connections",heading:"Connect Chinese and OpenAI-compatible models",intro:"The keyless rules demo remains available by default. Administrators can add a service endpoint and model names, then test them with a temporary key before live generation.",create:"Add model connection",edit:"Edit model connection",serverSecret:"Server-side secret reference",name:"Connection name",namePlaceholder:"For example: China production model",baseUrl:"API Base URL",chatModel:"Chat model",chatModelPlaceholder:"Model identifier",embeddingModel:"Embedding model (optional)",embeddingModelPlaceholder:"Embedding model identifier",secretReference:"Environment variable name",secretNote:"Only the environment variable name is stored. The API key is never written to the database or browser.",enabled:"Enable connection",primary:"Use as primary model",fallback:"Use as fallback model",save:"Save connection",saveChanges:"Save changes",cancel:"Cancel editing",list:"Configured connections",testIntro:"You may enter a one-time API key when testing. It is sent only with that probe and is not stored.",empty:"No live model is configured yet. The rules demo remains fully available.",configured:"Server secret configured",notConfigured:"Server secret not configured",test:"Test connection",testing:"Testing…",temporaryKey:"Temporary API key (optional)",editAction:"Edit",deleteAction:"Delete",deleteConfirm:"Delete this model connection?",saved:"Model connection saved.",deleted:"Model connection deleted.",testSucceeded:"Connected to {model} in {latency} ms",testFailed:"Connection failed: {error}",statusNever:"Not tested yet",statusSucceeded:"Latest test succeeded",statusFailed:"Latest test failed",primaryBadge:"Primary",fallbackBadge:"Fallback",disabledBadge:"Disabled"
+  },
+};
+const providerText=(key,variables={})=>{
+  const locale=providerMessages[HeyuI18n.getLocale()]?HeyuI18n.getLocale():"zh-CN";
+  let value=providerMessages[locale][key]||providerMessages["zh-CN"][key]||key;
+  return value.replace(/\{(\w+)\}/g,(_,name)=>variables[name]??`{${name}}`);
+};
 const operationMessages={
   "zh-CN":{
     "import.heading":"批量回传运营数据","import.format":"CSV / XLSX","import.intro":"上传平台导出的数据文件，先检查字段匹配、发布记录匹配与逐行错误，再确认写入数据快照。","import.chooseFile":"选择运营数据文件","import.fileHint":"支持 UTF-8 CSV 与 XLSX，最大 20 MB","import.mappingSummary":"高级：自定义字段映射","import.mappingLabel":"字段映射 JSON（可留空自动识别）","import.mappingPlaceholder":"例如：{\"渠道\":\"platform\",\"帖子编号\":\"external_content_id\",\"曝光\":\"views\"}","import.preview":"预览匹配结果","import.previewing":"正在预览…","import.confirm":"确认导入有效匹配行","import.importing":"正在导入…","import.selected":"已选择：{name}","import.summary":"共 {total} 行 · {valid} 行格式有效 · {matched} 行匹配发布 · {invalid} 行有误","import.sheet":"工作表：{name}","import.mapping":"识别字段","import.warnings":"文件提示","import.row":"行","import.publicationMatch":"发布匹配","import.data":"规范化数据","import.errors":"错误","import.matched":"已匹配","import.unmatched":"未匹配","import.duplicate":"重复数据","import.valid":"可导入","import.noErrors":"无","import.moreRows":"仅显示前 {count} 行，请根据汇总确认完整文件。","import.noMatchedRows":"没有可导入的有效匹配行。请检查平台与平台内容 ID / 外部链接。","import.invalidMapping":"字段映射必须是有效的 JSON 对象。","import.completed":"导入完成：写入 {imported} 行，跳过 {duplicates} 行重复数据。","import.previewRequired":"请先预览当前文件。",
@@ -111,7 +127,7 @@ const downloadCampaignPresentation=async campaign=>{
   link.click();
   setTimeout(()=>URL.revokeObjectURL(link.href),0);
 };
-const workspacePages=["overview","plans","assets","knowledge","campaigns","studio","operations","review","audit","members"];
+const workspacePages=["overview","plans","assets","knowledge","campaigns","studio","operations","review","audit","members","providers"];
 const pageFromLocation=()=>{const page=location.pathname.split("/").filter(Boolean)[1]||"overview";return workspacePages.includes(page)?page:"overview"};
 
 function showWorkspace(){
@@ -137,7 +153,7 @@ function navigate(page,push=true){
   if(!workspacePages.includes(page))page="overview";
   $$(".nav").forEach(x=>x.classList.toggle("active",x.dataset.page===page));
   $$(".page").forEach(x=>x.classList.toggle("active",x.dataset.pagePanel===page));
-  $("#page-title").textContent=t(`workspace.page.${page}`);
+  $("#page-title").textContent=page==="providers"?providerText("pageTitle"):t(`workspace.page.${page}`);
   const path=page==="overview"?"/workspace/":`/workspace/${page}`;
   if(push&&location.pathname!==path)history.pushState({page},"",path);
 }
@@ -145,9 +161,10 @@ async function refresh(){
   state.actor=await api("/v1/me");
   const canManageMembers=["owner","admin"].includes(state.actor.role);
   [state.brands,state.products,state.knowledge,state.campaigns,state.marketingPlans,state.projects,state.publications,state.audit]=await Promise.all([api("/v1/brands"),api("/v1/products"),api("/v1/knowledge"),api("/v1/campaign-packages"),api("/v1/marketing-plans"),api("/v1/content-projects"),api("/v1/publications"),api("/v1/audit-events")]);
-  [state.members,state.invitations]=canManageMembers?await Promise.all([api("/v1/members"),api("/v1/invitations")]):[[],[]];
+  [state.members,state.invitations,state.providers]=canManageMembers?await Promise.all([api("/v1/members"),api("/v1/invitations"),api("/v1/provider-connections")]):[[],[],[]];
   $$(".member-nav").forEach(x=>x.hidden=!canManageMembers);
-  if(!canManageMembers&&$(".nav.active")?.dataset.page==="members")navigate("overview");
+  $$(".provider-nav").forEach(x=>x.hidden=!canManageMembers);
+  if(!canManageMembers&&["members","providers"].includes($(".nav.active")?.dataset.page))navigate("overview");
   render();
   const requestedPlan=new URLSearchParams(location.search).get("plan");
   const pendingImport=new URLSearchParams(location.search).get("import")==="1";
@@ -282,6 +299,7 @@ function render(){
   renderOperationImportPreview();
   renderPublications();
   renderMembers();
+  renderProviders();
   renderMarketingPlans();
 }
 const campaignStatusLabel=value=>t(`campaign.status.${value}`);
@@ -596,6 +614,47 @@ function renderMembers(){
     return `<article class="invitation-row"><div><h3>${escapeHtml(invitation.email)}</h3><p>${escapeHtml(roleLabel(invitation.role))} · ${escapeHtml(t("invitation.expires",{date:HeyuI18n.formatDate(invitation.expires_at)}))}</p></div><div class="invitation-actions"><span class="badge ${status==="accepted"?"approved":status==="pending"?"pending_review":"rejected"}">${escapeHtml(t(`invitation.status.${status}`))}</span>${status==="pending"?`<button class="reject" data-revoke-invitation="${invitation.id}">${escapeHtml(t("invitation.revoke"))}</button>`:""}</div></article>`;
   }).join("")||t("invitation.empty");
 }
+function applyProviderCopy(){
+  $$("[data-provider-copy]").forEach(element=>{element.textContent=providerText(element.dataset.providerCopy)});
+  $$("[data-provider-placeholder]").forEach(element=>{element.placeholder=providerText(element.dataset.providerPlaceholder)});
+}
+function renderProviders(){
+  applyProviderCopy();
+  if(!state.actor||!["owner","admin"].includes(state.actor.role))return;
+  $("#provider-count").textContent=HeyuI18n.formatNumber(state.providers.length);
+  $("#provider-list").innerHTML=state.providers.map(provider=>{
+    const statusKey=provider.last_test_status==="succeeded"?"statusSucceeded":provider.last_test_status==="failed"?"statusFailed":"statusNever";
+    const badges=[
+      provider.is_primary?providerText("primaryBadge"):"",
+      provider.is_fallback?providerText("fallbackBadge"):"",
+      !provider.enabled?providerText("disabledBadge"):"",
+    ].filter(Boolean).map(label=>`<span class="badge">${escapeHtml(label)}</span>`).join("");
+    const testClass=provider.last_test_status==="succeeded"?"approved":provider.last_test_status==="failed"?"rejected":"";
+    const testedAt=provider.last_tested_at?` · ${escapeHtml(HeyuI18n.formatDate(provider.last_tested_at))}`:"";
+    const lastError=provider.last_test_error?`<p class="provider-last-error">${escapeHtml(provider.last_test_error)}</p>`:"";
+    return `<article class="provider-card">
+      <div class="panel-heading">
+        <div><h3>${escapeHtml(provider.name)}</h3><p>${escapeHtml(provider.base_url)}</p></div>
+        <div class="provider-badges">${badges}</div>
+      </div>
+      <dl class="provider-models">
+        <div><dt>${escapeHtml(providerText("chatModel"))}</dt><dd>${escapeHtml(provider.chat_model)}</dd></div>
+        <div><dt>${escapeHtml(providerText("embeddingModel"))}</dt><dd>${escapeHtml(provider.embedding_model||"—")}</dd></div>
+        <div><dt>${escapeHtml(providerText("secretReference"))}</dt><dd>${escapeHtml(provider.secret_reference)} · ${escapeHtml(providerText(provider.secret_configured?"configured":"notConfigured"))}</dd></div>
+      </dl>
+      <div class="provider-test-status"><span class="badge ${testClass}">${escapeHtml(providerText(statusKey))}</span><small>${testedAt.replace(/^ · /,"")}</small></div>
+      ${lastError}
+      <form class="provider-probe" data-provider-probe="${provider.id}">
+        <input type="password" name="temporary_api_key" autocomplete="off" placeholder="${escapeHtml(providerText("temporaryKey"))}">
+        <button type="submit">${escapeHtml(providerText("test"))}</button>
+      </form>
+      <div class="row-actions">
+        <button type="button" data-edit-provider="${provider.id}">${escapeHtml(providerText("editAction"))}</button>
+        <button type="button" class="reject" data-delete-provider="${provider.id}">${escapeHtml(providerText("deleteAction"))}</button>
+      </div>
+    </article>`;
+  }).join("")||escapeHtml(providerText("empty"));
+}
 function renderFocus(approvedKnowledge,pendingKnowledge){
   let prefix="focus.initial",target="assets",variables={};
   if(state.brands.length&&!state.products.length)prefix="focus.brandReady";
@@ -732,6 +791,84 @@ $("#project-edit-cancel").addEventListener("click",resetProjectForm);
 $("#member-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{const data=formData(event.target);data.expires_in_hours=Number(data.expires_in_hours);const invite=await api("/v1/invitations",{method:"POST",body:JSON.stringify(data)});const link=`${location.origin}/workspace/#invite=${encodeURIComponent(invite.token)}`;$("#invite-link").value=link;$("#invite-result").hidden=false;event.target.reset();state.invitations=await api("/v1/invitations");renderMembers()},t("toast.member.invited"))});
 $("#copy-invite-link").addEventListener("click",()=>request(async()=>{await navigator.clipboard.writeText($("#invite-link").value)},t("invite.copied")));
 document.addEventListener("click",event=>{const button=event.target.closest("[data-revoke-invitation]");if(!button)return;request(async()=>{if(!confirm(t("invitation.revokeConfirm")))return;await api(`/v1/invitations/${button.dataset.revokeInvitation}/revoke`,{method:"POST"});state.invitations=await api("/v1/invitations");renderMembers()},t("toast.invitation.revoked"))});
+const resetProviderForm=()=>{
+  const form=$("#provider-form");
+  form.reset();
+  form.elements.id.value="";
+  form.elements.secret_reference.value="HEYU_PROVIDER_API_KEY";
+  form.elements.enabled.checked=true;
+  $("#provider-form-title").textContent=providerText("create");
+  $("#provider-save-button").textContent=providerText("save");
+  $("#provider-edit-cancel").hidden=true;
+};
+$("#provider-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{
+  const form=event.target;
+  const data=formData(form);
+  const id=data.id;
+  delete data.id;
+  data.enabled=form.elements.enabled.checked;
+  data.is_primary=form.elements.is_primary.checked;
+  data.is_fallback=form.elements.is_fallback.checked;
+  await api(id?`/v1/provider-connections/${id}`:"/v1/provider-connections",{method:id?"PATCH":"POST",body:JSON.stringify(data)});
+  resetProviderForm();
+  state.providers=await api("/v1/provider-connections");
+  renderProviders();
+},providerText("saved"))});
+$("#provider-edit-cancel").addEventListener("click",resetProviderForm);
+$("#provider-form").addEventListener("change",event=>{
+  if(event.target.name==="is_primary"&&event.target.checked)event.currentTarget.elements.is_fallback.checked=false;
+  if(event.target.name==="is_fallback"&&event.target.checked)event.currentTarget.elements.is_primary.checked=false;
+});
+document.addEventListener("submit",event=>{
+  const form=event.target.closest("[data-provider-probe]");
+  if(!form)return;
+  event.preventDefault();
+  const button=form.querySelector("button");
+  const original=button.textContent;
+  button.disabled=true;
+  button.textContent=providerText("testing");
+  (async()=>{
+    try{
+      const temporaryKey=form.elements.temporary_api_key.value.trim();
+      const result=await api(`/v1/provider-connections/${form.dataset.providerProbe}/test`,{method:"POST",body:JSON.stringify({temporary_api_key:temporaryKey||null})});
+      form.reset();
+      state.providers=await api("/v1/provider-connections");
+      renderProviders();
+      if(result.status==="failed")throw new Error(providerText("testFailed",{error:result.error}));
+      toast(providerText("testSucceeded",{model:result.model,latency:HeyuI18n.formatNumber(result.latency_ms)}));
+    }catch(error){
+      toast(error.message,true);
+    }finally{
+      if(button.isConnected){
+        button.disabled=false;
+        button.textContent=original;
+      }
+    }
+  })();
+});
+document.addEventListener("click",event=>{
+  const edit=event.target.closest("[data-edit-provider]");
+  if(edit){
+    const provider=state.providers.find(item=>item.id===edit.dataset.editProvider);
+    if(!provider)return;
+    const form=$("#provider-form");
+    ["id","name","base_url","chat_model","embedding_model","secret_reference"].forEach(name=>{form.elements[name].value=provider[name]||""});
+    form.elements.enabled.checked=provider.enabled;
+    form.elements.is_primary.checked=provider.is_primary;
+    form.elements.is_fallback.checked=provider.is_fallback;
+    $("#provider-form-title").textContent=providerText("edit");
+    $("#provider-save-button").textContent=providerText("saveChanges");
+    $("#provider-edit-cancel").hidden=false;
+    form.scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  const remove=event.target.closest("[data-delete-provider]");
+  if(remove)request(async()=>{
+    if(!confirm(providerText("deleteConfirm")))return;
+    await api(`/v1/provider-connections/${remove.dataset.deleteProvider}`,{method:"DELETE"});
+    state.providers=await api("/v1/provider-connections");
+    renderProviders();
+  },providerText("deleted"));
+});
 $("#generate-button").addEventListener("click",()=>request(async()=>{
   const id=$("#project-select").value;
   if(!id)throw new Error(t("generation.selectProjectFirst"));

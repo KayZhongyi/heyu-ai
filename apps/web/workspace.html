@@ -32,6 +32,7 @@
         <button class="nav" data-page="review" data-index="07">审核与版本</button>
         <button class="nav" data-page="audit" data-index="08">审计记录</button>
         <button class="nav member-nav" data-page="members" data-index="09" hidden>团队与权限</button>
+        <button class="nav provider-nav" data-page="providers" data-index="10" data-provider-copy="pageTitle" hidden>模型连接</button>
       </nav>
       <div class="sidebar-note">
         <b><i></i>内容工作台运行中</b>
@@ -522,6 +523,49 @@
             <div class="panel-heading"><div><p class="eyebrow">INVITATION CONTROL</p><h2>邀请记录</h2></div><span class="pill" id="invitation-count">0 条邀请</span></div>
             <p class="panel-intro">查看邀请状态，并在链接尚未使用且未过期时主动撤销。邀请令牌不会在列表中再次显示。</p>
             <div id="invitation-list" class="stack invitation-list empty" data-business-data>暂无邀请记录</div>
+          </div>
+        </section>
+
+        <section class="page" data-page-panel="providers">
+          <div class="provider-hero">
+            <div>
+              <p class="eyebrow">MODEL CONNECTIONS</p>
+              <h2 data-provider-copy="heading">连接国产与 OpenAI-compatible 模型</h2>
+              <p data-provider-copy="intro">平台默认保留无密钥规则 Demo；需要真实生成时，由管理员配置服务地址与模型名称，并使用临时密钥先测试连接。</p>
+            </div>
+            <span class="pill">Owner / Admin</span>
+          </div>
+          <div class="two-col provider-layout">
+            <form class="panel" id="provider-form">
+              <input name="id" type="hidden">
+              <div class="panel-heading">
+                <div><p class="eyebrow">OPENAI-COMPATIBLE</p><h2 id="provider-form-title" data-provider-copy="create">添加模型连接</h2></div>
+                <span class="pill" data-provider-copy="serverSecret">服务端密钥引用</span>
+              </div>
+              <label><span data-provider-copy="name">连接名称</span><input name="name" data-provider-placeholder="namePlaceholder" placeholder="例如：国内生产模型" required></label>
+              <label><span data-provider-copy="baseUrl">API Base URL</span><input name="base_url" type="url" placeholder="https://api.example.com/v1" required></label>
+              <div class="form-grid">
+                <label><span data-provider-copy="chatModel">对话模型</span><input name="chat_model" data-provider-placeholder="chatModelPlaceholder" placeholder="模型标识" required></label>
+                <label><span data-provider-copy="embeddingModel">向量模型（可选）</span><input name="embedding_model" data-provider-placeholder="embeddingModelPlaceholder" placeholder="Embedding 模型标识"></label>
+              </div>
+              <label><span data-provider-copy="secretReference">环境变量名</span><input name="secret_reference" value="HEYU_PROVIDER_API_KEY" pattern="[A-Z][A-Z0-9_]*" required></label>
+              <p class="provider-secret-note" data-provider-copy="secretNote">这里只保存环境变量名，不把 API Key 写入数据库或浏览器。</p>
+              <div class="provider-role-grid">
+                <label><input type="checkbox" name="enabled" checked><span data-provider-copy="enabled">启用连接</span></label>
+                <label><input type="checkbox" name="is_primary"><span data-provider-copy="primary">设为主模型</span></label>
+                <label><input type="checkbox" name="is_fallback"><span data-provider-copy="fallback">设为备用模型</span></label>
+              </div>
+              <button class="primary wide" id="provider-save-button" type="submit" data-provider-copy="save">保存连接</button>
+              <button class="ghost wide" id="provider-edit-cancel" type="button" hidden data-provider-copy="cancel">取消编辑</button>
+            </form>
+            <div class="panel">
+              <div class="panel-heading">
+                <div><p class="eyebrow">CONNECTION STATUS</p><h2 data-provider-copy="list">已配置连接</h2></div>
+                <span class="pill" id="provider-count">0</span>
+              </div>
+              <p class="panel-intro" data-provider-copy="testIntro">测试连接时可输入一次性临时 API Key；密钥只随本次测试请求发送，不会保存。</p>
+              <div id="provider-list" class="stack provider-list empty" data-business-data></div>
+            </div>
           </div>
         </section>
       </div>

@@ -388,6 +388,7 @@ workspace_pages = {
     "review",
     "audit",
     "members",
+    "providers",
 }
 if web_assets.is_dir():
     app.mount("/assets", StaticFiles(directory=web_assets), name="assets")
