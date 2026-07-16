@@ -699,6 +699,8 @@
       "禾语 AI · 农产品内容创作与运营助手": "Heyu AI · Agricultural content and operations assistant",
       "从一份产品资料开始，": "Start with one product brief.",
       "生成一整套新媒体内容。": "Build a complete social content plan.",
+      "让好产品走向市场": "Bring great produce to market",
+      "让好故事走进人心": "Bring its story closer to people",
       "选择经营目标和发布平台，禾语 AI 会提炼产品亮点，生成三套短视频方案，并继续完成手机分镜、直播话术和七天发布计划。": "Choose a business objective and publishing channel. Heyu AI distills the product highlights, develops three short-video directions, and completes mobile shot lists, livestream talking points, and a seven-day publishing plan.",
       "开始生成内容方案": "Create a content plan",
       "先看番茄案例": "View the tomato example",
