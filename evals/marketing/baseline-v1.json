@@ -1,0 +1,65 @@
+{
+  "baseline_version": "marketing-baseline-v1",
+  "dataset_version": "marketing-offline-v1",
+  "evaluator_version": "marketing-rules-v1",
+  "disclaimer": "Rule scores assess structure, factual retention, prohibited claims, citation allowlisting, language, marketing expression, platform fit and filmability. They do not predict or guarantee views, engagement, sales or real-world reach.",
+  "aggregate": {
+    "case_count": 3,
+    "passed_case_count": 3,
+    "overall_score": 100.0,
+    "dimension_scores": {
+      "schema": 100.0,
+      "factual_grounding": 100.0,
+      "prohibited_claims": 100.0,
+      "citations": 100.0,
+      "language": 100.0,
+      "marketing_expression": 100.0,
+      "platform_fit": 100.0,
+      "filmability": 100.0
+    }
+  },
+  "cases": [
+    {
+      "case_key": "zh-cn-tomato-douyin",
+      "overall_score": 100.0,
+      "dimension_scores": {
+        "schema": 100,
+        "factual_grounding": 100,
+        "prohibited_claims": 100,
+        "citations": 100,
+        "language": 100,
+        "marketing_expression": 100,
+        "platform_fit": 100,
+        "filmability": 100
+      }
+    },
+    {
+      "case_key": "zh-hk-tea-xiaohongshu",
+      "overall_score": 100.0,
+      "dimension_scores": {
+        "schema": 100,
+        "factual_grounding": 100,
+        "prohibited_claims": 100,
+        "citations": 100,
+        "language": 100,
+        "marketing_expression": 100,
+        "platform_fit": 100,
+        "filmability": 100
+      }
+    },
+    {
+      "case_key": "en-citrus-wechat-channels",
+      "overall_score": 100.0,
+      "dimension_scores": {
+        "schema": 100,
+        "factual_grounding": 100,
+        "prohibited_claims": 100,
+        "citations": 100,
+        "language": 100,
+        "marketing_expression": 100,
+        "platform_fit": 100,
+        "filmability": 100
+      }
+    }
+  ]
+}

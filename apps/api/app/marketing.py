@@ -16,12 +16,14 @@ import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Annotated, Literal, Protocol
+from datetime import datetime
+from typing import Annotated, Literal, Protocol, cast
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.config import Settings, get_settings
+from app.script_quality import evaluate_script_quality
 
 Locale = Literal["zh-CN", "zh-HK", "en"]
 Platform = Literal["douyin", "xiaohongshu", "wechat-channels", "kuaishou"]
@@ -46,6 +48,14 @@ class StrictModel(BaseModel):
 
 
 SellingPoint = Annotated[str, Field(min_length=1, max_length=80)]
+TrendSourceType = Literal[
+    "manual",
+    "rss",
+    "atom",
+    "douyin-open-platform",
+    "seasonal",
+    "evergreen",
+]
 
 HIGH_RISK_CLAIM_PATTERNS = (
     re.compile(
@@ -61,6 +71,20 @@ HIGH_RISK_CLAIM_PATTERNS = (
 )
 
 
+class TrendSnapshot(StrictModel):
+    """The exact discovery result selected for this plan."""
+
+    title: str = Field(min_length=1, max_length=240)
+    source_url: str | None = Field(default=None, max_length=2048)
+    source_label: str = Field(min_length=1, max_length=120)
+    source_type: TrendSourceType
+    published_at: datetime | None = None
+    captured_at: datetime
+    fit_score: int = Field(ge=0, le=100)
+    recommendation: Recommendation
+    recommendation_reason: str = Field(min_length=1, max_length=1000)
+
+
 class MarketingPlanRequest(StrictModel):
     locale: Locale = "zh-CN"
     persona: Literal["farmer", "cooperative", "rural-operator"] = "farmer"
@@ -73,11 +97,16 @@ class MarketingPlanRequest(StrictModel):
     platform: Platform = "douyin"
     tone: Literal["plain", "warm", "lively", "premium"] = "plain"
     trend: str = Field(default="", max_length=240)
+    trend_snapshot: TrendSnapshot | None = None
 
     @model_validator(mode="after")
     def normalize_and_reject_high_risk_claims(self) -> MarketingPlanRequest:
         self.goals = list(dict.fromkeys(self.goals))
         self.selling_points = [point.strip() for point in self.selling_points if point.strip()]
+        if self.trend_snapshot is not None:
+            if self.trend and self.trend != self.trend_snapshot.title:
+                raise ValueError("trend must match trend_snapshot.title")
+            self.trend = self.trend_snapshot.title
         source_text = "\n".join((self.product_description, *self.selling_points))
         if any(pattern.search(source_text) for pattern in HIGH_RISK_CLAIM_PATTERNS):
             raise ValueError(
@@ -414,6 +443,251 @@ def _text(locale: Locale, simplified: str, traditional: str, english: str) -> st
     if locale == "zh-HK":
         return traditional
     return simplified
+
+
+def _short_product_fact(description: str, *, limit: int = 72) -> str:
+    """Keep one supplied fact short enough for a single 8–20 second voiceover."""
+    normalized = " ".join(description.split())
+    first_sentence = re.split(r"(?<=[。！？.!?])\s*", normalized, maxsplit=1)[0]
+    if len(first_sentence) <= limit:
+        return first_sentence
+    return first_sentence[: limit - 1].rstrip("，,；;。.!！?？ ") + "。"
+
+
+def _product_film_language(product_name: str) -> dict[str, str]:
+    """Return concrete, phone-filmable visual language for common farm products."""
+    normalized = product_name.casefold()
+    if any(token in normalized for token in ("番茄", "西红柿", "tomato")):
+        return {
+            "decision_detail": "果蒂、果肩和成熟度",
+            "practical_hook": "这两颗{product}，你会先拿哪一颗？别只看红不红，先看果蒂和果肩。",
+            "evidence_sentence": "把两颗成熟度不同的番茄放在一起，看果蒂、果肩，再切开看果肉和汁水。",
+            "proof_action": "把两颗成熟度不同的番茄并排，从果蒂扫到果肩，再切开拍果肉和汁水",
+            "process_action": "用近景跟拍采摘、轻放入筐和分选动作，让种植者边做边讲",
+            "story_hook": "别人摘下来就直接装筐，我们为什么还要把这一筐{product}重新挑一遍？",
+            "story_opening": "一筐番茄占满画面，种植者拿起其中一颗重新分选，并同步说出第一句话",
+            "story_steps": "采摘、分选还是装筐",
+            "contrast_action": "同框放一颗外形规整和一颗外形普通的番茄，先让观众选，再切开对比",
+            "use_scene": "鲜食、做菜或家庭餐桌",
+        }
+    if any(token in normalized for token in ("茶", "tea", "oolong")):
+        return {
+            "decision_detail": "干茶、第一遍出汤和叶底",
+            "practical_hook": "同样是这批{product}，为什么第一遍出汤差这么多？先看干茶和叶底。",
+            "evidence_sentence": "不急着听香气描述，先看干茶、第一遍出汤和泡开后的叶底。",
+            "proof_action": "固定机位拍投茶、注水、第一遍出汤，再给叶底一个近景",
+            "process_action": "用近景跟拍采青、摊晾或冲泡中的一个连续动作，让制茶人边做边讲一个真实工序",
+            "story_hook": "这批{product}已经能继续做了，我们为什么还要多等这一段摊晾？",
+            "story_opening": "摊晾中的茶叶铺满画面，制茶人翻动茶叶并同步说出第一句话",
+            "story_steps": "采青、摊晾还是冲泡",
+            "contrast_action": "先拍不起眼的干茶，再用同一机位切到舒展后的叶底和茶汤",
+            "use_scene": "日常冲泡、办公室或朋友分享",
+        }
+    if any(
+        token in normalized
+        for token in ("水果", "荔枝", "柑", "橙", "桃", "梨", "莓", "fruit", "lychee")
+    ):
+        return {
+            "decision_detail": "成熟度、果面和装箱分层",
+            "practical_hook": "这两份{product}看起来都漂亮，哪一份更适合今天吃？先看成熟度和装箱分层。",
+            "evidence_sentence": "先看同一批果实的成熟度和完整度，再看分级、搭配和装箱是否对应食用时间。",
+            "proof_action": "从果面近景拍到称重、切开和装箱，尤其展示最底下一层",
+            "process_action": "用近景跟拍采收、分级、搭配和装箱，让农户边做边讲为什么这样分",
+            "story_hook": "明明这颗{product}更漂亮，装箱时我们为什么把它放到另一组？",
+            "story_opening": "农户从两组水果中拿起一颗重新分级，并同步说出第一句话",
+            "story_steps": "采收、分级、搭配还是装箱",
+            "contrast_action": "把外形更漂亮和更适合现在吃的两份放在一起，请观众先选再揭晓判断方法",
+            "use_scene": "家庭分享、送礼或当季鲜食",
+        }
+    return {
+        "decision_detail": "一个能在镜头里看见的产品细节",
+        "practical_hook": f"这两份{product_name}，你会先选哪一份？别只看第一眼，先看一个能拍出来的细节。",
+        "evidence_sentence": "先把卖点换成一个能拍到的细节，再用同一件产品的动作或前后状态证明。",
+        "proof_action": "把卖点对应的实物、动作或前后状态放在同一画面里",
+        "process_action": "用近景跟拍采收、处理或装箱，让农户边做边讲一个真实决定",
+        "story_hook": f"同样是{product_name}，我们为什么还要多做这一步？",
+        "story_opening": f"{product_name}占满画面，农户拿起产品开始处理，并同步说出第一句话",
+        "story_steps": "采收、处理还是装箱",
+        "contrast_action": "把两种常见选择并排，请观众先选，再用现场细节解释差别",
+        "use_scene": "家庭消费和日常使用",
+    }
+
+
+def _simplified_bgm_directions(platform: Platform) -> dict[str, str]:
+    platform_search = {
+        "douyin": "轻快乡村、无歌词、强节拍",
+        "xiaohongshu": "清新生活、无歌词、轻木吉他",
+        "wechat-channels": "温暖纪实、无歌词、自然感",
+        "kuaishou": "轻快生活、无歌词、真实感",
+    }[platform]
+    return {
+        "practical-hook": (
+            f"剪映搜索“{platform_search}”；开场0–3秒保留现场声，第4秒进入92–104 BPM；"
+            "音乐音量约25%，口播时压低到8%，结尾问题前留半拍"
+        ),
+        "people-story": (
+            f"剪映搜索“{platform_search}”；开场先收种植或制作现场声，人物第一句话后进入68–82 BPM；"
+            "音乐音量约18%，口播时压低到6%，人物停顿处不要补满"
+        ),
+        "playful-contrast": (
+            f"剪映搜索“{platform_search}”；开场0–2秒用两个清楚节拍，揭晓时短暂停顿后进入100–112 BPM；"
+            "音乐音量约28%，口播时压低到8%，答案揭晓后再恢复"
+        ),
+    }
+
+
+def _simplified_video_blueprints(
+    request: MarketingPlanRequest,
+    points: list[str],
+) -> list[dict[str, str]]:
+    """Build three genuinely different story engines instead of three rewrites."""
+    product = request.product_name
+    origin = request.origin or "本地农场"
+    film = _product_film_language(product)
+    music = _simplified_bgm_directions(request.platform)
+    practical_cta = (
+        f"你挑{product}最先看哪一点？把你的判断留在评论区。"
+    )
+    story_cta = f"你更想看{film['story_steps']}？留言选一个，下一条带你看。"
+    contrast_cta = "你刚才选对了吗？把你选这一边的理由留在评论区。"
+    blueprints = [
+        {
+            "route_id": "practical-hook",
+            "angle": "实用吸睛",
+            "title": f"{product}怎么挑？先看{film['decision_detail']}",
+            "cover_text": f"挑{product}先看这里",
+            "hook": film["practical_hook"].format(product=product),
+            "opening_visual": f"{product}清楚入镜；用极近景拍{film['decision_detail']}，手指直接指出要看的位置",
+            "bridge": film["evidence_sentence"],
+            "proof_visual": film["proof_action"],
+            "proof_voice": (
+                f"先看{film['decision_detail']}，再看镜头里的变化；"
+                f"我们这批{product}最想讲清的是{points[0]}。"
+            ),
+            "context_visual": f"把{product}放进{film['use_scene']}的真实使用场景",
+            "context_voice": request.product_description.strip(),
+            "music": music["practical-hook"],
+            "cta": practical_cta,
+        },
+        {
+            "route_id": "people-story",
+            "angle": "人物故事",
+            "title": f"做{product}，我们为什么一直保留这一步",
+            "cover_text": f"{product}背后的一个决定",
+            "hook": film["story_hook"].format(product=product),
+            "opening_visual": f"{product}清楚入镜；{film['story_opening']}",
+            "bridge": f"在{origin}，“{points[1]}”不是一句卖点，它就在每天的操作里。",
+            "proof_visual": film["process_action"],
+            "proof_voice": (
+                f"现在做的每一步都能在现场看见；我们保留它，是因为它直接关系到{points[1]}。"
+            ),
+            "context_visual": "手部动作、人物表情和产地环境交替出现，最后回到产品近景",
+            "context_voice": request.product_description.strip(),
+            "music": music["people-story"],
+            "cta": story_cta,
+        },
+        {
+            "route_id": "playful-contrast",
+            "angle": "轻松反差",
+            "title": f"只看外表挑{product}，你可能会选错",
+            "cover_text": "你会选左边还是右边？",
+            "hook": f"先别告诉我答案：左边和右边这两份{product}，你会选哪一份？",
+            "opening_visual": f"左右两份{product}同时入镜，画面中央出现两秒倒计时",
+            "bridge": f"先选，不急着听答案；真正要看的，是和“{points[2]}”有关的现场细节。",
+            "proof_visual": film["contrast_action"],
+            "proof_voice": (
+                f"别只看第一眼，刚才容易忽略的细节，正好能说明{points[2]}。"
+            ),
+            "context_visual": "用手指向左右两组产品，揭晓后快速回放刚才容易忽略的细节",
+            "context_voice": request.product_description.strip(),
+            "music": music["playful-contrast"],
+            "cta": contrast_cta,
+        },
+    ]
+    trend = request.trend.strip()
+    if trend:
+        trend_angle = trend
+        for prefix in (f"{product}：", f"{product}:", f"{product}｜", f"{product}|"):
+            if trend_angle.startswith(prefix):
+                trend_angle = trend_angle[len(prefix) :].strip()
+                break
+        for suffix in ("怎么拍", "怎麼拍", "如何拍"):
+            if trend_angle.endswith(suffix):
+                trend_angle = trend_angle[: -len(suffix)].strip()
+                break
+        trend_angle = trend_angle or trend
+        blueprints[0]["bridge"] = (
+            f"借“{trend_angle}”这个切口，先把{product}放在镜头前做一个具体选择："
+            f"{film['evidence_sentence']}"
+        )
+        blueprints[1]["bridge"] = (
+            f"趁大家在关注“{trend_angle}”，把镜头拉回{origin}："
+            f"“{points[1]}”就藏在眼前这一步真实操作里。"
+        )
+        blueprints[2]["bridge"] = (
+            f"围绕“{trend_angle}”先做一个更实在的选择题：这两份{product}你会选哪份？"
+            f"答案藏在和“{points[2]}”有关的现场细节里。"
+        )
+    return blueprints
+
+
+def _english_video_blueprints(
+    request: MarketingPlanRequest,
+    points: list[str],
+) -> list[dict[str, str]]:
+    product = request.product_name
+    origin = request.origin or "the local farm"
+    trend = request.trend.strip()
+    blueprints = [
+        {
+            "route_id": "practical-hook",
+            "angle": "Practical hook",
+            "title": f"How to choose {product}: one detail to check first",
+            "cover_text": f"Check this before buying {product}",
+            "hook": f"Before choosing {product}, can you spot which visible detail proves the difference?",
+            "opening_visual": f"Extreme close-up of two {product} samples; point to one visible difference",
+            "bridge": f"Use one simple side-by-side check to test whether “{points[0]}” is visible.",
+            "proof_visual": f"Place two {product} samples side by side, then cut, weigh or turn them to reveal the relevant detail",
+            "proof_voice": f"Start with what viewers can see, then connect that evidence to {points[0]}.",
+            "context_visual": f"Show {product} in a real family-use scene rather than on an empty display table",
+            "music": "Keep natural sound for the first 3 seconds; bring in a clean 92–104 BPM beat at second 4 and lower it under the explanation",
+            "cta": f"What do you check first when choosing {product}? Comment your answer; use “details” for size and delivery information.",
+        },
+        {
+            "route_id": "people-story",
+            "angle": "People story",
+            "title": f"The decision behind this batch of {product}",
+            "cover_text": "One decision behind the product",
+            "hook": f"The hardest part of explaining {product} is not saying it is good—it is showing why we keep this step.",
+            "opening_visual": "The grower's hands perform the key task while the first sentence is spoken",
+            "bridge": f"Follow the grower at {origin} through one real action connected to {points[1]}.",
+            "proof_visual": "Track harvesting, sorting or packing in one continuous action, keeping the grower in frame",
+            "proof_voice": f"Name the action on screen and explain how it connects to {points[1]}, without switching to advertising slogans.",
+            "context_visual": "Alternate hands, facial expression and the growing environment, then return to a product close-up",
+            "music": "Open on farm ambience; add warm acoustic guitar or piano at 68–82 BPM after the first sentence, always below the voice",
+            "cta": "Which should we film next—harvesting, sorting or packing? Choose one in the comments.",
+        },
+        {
+            "route_id": "playful-contrast",
+            "angle": "Playful contrast",
+            "title": f"The appearance test most {product} shoppers get wrong",
+            "cover_text": "Left or right?",
+            "hook": f"Do not answer yet: which of these two {product} would you choose, left or right?",
+            "opening_visual": f"Bring two {product} options into frame together and show a two-second choice countdown",
+            "bridge": f"The reveal uses a visible detail connected to {points[2]}, not an exaggerated twist.",
+            "proof_visual": "Hold both options side by side, pause for the choice, then cut, turn or unpack them to reveal the evidence",
+            "proof_voice": f"Let viewers choose first, then point out the visible detail connected to {points[2]}.",
+            "context_visual": "Point to the left and right options, reveal the answer, then replay the detail viewers may have missed",
+            "music": "Use two clear beats for the opening choice; pause at the reveal, then enter a light 100–112 BPM rhythm",
+            "cta": "Left or right—which did you choose? Comment before the reveal, then compare your reason with ours.",
+        },
+    ]
+    if trend:
+        blueprints[2]["bridge"] = (
+            f"Use the choice-and-reveal structure of “{trend}”, but return to {product} "
+            f"within three seconds and explain the answer through {points[2]}."
+        )
+    return blueprints
 
 
 def _creative_routes(request: MarketingPlanRequest) -> list[CreativeRoute]:
@@ -935,31 +1209,50 @@ def _video_quality_assessment(
     script: str,
     shots: list[Shot],
     call_to_action: str,
+    background_music: str,
 ) -> VideoQualityAssessment:
-    hook_score = {
-        "practical-hook": 92,
-        "people-story": 86,
-        "playful-contrast": 90,
-    }[route_id]
-    if request.product_name.casefold() not in hook.casefold():
-        hook_score -= 4
-    factual_score = 92 if request.product_description.strip() in script else 82
-    platform_score = {
+    evaluation = evaluate_script_quality(
+        product_name=request.product_name,
+        trend=request.trend,
+        hook=hook,
+        script=script,
+        shots=shots,
+        cta=call_to_action,
+        bgm=background_music,
+    )
+    detailed_scores = evaluation["scores"]
+    hook_score = round(
+        (
+            detailed_scores["hook_product"]
+            + detailed_scores["hook_structure"]
+            + detailed_scores["opening_0_3"]
+        )
+        / 3
+    )
+    factual_score = round(
+        (
+            detailed_scores["visual_proof_3_8"]
+            + detailed_scores["voice_visual_alignment"]
+            + detailed_scores["specificity"]
+        )
+        / 3
+    )
+    platform_baseline = {
         "douyin": 90,
         "xiaohongshu": 88 if route_id == "practical-hook" else 86,
         "wechat-channels": 90 if route_id == "people-story" else 84,
         "kuaishou": 88,
     }[request.platform]
-    filmability_score = min(
-        96,
-        70 + len(shots) * 4 + (6 if all(shot.filming_tip.strip() for shot in shots) else 0),
+    platform_score = round(
+        (
+            platform_baseline
+            + detailed_scores["bgm_direction"]
+            + detailed_scores["trend_integration"]
+        )
+        / 3
     )
-    interaction_tokens = ("评论", "留言", "comment", "details", "想尝", "想試")
-    interaction_score = (
-        90
-        if any(token.casefold() in call_to_action.casefold() for token in interaction_tokens)
-        else 72
-    )
+    filmability_score = detailed_scores["filmability"]
+    interaction_score = detailed_scores["cta_interaction"]
     compliance_score = (
         45 if any(pattern.search(script) for pattern in HIGH_RISK_CLAIM_PATTERNS) else 96
     )
@@ -991,6 +1284,107 @@ def _video_quality_assessment(
             "The contrast is visual and memorable without relying on hype.",
         ),
     }[route_id]
+    issue_messages = {
+        "hook_missing_product": _text(
+            request.locale,
+            f"开头直接说出{request.product_name}，不要让观众猜正在讲什么。",
+            f"開頭直接說出{request.product_name}，不要讓觀眾猜正在講甚麼。",
+            f"Name {request.product_name} in the opening so viewers know the subject immediately.",
+        ),
+        "hook_weak_question": _text(
+            request.locale,
+            "把开头改成一个具体选择、反差或结果，不只提出宽泛问题。",
+            "把開頭改成一個具體選擇、反差或結果，不只提出寬泛問題。",
+            "Turn the opening into a concrete choice, contrast or result instead of a broad question.",
+        ),
+        "hook_no_tension": _text(
+            request.locale,
+            "前三秒加入明确问题、选择、反差或结果，让观众有继续看的理由。",
+            "首三秒加入明確問題、選擇、反差或結果，讓觀眾有繼續看的理由。",
+            "Add a clear problem, choice, contrast or result in the first three seconds.",
+        ),
+        "opening_product_not_visible": _text(
+            request.locale,
+            f"0—3秒让{request.product_name}直接入镜，并与第一句话同步出现。",
+            f"0—3秒讓{request.product_name}直接入鏡，並與第一句話同步出現。",
+            f"Show {request.product_name} on screen in 0–3 seconds as the first line begins.",
+        ),
+        "opening_no_action": _text(
+            request.locale,
+            "开场加入手指指出、切开、对比或拿起等一个可见动作。",
+            "開場加入手指指出、切開、對比或拿起等一個可見動作。",
+            "Add one visible opening action such as pointing, cutting, comparing or picking up.",
+        ),
+        "proof_shot_missing": _text(
+            request.locale,
+            "补充3—8秒证据镜头，用近景或对比证明开场提出的问题。",
+            "補充3—8秒證據鏡頭，用近鏡或對比證明開場提出的問題。",
+            "Add a 3–8 second proof shot using a close-up or comparison.",
+        ),
+        "proof_not_visual": _text(
+            request.locale,
+            "3—8秒不要只讲结论，要拍到近景、对比、测量或真实操作。",
+            "3—8秒不要只講結論，要拍到近鏡、對比、量度或真實操作。",
+            "Use a close-up, comparison, measurement or real action in the 3–8 second proof.",
+        ),
+        "voice_visual_mismatch": _text(
+            request.locale,
+            "逐镜检查口播与画面：说到哪个细节，镜头就展示哪个细节。",
+            "逐鏡檢查口播與畫面：說到哪個細節，鏡頭就展示哪個細節。",
+            "Align every spoken detail with the same visible detail in that shot.",
+        ),
+        "cta_not_interactive": _text(
+            request.locale,
+            "结尾只保留一个具体互动动作，例如评论选择、回答问题或收藏。",
+            "結尾只保留一個具體互動行動，例如留言選擇、回答問題或收藏。",
+            "End with one specific action such as choosing in comments, answering or saving.",
+        ),
+        "bgm_incomplete_direction": _text(
+            request.locale,
+            "补充可搜索的音乐类型、进入时机，以及口播时降低音量的位置。",
+            "補充可搜尋的音樂類型、進入時機，以及口播時降低音量的位置。",
+            "Specify a searchable music style, entry point and where to lower it under speech.",
+        ),
+        "trend_not_integrated": _text(
+            request.locale,
+            "不要只贴热点名称；用热点建立选择或讨论，并在三秒内回到产品。",
+            "不要只貼熱點名稱；用熱點建立選擇或討論，並在三秒內回到產品。",
+            "Use the trend to frame a choice or discussion, then return to the product within three seconds.",
+        ),
+        "generic_ad_copy": _text(
+            request.locale,
+            "把空泛形容词换成观众能在镜头里看到的事实或动作。",
+            "把空泛形容詞換成觀眾能在鏡頭裡看到的事實或動作。",
+            "Replace generic promotion with a fact or action viewers can see.",
+        ),
+        "high_resource_shoot": _text(
+            request.locale,
+            "把高门槛拍摄改成手机、现有场地和一人可完成的镜头。",
+            "把高門檻拍攝改成手機、現有場地和一人可完成的鏡頭。",
+            "Replace high-threshold production with shots one person can film by phone on site.",
+        ),
+        "too_many_shots": _text(
+            request.locale,
+            "把镜头收敛到3—6个，优先保留开场、证据、解释和互动。",
+            "把鏡頭收斂到3—6個，優先保留開場、證據、解釋和互動。",
+            "Reduce the plan to 3–6 shots covering opening, proof, explanation and interaction.",
+        ),
+    }
+    improvements = [
+        issue_messages[issue["code"]]
+        for issue in evaluation["issues"]
+        if issue["code"] in issue_messages
+    ]
+    improvements = list(dict.fromkeys(improvements))[:3]
+    if not improvements:
+        improvements = [
+            _text(
+                request.locale,
+                "发布后记录三秒留存、完播和有效评论，用真实反馈调整下一条开场。",
+                "發佈後記錄三秒留存、完播和有效留言，用真實回饋調整下一條開場。",
+                "After publishing, use three-second retention, completion and useful comments to refine the next opening.",
+            )
+        ]
     return VideoQualityAssessment(
         scores=scores,
         total_score=scores.average(),
@@ -1003,20 +1397,7 @@ def _video_quality_assessment(
                 "Facts come from the supplied description and selling points, with no invented trend data.",
             ),
         ],
-        improvements=[
-            _text(
-                request.locale,
-                f"拍摄前补充一个可核实的{request.product_name}细节，并用近景证明。",
-                f"拍攝前補充一個可核實的{request.product_name}細節，並用近鏡證明。",
-                f"Before filming, add one verifiable {request.product_name} detail and prove it in close-up.",
-            ),
-            _text(
-                request.locale,
-                "发布后记录三秒留存、完播和有效评论，下一轮再调整钩子。",
-                "發佈後記錄三秒留存、完播和有效留言，下一輪再調整開場。",
-                "After publishing, record three-second retention, completion and useful comments.",
-            ),
-        ],
+        improvements=improvements,
     )
 
 
@@ -1115,7 +1496,7 @@ class DeterministicMarketingProvider:
     """Stable, zero-cost provider for demos, tests and offline use."""
 
     name = "mock"
-    model = "farmer-marketing-v1"
+    model = "farmer-marketing-v2"
 
     def generate(self, request: MarketingPlanRequest) -> MarketingPlanResponse:
         started = time.perf_counter()
@@ -1138,84 +1519,70 @@ class DeterministicMarketingProvider:
         platform_name = PLATFORM_NAMES["zh-CN"][request.platform]
         audience = request.audience or "关注新鲜食材、家庭餐桌与产地故事的消费者"
         trend = request.trend.strip()
-        cta = "评论区留言“想尝”，获取规格、价格和发货信息"
         creative_routes = _creative_routes(request)
-        angles: list[tuple[CreativeRouteId, str, str, str, str]] = [
-            (
-                "practical-hook",
-                "实用吸睛",
-                f"挑{product}，先看这个真实细节",
-                f"挑{product}别只看价格，先看这个细节。",
-                "节奏清晰、鼓点轻盈的知识类配乐",
-            ),
-            (
-                "people-story",
-                "人物故事",
-                f"种了这么多年{product}，这一步我不愿省",
-                f"我是{origin}的种植者，做{product}时最不愿省掉的是这一步。",
-                "温暖克制的钢琴与环境声",
-            ),
-            (
-                "playful-contrast",
-                "轻松反差",
-                f"看着普通的{product}，下一镜不一样",
-                f"看着普通的{product}，切开、冲泡或装箱后可能和你想的不一样。",
-                "轻松俏皮、不过度夸张的节奏配乐",
-            ),
-        ]
+        blueprints = _simplified_video_blueprints(request, points)
         videos: list[VideoScript] = []
-        for index, (route_id, angle, title, hook, music) in enumerate(angles):
-            point = points[index % len(points)]
-            script = (
-                f"{hook} 这一季我们最在意的是{point}。"
-                f"{request.product_description.strip()} "
-                f"镜头里不需要复杂表演，把采摘、切开或装箱的真实过程拍清楚，"
-                f"让大家先看见产品，再听见种植者的话。{cta}。"
+        for blueprint in blueprints:
+            route_id = blueprint["route_id"]
+            if route_id not in ("practical-hook", "people-story", "playful-contrast"):
+                raise ValueError("unsupported deterministic creative route")
+            typed_route_id = cast(CreativeRouteId, route_id)
+            hook = blueprint["hook"]
+            cta = blueprint["cta"]
+            proof_voice = " ".join(
+                part
+                for part in (
+                    blueprint["proof_voice"],
+                    _short_product_fact(request.product_description),
+                )
+                if part
             )
             shots = [
                 Shot(
                     seconds="0–3秒",
-                    visual="产品特写快速入镜，保留自然环境声",
+                    visual=blueprint["opening_visual"],
                     voiceover=hook,
-                    filming_tip="手机竖拍，靠近主体，第一镜不要超过3秒",
+                    filming_tip="手机竖拍；第一句话和第一动作同时发生，3秒内必须出现产品",
                 ),
                 Shot(
-                    seconds="3–12秒",
-                    visual="展示产地、采摘或处理过程",
-                    voiceover=f"这一季我们最在意的是{point}。",
-                    filming_tip="用连续动作代替站着讲，画面更有信息量",
+                    seconds="3–8秒",
+                    visual=blueprint["proof_visual"],
+                    voiceover=blueprint["bridge"],
+                    filming_tip="只拍一个连续动作，用近景证明刚才提出的问题",
                 ),
                 Shot(
-                    seconds="12–24秒",
-                    visual="切开、称重、冲泡或细节对比",
-                    voiceover=request.product_description.strip()[:120],
-                    filming_tip="用自然光，避免滤镜改变产品真实颜色",
+                    seconds="8–20秒",
+                    visual=blueprint["context_visual"],
+                    voiceover=proof_voice,
+                    filming_tip="口播说到哪个细节，画面就切到哪个细节；不要用无关空镜",
                 ),
                 Shot(
-                    seconds="24–30秒",
-                    visual="农户出镜或产品整齐装箱",
+                    seconds="20–30秒",
+                    visual=f"回到{product}近景；屏幕只保留一个问题和一个行动词",
                     voiceover=cta,
-                    filming_tip="结尾只保留一个行动指令",
+                    filming_tip="说完问题后停一秒，让观众有时间选择或评论",
                 ),
             ]
+            script = " ".join(shot.voiceover.strip() for shot in shots if shot.voiceover.strip())
             videos.append(
                 VideoScript(
-                    route_id=route_id,
-                    angle=angle,
-                    title=title,
-                    cover_text=f"{product}｜{point}",
+                    route_id=typed_route_id,
+                    angle=blueprint["angle"],
+                    title=blueprint["title"],
+                    cover_text=blueprint["cover_text"],
                     hook=hook,
                     script=script,
-                    background_music=music,
+                    background_music=blueprint["music"],
                     shots=shots,
                     call_to_action=cta,
                     quality_assessment=_video_quality_assessment(
                         request,
-                        route_id,
+                        typed_route_id,
                         hook=hook,
                         script=script,
                         shots=shots,
                         call_to_action=cta,
+                        background_music=blueprint["music"],
                     ),
                 )
             )
@@ -1242,9 +1609,9 @@ class DeterministicMarketingProvider:
             strategy=PlatformStrategy(
                 platform=request.platform,
                 platform_name=platform_name,
-                content_focus="前三秒给出明确看点，中段用现场细节建立兴趣，结尾只设置一个转化动作。",
+                content_focus="前三秒提出具体问题或选择，中段立刻给视觉证据，结尾用一个评论动作承接互动。",
                 recommended_duration="25–40秒；人物故事可延长至60秒",
-                conversion_action=cta,
+                conversion_action="先用评论问题承接互动，再按所选路线引导规格咨询、下一条内容或直播。",
             ),
             trend=trend_brief,
             creative_routes=creative_routes,
@@ -1287,19 +1654,19 @@ class DeterministicMarketingProvider:
                 DailyPlan(
                     day=1,
                     objective="让用户认识产品",
-                    content=f"发布“{angles[0][2]}”实用视频",
+                    content=f"发布“{blueprints[0]['title']}”实用视频",
                     action="记录完播率与高频评论",
                 ),
                 DailyPlan(
                     day=2,
                     objective="解释产品差异",
-                    content=f"发布“{angles[1][2]}”人物视频",
+                    content=f"发布“{blueprints[1]['title']}”人物视频",
                     action="把评论问题加入直播问答",
                 ),
                 DailyPlan(
                     day=3,
                     objective="建立人物信任",
-                    content=f"发布“{angles[2][2]}”反差视频",
+                    content=f"发布“{blueprints[2]['title']}”反差视频",
                     action="置顶一个真实种植细节",
                 ),
                 DailyPlan(
@@ -1386,6 +1753,9 @@ class DeterministicMarketingProvider:
             "听见": "聽見",
             "开始": "開始",
             "选择": "選擇",
+            "会": "會",
+            "错": "錯",
+            "边": "邊",
             "继续": "繼續",
             "已经": "已經",
             "适合": "適合",
@@ -1444,6 +1814,32 @@ class DeterministicMarketingProvider:
             "质量": "質量",
             "推荐": "推薦",
             "信息": "資訊",
+            "形容词": "形容詞",
+            "分层": "分層",
+            "解释": "解釋",
+            "必须": "必須",
+            "还是": "還是",
+            "刚才": "剛才",
+            "揭晓": "揭曉",
+            "停顿": "停頓",
+            "制造": "製造",
+            "环境": "環境",
+            "关系": "關係",
+            "结论": "結論",
+            "检查": "檢查",
+            "开头": "開頭",
+            "宽泛": "寬泛",
+            "脚本": "腳本",
+            "没有": "沒有",
+            "实时": "實時",
+            "搜索": "搜尋",
+            "温暖": "溫暖",
+            "歌词": "歌詞",
+            "压低": "壓低",
+            "恢复": "恢復",
+            "记忆": "記憶",
+            "测量": "測量",
+            "讨论": "討論",
         }
         for source, target in replacements.items():
             raw = raw.replace(source, target)
@@ -1596,6 +1992,36 @@ class DeterministicMarketingProvider:
             "锁": "鎖",
             "链": "鏈",
             "表": "表",
+            "两": "兩",
+            "层": "層",
+            "释": "釋",
+            "须": "須",
+            "还": "還",
+            "刚": "剛",
+            "晓": "曉",
+            "顿": "頓",
+            "环": "環",
+            "系": "係",
+            "论": "論",
+            "检": "檢",
+            "题": "題",
+            "宽": "寬",
+            "并": "並",
+            "没": "沒",
+            "词": "詞",
+            "约": "約",
+            "压": "壓",
+            "满": "滿",
+            "连": "連",
+            "从": "從",
+            "组": "組",
+            "颗": "顆",
+            "竖": "豎",
+            "吗": "嗎",
+            "忆": "憶",
+            "测": "測",
+            "讨": "討",
+            "贴": "貼",
         }
         raw = raw.translate(str.maketrans(character_replacements))
         for placeholder, value in placeholders.items():
@@ -1611,71 +2037,57 @@ class DeterministicMarketingProvider:
         points = _clean_points(request)
         platform_name = PLATFORM_NAMES["en"][request.platform]
         audience = request.audience or "people who care about seasonal food and farm stories"
-        cta = "Comment “details” for specifications, price and delivery information"
         creative_routes = _creative_routes(request)
-        angles: list[tuple[CreativeRouteId, str, str, str]] = [
-            (
-                "practical-hook",
-                "Practical hook",
-                f"Check this detail before choosing {product}",
-                f"Do not choose {product} on price alone; check this detail first.",
-            ),
-            (
-                "people-story",
-                "People story",
-                f"The step I will not skip when growing {product}",
-                f"I grow {product} in {origin}, and this is the step I will not skip.",
-            ),
-            (
-                "playful-contrast",
-                "Playful contrast",
-                f"This ordinary-looking {product} changes in the next shot",
-                f"This ordinary-looking {product} may change your mind after cutting, brewing or packing.",
-            ),
-        ]
+        blueprints = _english_video_blueprints(request, points)
         videos: list[VideoScript] = []
-        for index, (route_id, angle, title, hook) in enumerate(angles):
-            point = points[index % len(points)]
-            script = f"{hook} This season, our focus is {point}. {request.product_description.strip()} Show the real harvest, preparation or packing process instead of overproducing the scene. {cta}."
+        for blueprint in blueprints:
+            route_id = cast(CreativeRouteId, blueprint["route_id"])
+            hook = blueprint["hook"]
+            cta = blueprint["cta"]
+            proof_voice = " ".join(
+                part
+                for part in (
+                    blueprint["proof_voice"],
+                    _short_product_fact(request.product_description, limit=110),
+                )
+                if part
+            )
             shots = [
                 Shot(
                     seconds="0–3s",
-                    visual="Immediate close-up of the product",
+                    visual=blueprint["opening_visual"],
                     voiceover=hook,
-                    filming_tip="Shoot vertically and keep the first shot under three seconds",
+                    filming_tip="Shoot vertically; begin the first action and first sentence together",
                 ),
                 Shot(
-                    seconds="3–12s",
-                    visual="Origin, harvest or handling process",
-                    voiceover=f"Our focus this season is {point}.",
-                    filming_tip="Film an action rather than a static explanation",
+                    seconds="3–8s",
+                    visual=blueprint["proof_visual"],
+                    voiceover=blueprint["bridge"],
+                    filming_tip="Use one continuous close-up action to answer the opening question",
                 ),
                 Shot(
-                    seconds="12–24s",
-                    visual="Cut-open, brewing, weighing or detail comparison",
-                    voiceover=request.product_description.strip()[:120],
-                    filming_tip="Use daylight and preserve the product's real color",
+                    seconds="8–20s",
+                    visual=blueprint["context_visual"],
+                    voiceover=proof_voice,
+                    filming_tip="Match every spoken detail with the exact action or product detail on screen",
                 ),
                 Shot(
-                    seconds="24–30s",
-                    visual="Farmer on camera or packed product",
+                    seconds="20–30s",
+                    visual=f"Return to a close-up of {product}; show only one question and one action word on screen",
                     voiceover=cta,
-                    filming_tip="End with one clear action",
+                    filming_tip="Pause for one second after the question so viewers have time to choose",
                 ),
             ]
+            script = " ".join(shot.voiceover.strip() for shot in shots if shot.voiceover.strip())
             videos.append(
                 VideoScript(
                     route_id=route_id,
-                    angle=angle,
-                    title=title,
-                    cover_text=f"{product} · {point}",
+                    angle=blueprint["angle"],
+                    title=blueprint["title"],
+                    cover_text=blueprint["cover_text"],
                     hook=hook,
                     script=script,
-                    background_music=[
-                        "clean rhythmic explainer",
-                        "warm piano with natural ambience",
-                        "light playful rhythm with natural ambience",
-                    ][index],
+                    background_music=blueprint["music"],
                     shots=shots,
                     call_to_action=cta,
                     quality_assessment=_video_quality_assessment(
@@ -1685,6 +2097,7 @@ class DeterministicMarketingProvider:
                         script=script,
                         shots=shots,
                         call_to_action=cta,
+                        background_music=blueprint["music"],
                     ),
                 )
             )
@@ -1711,9 +2124,9 @@ class DeterministicMarketingProvider:
             strategy=PlatformStrategy(
                 platform=request.platform,
                 platform_name=platform_name,
-                content_focus="Make the first three seconds specific, prove the point with visible detail, and end with one conversion action.",
+                content_focus="Open with a specific question or choice, provide visual evidence immediately, and finish with one interaction action.",
                 recommended_duration="25–40 seconds; up to 60 seconds for a farmer story",
-                conversion_action=cta,
+                conversion_action="Use a route-specific comment question first, then guide viewers to details, the next episode or a live session.",
             ),
             trend=trend,
             creative_routes=creative_routes,
@@ -1763,19 +2176,19 @@ class DeterministicMarketingProvider:
                 DailyPlan(
                     day=1,
                     objective="Introduce the product",
-                    content=f"Publish “{angles[0][2]}”",
+                    content=f"Publish “{blueprints[0]['title']}”",
                     action="Record completion rate and recurring comments",
                 ),
                 DailyPlan(
                     day=2,
                     objective="Explain the difference",
-                    content=f"Publish “{angles[1][2]}”",
+                    content=f"Publish “{blueprints[1]['title']}”",
                     action="Add comment questions to the live Q&A",
                 ),
                 DailyPlan(
                     day=3,
                     objective="Build personal trust",
-                    content=f"Publish “{angles[2][2]}”",
+                    content=f"Publish “{blueprints[2]['title']}”",
                     action="Pin one concrete growing detail",
                 ),
                 DailyPlan(
@@ -1816,17 +2229,84 @@ class DeterministicMarketingProvider:
         )
 
 
-SYSTEM_PROMPT = """You are Heyu AI, a farmer-first agricultural marketing strategist.
-Create a practical plan that a farmer can film with a phone. Never invent product
-facts, certifications, prices, medical effects, stock or trend data. Return one
-JSON object that strictly matches the supplied schema. Produce exactly three
-selectable creative routes (practical hook, people story and playful contrast),
-one video and a structured quality assessment for each route, three explainable
-topic signals (manual input, seasonal farming and evergreen pain point), and seven
-daily actions. Topic signals are planning aids, never claims of real-time popularity.
-End with a contextual route-selection, shoot-preparation and publication-record
-workflow. Keep the requested locale natural and adapt the content to the selected
-Chinese social platform."""
+SYSTEM_PROMPT = """You are Heyu AI, a farmer-first short-video growth producer.
+Your primary job is to turn a farm product brief and a selected topic signal into
+content that is specific, watchable and easy to film with one phone.
+
+Return one JSON object that strictly matches the supplied schema. Produce exactly
+three genuinely different creative routes:
+1. Practical hook: solve one concrete buying, choosing, storing or using problem.
+2. People story: follow one real action and explain the grower's decision behind it.
+3. Playful contrast: let viewers choose, compare or guess before a visual reveal.
+
+For every route:
+- Put the product and a concrete question, contrast or consequence in the first
+  three seconds. Never use vague hooks such as "check this detail" without naming
+  the object viewers should inspect.
+- Use a 0–3s hook, 3–8s visual proof, 8–20s explanation or contrast, and one clear
+  interaction action at the end.
+- Match every spoken claim with a filmable close-up, action or side-by-side proof.
+- Give route-specific BGM direction including mood, tempo and where music enters,
+  pauses or lowers under speech.
+- Make the three titles, hooks, narrative subjects, shot logic and CTAs different.
+- Use the selected trend as a narrative structure or discussion entry, then return
+  to the product within three seconds. Do not paste an unrelated trend into copy.
+- Avoid generic advertising phrases such as high quality, great taste, worth
+  buying, must-buy or best choice.
+
+Also provide three explainable topic signals and seven daily actions, then end with
+route selection, shoot preparation and publication follow-up. Keep the requested
+locale natural and adapt pacing and interaction to the selected Chinese platform.
+Use only supplied product facts. Do not invent certifications, prices, medical
+effects, stock, popularity metrics, views, sales or trend rankings."""
+
+
+def _refresh_plan_quality(
+    request: MarketingPlanRequest,
+    plan: MarketingPlanResponse,
+) -> MarketingPlanResponse:
+    """Replace model self-scoring with the shared deterministic evaluator."""
+
+    for video in plan.videos:
+        video.quality_assessment = _video_quality_assessment(
+            request,
+            video.route_id,
+            hook=video.hook,
+            script=video.script,
+            shots=video.shots,
+            call_to_action=video.call_to_action,
+            background_music=video.background_music,
+        )
+    return plan
+
+
+def _plan_revision_issues(
+    request: MarketingPlanRequest,
+    plan: MarketingPlanResponse,
+) -> list[dict[str, object]]:
+    issues: list[dict[str, object]] = []
+    for video in plan.videos:
+        evaluation = evaluate_script_quality(
+            product_name=request.product_name,
+            trend=request.trend,
+            hook=video.hook,
+            script=video.script,
+            shots=video.shots,
+            cta=video.call_to_action,
+            bgm=video.background_music,
+        )
+        important = [
+            issue for issue in evaluation["issues"] if issue["severity"] == "high"
+        ]
+        if evaluation["total_score"] < 78 or important:
+            issues.append(
+                {
+                    "route_id": video.route_id,
+                    "total_score": evaluation["total_score"],
+                    "issues": important or evaluation["issues"][:3],
+                }
+            )
+    return issues
 
 
 class OpenAICompatibleMarketingProvider:
@@ -1845,62 +2325,100 @@ class OpenAICompatibleMarketingProvider:
         started = time.perf_counter()
         endpoint = self.settings.ai_base_url.rstrip("/") + "/chat/completions"
         schema = MarketingPlanResponse.model_json_schema()
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "request": request.model_dump(mode="json"),
+                        "required_response_schema": schema,
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        ]
         payload = {
             "model": self.model,
             "temperature": 0.55,
             "response_format": {"type": "json_object"},
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        {
-                            "request": request.model_dump(),
-                            "required_response_schema": schema,
-                        },
-                        ensure_ascii=False,
-                    ),
-                },
-            ],
+            "messages": messages,
         }
         try:
-            response = httpx.post(
-                endpoint,
-                headers={"Authorization": f"Bearer {self.settings.ai_api_key}"},
-                json=payload,
-                timeout=self.settings.ai_timeout_seconds,
+            candidates: list[MarketingPlanResponse] = []
+            for attempt in range(2):
+                response = httpx.post(
+                    endpoint,
+                    headers={"Authorization": f"Bearer {self.settings.ai_api_key}"},
+                    json=payload,
+                    timeout=self.settings.ai_timeout_seconds,
+                )
+                response.raise_for_status()
+                body = response.json()
+                if not isinstance(body, dict):
+                    raise ValueError("Model response body must be an object")
+                choices = body.get("choices")
+                if not isinstance(choices, list) or not choices:
+                    raise ValueError("Model response did not include choices")
+                first_choice = choices[0]
+                if not isinstance(first_choice, dict):
+                    raise ValueError("Model choice must be an object")
+                message = first_choice.get("message")
+                if not isinstance(message, dict):
+                    raise ValueError("Model choice did not include a message")
+                raw_content = message.get("content")
+                if not isinstance(raw_content, str) or not raw_content.strip():
+                    raise ValueError("Model message content must be non-empty text")
+                content = raw_content.strip()
+                if content.startswith("```"):
+                    content = re.sub(r"^```(?:json)?\s*", "", content, flags=re.IGNORECASE)
+                    content = re.sub(r"\s*```$", "", content)
+                parsed = json.loads(content)
+                if not isinstance(parsed, dict):
+                    raise ValueError("Model content must decode to a JSON object")
+                parsed.update(
+                    {
+                        "provider": self.name,
+                        "model": self.model,
+                        "latency_ms": int((time.perf_counter() - started) * 1000),
+                    }
+                )
+                candidate = _refresh_plan_quality(
+                    request,
+                    MarketingPlanResponse.model_validate(parsed),
+                )
+                candidates.append(candidate)
+                revision_issues = _plan_revision_issues(request, candidate)
+                if not revision_issues or attempt == 1:
+                    break
+                messages.extend(
+                    [
+                        {"role": "assistant", "content": content},
+                        {
+                            "role": "user",
+                            "content": json.dumps(
+                                {
+                                    "task": (
+                                        "Revise the complete JSON once. Fix the listed script "
+                                        "quality problems without changing supplied product facts, "
+                                        "then return only the full response object."
+                                    ),
+                                    "quality_issues": revision_issues,
+                                    "required_response_schema": schema,
+                                },
+                                ensure_ascii=False,
+                            ),
+                        },
+                    ]
+                )
+            if not candidates:
+                raise ValueError("Model did not produce a valid marketing plan")
+            return max(
+                candidates,
+                key=lambda item: min(
+                    video.quality_assessment.total_score for video in item.videos
+                ),
             )
-            response.raise_for_status()
-            body = response.json()
-            if not isinstance(body, dict):
-                raise ValueError("Model response body must be an object")
-            choices = body.get("choices")
-            if not isinstance(choices, list) or not choices:
-                raise ValueError("Model response did not include choices")
-            first_choice = choices[0]
-            if not isinstance(first_choice, dict):
-                raise ValueError("Model choice must be an object")
-            message = first_choice.get("message")
-            if not isinstance(message, dict):
-                raise ValueError("Model choice did not include a message")
-            content = message.get("content")
-            if not isinstance(content, str) or not content.strip():
-                raise ValueError("Model message content must be non-empty text")
-            content = content.strip()
-            if content.startswith("```"):
-                content = re.sub(r"^```(?:json)?\s*", "", content, flags=re.IGNORECASE)
-                content = re.sub(r"\s*```$", "", content)
-            parsed = json.loads(content)
-            if not isinstance(parsed, dict):
-                raise ValueError("Model content must decode to a JSON object")
-            parsed.update(
-                {
-                    "provider": self.name,
-                    "model": self.model,
-                    "latency_ms": int((time.perf_counter() - started) * 1000),
-                }
-            )
-            return MarketingPlanResponse.model_validate(parsed)
         except (
             httpx.HTTPError,
             KeyError,

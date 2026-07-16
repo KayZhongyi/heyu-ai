@@ -18,6 +18,7 @@ from app.ai import (
     validate_campaign_brief_output,
     validate_generation_output,
 )
+from app.knowledge_indexing import index_knowledge_source, retrieve_knowledge_context
 from app.models import (
     AuditEvent,
     Brand,
@@ -44,6 +45,7 @@ from app.models import (
     new_id,
     utc_now,
 )
+from app.provider_connections import resolve_organization_ai_provider
 from app.schemas import (
     Actor,
     AssetReview,
@@ -535,7 +537,7 @@ def _new_marketing_plan_version(
         organization_id=actor.organization_id,
         marketing_plan_id=plan.id,
         version_number=version_number,
-        request_payload=data.request_payload.model_dump(mode="json"),
+        request_payload=data.request_payload.model_dump(mode="json", exclude_none=True),
         content=data.content.model_dump(mode="json"),
         provider=data.content.provider,
         model=data.content.model,
@@ -1026,6 +1028,8 @@ def review_knowledge_source(
     )
     db.commit()
     db.refresh(source)
+    if source.status == ReviewStatus.approved:
+        source = index_knowledge_source(db, actor, source.id)
     return source
 
 
@@ -3798,9 +3802,39 @@ def generate_content(
     latest_approved_by_group: dict[str, KnowledgeSource] = {}
     for source in approved_sources:
         latest_approved_by_group.setdefault(source.source_group_id, source)
-    sources, context_manifest = select_generation_context(
-        list(latest_approved_by_group.values()), project, brand, product
+    latest_sources = list(latest_approved_by_group.values())
+    retrieval_query = " ".join(
+        (
+            project.title,
+            project.platform,
+            project.target_audience,
+            project.objective,
+            project.extra_requirements,
+            brand.name,
+            product.name,
+            product.origin,
+            " ".join(product.selling_points),
+        )
     )
+    indexed_context = retrieve_knowledge_context(
+        db,
+        actor,
+        query=retrieval_query,
+        source_ids={source.id for source in latest_sources},
+    )
+    sources = list(indexed_context.sources)
+    context_manifest = list(indexed_context.manifest)
+    context_policy = indexed_context.retrieval.strategy
+    fallback_reason = indexed_context.retrieval.fallback_reason
+    if not sources:
+        sources, context_manifest = select_generation_context(
+            latest_sources,
+            project,
+            brand,
+            product,
+        )
+        context_policy = "lexical-v1-fallback"
+        fallback_reason = "knowledge-index-unavailable"
     if not sources:
         raise HTTPException(
             status_code=409,
@@ -3809,7 +3843,11 @@ def generate_content(
                 "linked to this brand or product"
             ),
         )
-    provider = get_ai_provider()
+    provider = resolve_organization_ai_provider(
+        db,
+        actor.organization_id,
+        environment_provider=get_ai_provider(),
+    )
     source_ids = [source.id for source in sources]
     normalized_input = {
         "content_type": project.content_type.value,
@@ -3820,7 +3858,8 @@ def generate_content(
         "extra_requirements": project.extra_requirements,
         "brand_id": brand.id,
         "product_id": product.id,
-        "context_policy": "lexical-v1",
+        "context_policy": context_policy,
+        "context_fallback_reason": fallback_reason,
         "context_sources": context_manifest,
         "campaign_package_id": campaign.id if campaign else None,
         "brief_revision_id": brief.id if brief else None,
@@ -3863,6 +3902,7 @@ def generate_content(
             farmer_evidence,
             brief,
         )
+        normalized_input["provider_attempts"] = list(provider.attempts)
         validated_content = validate_generation_output(
             result.content,
             project.content_type,
@@ -3871,6 +3911,7 @@ def generate_content(
         validate_campaign_brief_output(validated_content, brief)
         _validate_farmer_claims(validated_content, farmer_evidence)
     except FarmerClaimViolation as exc:
+        normalized_input["provider_attempts"] = list(provider.attempts)
         latency_ms = max(1, int((time.perf_counter() - started) * 1000))
         failed_run = GenerationRun(
             organization_id=actor.organization_id,
@@ -3911,6 +3952,7 @@ def generate_content(
         db.commit()
         raise _farmer_claim_http_error(exc) from exc
     except AIProviderError as exc:
+        normalized_input["provider_attempts"] = list(provider.attempts)
         latency_ms = max(1, int((time.perf_counter() - started) * 1000))
         failed_run = GenerationRun(
             organization_id=actor.organization_id,

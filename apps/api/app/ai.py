@@ -28,12 +28,18 @@ class ContextSource:
     citation_label: str
     content: str
     content_sha256: str
+    chunk_id: str | None = None
+    locator: dict | None = None
+    retrieval_score: float | None = None
 
 
 @dataclass
 class GenerationResult:
     content: dict
     latency_ms: int
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    provider_request_id: str | None = None
 
 
 class AIProvider(Protocol):
@@ -1510,6 +1516,16 @@ def validate_campaign_brief_output(
         )
 
 
+def _optional_usage_count(payload: object, key: str) -> int | None:
+    if not isinstance(payload, dict):
+        return None
+    usage = payload.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    value = usage.get(key)
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
 class OpenAICompatibleProvider:
     """Adapter for servers implementing the OpenAI chat-completions contract."""
 
@@ -1735,6 +1751,9 @@ class OpenAICompatibleProvider:
         return GenerationResult(
             content=content,
             latency_ms=max(1, int((time.perf_counter() - started) * 1000)),
+            input_tokens=_optional_usage_count(data, "prompt_tokens"),
+            output_tokens=_optional_usage_count(data, "completion_tokens"),
+            provider_request_id=data.get("id") if isinstance(data.get("id"), str) else None,
         )
 
 

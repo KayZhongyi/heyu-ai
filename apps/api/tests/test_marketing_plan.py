@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -51,6 +52,43 @@ def test_deterministic_plan_is_complete():
     assert all(len(video.shots) >= 3 for video in result.videos)
     assert len({video.angle for video in result.videos}) == 3
     assert_no_corrupted_text(result)
+
+
+def test_request_preserves_selected_trend_provenance():
+    request = sample_request(
+        trend_snapshot={
+            "title": "盛夏清晨采收",
+            "source_url": "https://example.test/trends/harvest",
+            "source_label": "农业资讯测试源",
+            "source_type": "rss",
+            "published_at": datetime(2026, 7, 15, 8, tzinfo=UTC),
+            "captured_at": datetime(2026, 7, 16, 9, tzinfo=UTC),
+            "fit_score": 88,
+            "recommendation": "recommended",
+            "recommendation_reason": "与番茄、清晨采摘和抖音镜头都直接相关。",
+        }
+    )
+
+    assert request.trend == "盛夏清晨采收"
+    assert request.trend_snapshot is not None
+    assert request.trend_snapshot.source_type == "rss"
+    assert request.model_dump(mode="json")["trend_snapshot"]["source_url"].startswith("https://")
+
+
+def test_request_rejects_mismatched_trend_snapshot():
+    with pytest.raises(ValidationError, match="trend must match"):
+        sample_request(
+            trend="另一个热点",
+            trend_snapshot={
+                "title": "盛夏清晨采收",
+                "source_label": "用户提供",
+                "source_type": "manual",
+                "captured_at": datetime(2026, 7, 16, 9, tzinfo=UTC),
+                "fit_score": 80,
+                "recommendation": "recommended",
+                "recommendation_reason": "适合当前产品。",
+            },
+        )
 
 
 @pytest.mark.parametrize(
@@ -199,7 +237,8 @@ def test_plan_supports_three_locales():
     ]
     zh_hk_text = json.dumps(zh_hk.model_dump(), ensure_ascii=False)
     assert "不一样" not in zh_hk_text
-    assert zh_hk.videos[2].title.endswith("下一鏡不一樣")
+    assert "你可能會選錯" in zh_hk.videos[2].title
+    assert "会选错" not in zh_hk_text
     assert [route.name for route in en.creative_routes] == [
         "Practical hook",
         "People story",
@@ -207,6 +246,52 @@ def test_plan_supports_three_locales():
     ]
     for result in (zh_cn, zh_hk, en):
         assert_no_corrupted_text(result)
+
+
+def test_hong_kong_chinese_system_copy_has_no_common_simplified_residue():
+    provider = DeterministicMarketingProvider()
+    result = provider.generate(
+        sample_request(
+            locale="zh-HK",
+            product_name="Tomato",
+            origin="Hong Kong",
+            product_description="Fresh seasonal tomato for family meals.",
+            selling_points=["fresh", "farm direct", "seasonal"],
+            audience="Families",
+            platform="wechat-channels",
+            trend="summer meal",
+        )
+    )
+    generated_text = json.dumps(result.model_dump(), ensure_ascii=False)
+    simplified_residue = (
+        "形容词",
+        "分层",
+        "解释",
+        "必须",
+        "还是",
+        "两",
+        "刚才",
+        "揭晓",
+        "停顿",
+        "环境",
+        "关系",
+        "结论",
+        "检查",
+        "开头",
+        "宽泛",
+        "脚本",
+        "没有",
+        "实时",
+        "搜索",
+        "温暖",
+        "歌词",
+        "压低",
+        "恢复",
+        "记忆",
+        "测量",
+        "讨论",
+    )
+    assert not [token for token in simplified_residue if token in generated_text]
 
 
 def test_request_deduplicates_goals_and_rejects_high_risk_claims():
@@ -237,6 +322,31 @@ def test_public_preview_endpoint_needs_no_account(client: TestClient):
     assert body["provider"] == "mock"
     assert len(body["videos"]) == 3
     assert len(body["seven_day_plan"]) == 7
+
+
+def test_public_trend_discovery_returns_ranked_fallback_without_account(
+    client: TestClient,
+):
+    response = client.post(
+        "/v1/trends/discover",
+        json={
+            "product_name": "当季番茄",
+            "selling_points": ["自然成熟", "当天采摘"],
+            "audience": "年轻家庭",
+            "platform": "douyin",
+            "limit": 4,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["used_fallback"] is True
+    assert len(body["items"]) >= 2
+    assert all(
+        item["candidate"]["source_type"] in {"seasonal", "evergreen"}
+        for item in body["items"]
+    )
+    assert "不是实时热度" in body["metric_note"]
 
 
 def test_configured_generation_endpoint_requires_account(client: TestClient):
@@ -378,6 +488,52 @@ def test_openai_compatible_provider_accepts_fenced_json(monkeypatch):
     assert len(result.videos) == 3
     assert len(result.creative_routes) == 3
     assert len(result.topic_signals) == 3
+
+
+def test_openai_provider_skips_revision_when_quality_is_sufficient(monkeypatch):
+    source = DeterministicMarketingProvider().generate(sample_request()).model_dump()
+    body = {"choices": [{"message": {"content": json.dumps(source, ensure_ascii=False)}}]}
+    calls = []
+
+    def fake_post(*args, **kwargs):
+        calls.append(kwargs["json"])
+        return _FakeResponse(body)
+
+    monkeypatch.setattr(marketing.httpx, "post", fake_post)
+    monkeypatch.setattr(marketing, "_plan_revision_issues", lambda request, plan: [])
+
+    OpenAICompatibleMarketingProvider(_openai_settings()).generate(sample_request())
+
+    assert len(calls) == 1
+
+
+def test_openai_provider_revises_low_quality_plan_at_most_once(monkeypatch):
+    source = DeterministicMarketingProvider().generate(sample_request()).model_dump()
+    body = {"choices": [{"message": {"content": json.dumps(source, ensure_ascii=False)}}]}
+    calls = []
+    quality_checks = iter(
+        [
+            [{"route_id": "practical-hook", "total_score": 60, "issues": []}],
+            [],
+        ]
+    )
+
+    def fake_post(*args, **kwargs):
+        calls.append(kwargs["json"])
+        return _FakeResponse(body)
+
+    monkeypatch.setattr(marketing.httpx, "post", fake_post)
+    monkeypatch.setattr(
+        marketing,
+        "_plan_revision_issues",
+        lambda request, plan: next(quality_checks),
+    )
+
+    OpenAICompatibleMarketingProvider(_openai_settings()).generate(sample_request())
+
+    assert len(calls) == 2
+    assert len(calls[1]["messages"]) == 4
+    assert "quality_issues" in calls[1]["messages"][-1]["content"]
 
 
 def test_openai_compatible_provider_rejects_legacy_response_without_intelligence(monkeypatch):

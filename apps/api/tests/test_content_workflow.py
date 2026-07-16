@@ -199,9 +199,7 @@ def test_generation_requires_approved_assets_and_edits_reset_approval(client, au
     assert "product.approved" in actions
 
 
-def test_provider_failure_is_persisted_without_creating_a_content_version(
-    client, auth, monkeypatch
-):
+def test_provider_failure_falls_back_and_records_the_real_attempt(client, auth, monkeypatch):
     brand, product = create_brand_and_product(client, auth)
     create_approved_source(client, auth, brand, product)
     project = client.post(
@@ -240,37 +238,36 @@ def test_provider_failure_is_persisted_without_creating_a_content_version(
         headers=auth,
     )
 
-    assert response.status_code == 502
-    assert response.json()["detail"] == "The configured AI provider timed out"
-    assert (
+    assert response.status_code == 201
+    assert len(
         client.get(
             f"/v1/content-projects/{project['id']}/versions",
             headers=auth,
         ).json()
-        == []
-    )
+    ) == 1
     runs = client.get(
         f"/v1/content-projects/{project['id']}/generation-runs",
         headers=auth,
     ).json()
     assert len(runs) == 1
-    assert runs[0]["status"] == "failed"
-    assert runs[0]["provider"] == "external-test"
-    assert runs[0]["model"] == "failure-model"
-    assert runs[0]["output"] == {
-        "error": {
-            "code": "provider_timeout",
-            "message": "The configured AI provider timed out",
-        }
-    }
+    assert runs[0]["status"] == "succeeded"
+    assert runs[0]["provider"] == "mock"
+    assert runs[0]["model"] == "deterministic-v1"
+    assert runs[0]["normalized_input"]["provider_attempts"] == [
+        {
+            "provider": "external-test",
+            "model": "failure-model",
+            "status": "failed",
+            "error_code": "provider_timeout",
+            "error": "The configured AI provider timed out",
+        },
+        {
+            "provider": "mock",
+            "model": "deterministic-v1",
+            "status": "succeeded",
+        },
+    ]
     assert "api_key" not in str(runs[0]).lower()
-    failure_event = next(
-        event
-        for event in client.get("/v1/audit-events", headers=auth).json()
-        if event["action"] == "generation.failed"
-    )
-    assert failure_event["entity_id"] == runs[0]["id"]
-    assert failure_event["details"]["error_code"] == "provider_timeout"
 
 
 def test_invalid_provider_output_is_failed_and_never_becomes_content(client, auth, monkeypatch):
@@ -703,7 +700,7 @@ def test_approved_knowledge_is_cited_and_versions_are_append_only(client, auth):
     persisted_run = generation_runs.json()[0]
     assert persisted_run["id"] == result["run_id"]
     assert persisted_run["normalized_input"]["content_type"] == "short_video_30s"
-    assert persisted_run["normalized_input"]["context_policy"] == "lexical-v1"
+    assert persisted_run["normalized_input"]["context_policy"] == "lexical-v1-fallback"
     assert (
         persisted_run["normalized_input"]["context_sources"][0]["source_id"] == source.json()["id"]
     )
@@ -800,15 +797,16 @@ def test_generation_context_is_bounded_and_excerpt_provenance_is_persisted(clien
     assert response.status_code == 201, response.text
     generated = response.json()
 
-    assert generated["source_ids"] == [relevant["id"], second["id"]]
+    assert generated["source_ids"] == [relevant["id"]]
+    assert second["id"] not in generated["source_ids"]
     run = client.get(
         f"/v1/content-projects/{project['id']}/generation-runs",
         headers=auth,
     ).json()[0]
     manifest = run["normalized_input"]["context_sources"]
-    assert sum(item["included_chars"] for item in manifest) == 12000
+    assert 0 < sum(item["included_chars"] for item in manifest) <= 12000
     assert all(item["included_chars"] <= 6000 for item in manifest)
-    assert all(item["truncated"] for item in manifest)
+    assert all(item["included_chars"] < item["source_chars"] for item in manifest)
     assert manifest[0]["source_sha256"] == relevant["content_sha256"]
     assert manifest[0]["excerpt_sha256"] != manifest[0]["source_sha256"]
     assert run["sources"][0]["id"] == relevant["id"]

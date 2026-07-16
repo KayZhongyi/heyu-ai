@@ -141,9 +141,16 @@ def audit_scenario(scenario: Scenario) -> dict[str, Any]:
         "routes": [
             {
                 "route_id": video["route_id"],
+                "angle": video["angle"],
                 "title": video["title"],
+                "cover_text": video["cover_text"],
                 "hook": video["hook"],
+                "script": video["script"],
+                "background_music": video["background_music"],
+                "shots": video["shots"],
+                "call_to_action": video["call_to_action"],
                 "quality_score": video["quality_assessment"]["total_score"],
+                "strengths": video["quality_assessment"]["strengths"],
                 "improvements": video["quality_assessment"]["improvements"],
             }
             for video in payload["videos"]
@@ -181,6 +188,34 @@ def render_markdown(report: dict[str, Any]) -> str:
                 f"| `{route['route_id']}` | {route['title']} | {route['quality_score']} |"
             )
         lines.append("")
+        for route in scenario["routes"]:
+            lines.extend(
+                [
+                    f"### {route['angle']}（`{route['route_id']}`）",
+                    "",
+                    f"- 封面：{route['cover_text']}",
+                    f"- 前三秒：{route['hook']}",
+                    f"- BGM：{route['background_music']}",
+                    f"- CTA：{route['call_to_action']}",
+                    f"- 脚本：{route['script']}",
+                    "",
+                    "| 时间 | 画面 | 口播/字幕 | 拍摄提示 |",
+                    "| --- | --- | --- | --- |",
+                ]
+            )
+            for shot in route["shots"]:
+                lines.append(
+                    f"| {shot['seconds']} | {shot['visual']} | {shot['voiceover']} | "
+                    f"{shot['filming_tip']} |"
+                )
+            lines.extend(
+                [
+                    "",
+                    f"- 优点：{'；'.join(route['strengths'])}",
+                    f"- 下一轮改进：{'；'.join(route['improvements'])}",
+                    "",
+                ]
+            )
     lines.extend(
         [
             "## 人工复核清单",

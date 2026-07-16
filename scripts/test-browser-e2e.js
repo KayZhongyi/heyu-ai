@@ -96,6 +96,19 @@ async function expectSimpleModeLocale(page, locale, expectedCases, expectedPlatf
   for (const label of expectedPlatforms) {
     await page.getByText(label, { exact: true }).waitFor();
   }
+  const generationLabels = {
+    "zh-CN": ["选择生成方式", "规则 Demo", "真实模型", "外部热点源（可选）"],
+    "zh-HK": ["選擇生成方式", "規則 Demo", "真實模型", "外部熱點來源（可選）"],
+    en: ["Choose how to generate", "Rules demo", "Live model", "External trend feeds (optional)"],
+  };
+  for (const label of generationLabels[locale]) {
+    await page.getByText(label, { exact: true }).waitFor();
+  }
+  assert.equal(
+    await page.locator('[name="generation_mode"][value="rules"]').isChecked(),
+    true,
+    `${locale} did not default to the rules demo`,
+  );
   const visibleText = await page.locator("body").innerText();
   assert.doesNotMatch(
     visibleText,
@@ -122,6 +135,8 @@ async function generateDemoCase(
   const response = await responsePromise;
   assert.equal(response.status(), 200, `${caseId} preview request failed`);
   await page.locator("#result-state").waitFor({ state: "visible" });
+  assert.equal(await page.locator("#provider-meta").getAttribute("data-generation-mode"), "rules");
+  assert.equal(await page.locator("#provider-meta").getAttribute("data-degraded"), "false");
   assert.equal((await page.locator("#result-product").textContent()).trim(), expectedProduct);
   assert.equal(
     await page.locator(`[data-demo-case="${caseId}"]`).evaluate((node) =>
@@ -410,6 +425,81 @@ async function main() {
       "Douyin",
       "What to do next",
     );
+    let trendRequestPayload;
+    await page.route(
+      "**/v1/trends/discover",
+      async (route) => {
+        trendRequestPayload = route.request().postDataJSON();
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            items: [
+              {
+                candidate: {
+                  title: "seasonal produce and everyday family meals",
+                  source_url: "https://feeds.example.test/agriculture.xml",
+                  source_label: "Agriculture feed",
+                  captured_at: "2026-07-16T00:00:00Z",
+                  published_at: "2026-07-15T00:00:00Z",
+                  source_type: "rss",
+                  summary: "A traceable RSS item for the browser path.",
+                },
+                fit: {
+                  product: { score: 90, explanation: "Product fit" },
+                  selling_points: { score: 88, explanation: "Selling point fit" },
+                  audience: { score: 84, explanation: "Audience fit" },
+                  platform: { score: 82, explanation: "Platform fit" },
+                  timeliness: { score: 86, explanation: "Timely" },
+                  filmability: { score: 91, explanation: "Easy to film" },
+                },
+                fit_score: 87,
+                recommendation: "recommended",
+                recommendation_reason: "Relevant and practical.",
+              },
+            ],
+            warnings: [],
+            used_fallback: false,
+            metric_note: "Fit score is not a real-time popularity metric.",
+          }),
+        });
+      },
+      { times: 1 },
+    );
+    await page
+      .locator('[name="feed_sources"]')
+      .fill("Agriculture feed | https://feeds.example.test/agriculture.xml");
+    await page.locator('[name="generation_mode"][value="model"]').check();
+    await page.getByText("Live model mode", { exact: true }).waitFor();
+    const liveGenerationResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() === `${baseUrl}/v1/marketing/generate` &&
+        response.request().method() === "POST",
+    );
+    await page.locator('#marketing-form [type="submit"]').click();
+    const liveGenerationResponse = await liveGenerationResponsePromise;
+    assert.equal(liveGenerationResponse.status(), 200, "live model generation request failed");
+    assert.ok(trendRequestPayload, "trend discovery request was not captured");
+    assert.deepEqual(trendRequestPayload.feed_sources, [
+      {
+        url: "https://feeds.example.test/agriculture.xml",
+        label: "Agriculture feed",
+      },
+    ]);
+    assert.equal(
+      liveGenerationResponse.request().headers().authorization,
+      `Bearer ${ownerToken}`,
+      "live model generation did not use the signed-in team token",
+    );
+    const liveGeneration = await liveGenerationResponse.json();
+    const providerMeta = page.locator("#provider-meta");
+    await providerMeta.waitFor();
+    assert.equal(await providerMeta.getAttribute("data-generation-mode"), "model");
+    assert.equal(
+      await providerMeta.getAttribute("data-degraded"),
+      String(Boolean(liveGeneration.degraded)),
+    );
+    assert.match(await providerMeta.innerText(), new RegExp(liveGeneration.provider, "i"));
     const createMarketingPlanResponsePromise = page.waitForResponse(
       (response) =>
         response.url() === `${baseUrl}/v1/marketing-plans` &&
@@ -422,6 +512,38 @@ async function main() {
     assert.equal(savedMarketingPlan.current_version.version_number, 1);
     assert.match(savedMarketingPlan.product_name, /tomato/i);
     await page.locator("#open-saved-plan").waitFor({ state: "visible" });
+    const savedRouteDownloads = page.locator("#route-downloads [data-download-route]");
+    assert.equal(await savedRouteDownloads.count(), 3, "saved plan did not expose all route kits");
+    let exportAuthorization = "";
+    await page.route(
+      `**/v1/marketing-plans/${savedMarketingPlan.id}/export?route_id=practical-hook`,
+      async (route) => {
+        exportAuthorization = route.request().headers().authorization || "";
+        await route.fulfill({
+          status: 200,
+          contentType: "application/zip",
+          headers: {
+            "Content-Disposition": "attachment; filename=seasonal-tomatoes-practical-hook.zip",
+          },
+          body: Buffer.from("browser-e2e-publishing-kit"),
+        });
+      },
+      { times: 1 },
+    );
+    const routeDownloadPromise = page.waitForEvent("download");
+    await page
+      .locator('#route-downloads [data-download-route="practical-hook"]')
+      .click();
+    const routeDownload = await routeDownloadPromise;
+    assert.equal(
+      routeDownload.suggestedFilename(),
+      "seasonal-tomatoes-practical-hook.zip",
+    );
+    assert.equal(
+      exportAuthorization,
+      `Bearer ${ownerToken}`,
+      "publishing kit export did not use the signed-in team token",
+    );
     await Promise.all([
       page.waitForURL(
         `${baseUrl}/workspace/plans?plan=${encodeURIComponent(savedMarketingPlan.id)}`,

@@ -443,6 +443,34 @@
         </section>
 
         <section class="page" data-page-panel="operations">
+          <section class="panel operation-import-panel" data-write-scope="content">
+            <div class="panel-heading">
+              <div><p class="eyebrow">OPERATION DATA RETURN</p><h2 data-operation-copy="import.heading">批量回传运营数据</h2></div>
+              <span class="pill" data-operation-copy="import.format">CSV / XLSX</span>
+            </div>
+            <p class="panel-intro" data-operation-copy="import.intro">上传平台导出的数据文件，先检查字段匹配、发布记录匹配与逐行错误，再确认写入数据快照。</p>
+            <form id="operation-import-form">
+              <div class="operation-import-controls">
+                <label class="file-picker operation-file-picker">
+                  <span data-operation-copy="import.chooseFile">选择运营数据文件</span>
+                  <input id="operation-import-file" name="file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+                </label>
+                <span id="operation-import-file-status" class="file-status" data-operation-copy="import.fileHint">支持 UTF-8 CSV 与 XLSX，最大 20 MB</span>
+              </div>
+              <details class="operation-mapping">
+                <summary data-operation-copy="import.mappingSummary">高级：自定义字段映射</summary>
+                <label>
+                  <span data-operation-copy="import.mappingLabel">字段映射 JSON（可留空自动识别）</span>
+                  <textarea id="operation-field-mapping" rows="4" spellcheck="false" data-operation-placeholder="import.mappingPlaceholder"></textarea>
+                </label>
+              </details>
+              <div class="row-actions">
+                <button class="primary" id="operation-preview-button" type="submit" data-operation-copy="import.preview">预览匹配结果</button>
+                <button id="operation-confirm-button" type="button" disabled data-operation-copy="import.confirm">确认导入有效匹配行</button>
+              </div>
+            </form>
+            <div id="operation-import-preview" class="operation-import-preview" data-business-data hidden></div>
+          </section>
           <div class="two-col">
             <form id="publication-form" class="panel" data-write-scope="content">
               <div class="panel-heading"><div><p class="eyebrow">PUBLISH</p><h2>登记发布内容</h2></div><span class="pill">仅限已审核版本</span></div>
@@ -457,8 +485,8 @@
               <button class="primary">保存发布记录</button>
             </form>
             <div class="panel">
-              <div class="panel-heading"><div><p class="eyebrow">OPERATIONS</p><h2>发布与数据快照</h2></div><span class="pill">保留历史</span></div>
-              <p class="panel-intro">每次数据录入都会形成独立快照，不覆盖历史数据，也不计算未经验证的“爆款分数”。</p>
+              <div class="panel-heading"><div><p class="eyebrow">OPERATIONS</p><h2 data-operation-copy="loop.heading">发布、复盘与改进</h2></div><span class="pill" data-operation-copy="loop.history">保留历史</span></div>
+              <p class="panel-intro" data-operation-copy="loop.intro">每次数据录入都会形成独立快照。可基于最新快照生成规则复盘，把建议保存为改进简报，再创建关联的下一轮草稿。</p>
 <div id="publication-list" class="stack empty" data-business-data>暂无发布记录</div>
             </div>
           </div>

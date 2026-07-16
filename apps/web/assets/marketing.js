@@ -34,8 +34,16 @@
     topicAdvice: "使用建议",
     topicFallbackSource: "用户填写 / 内容规划",
     topicFallbackAdvice: "发布当天再核对平台语境与热度，避免生硬蹭热点。",
+    topicLiveSource: "可追溯外部来源",
+    topicUserSource: "用户提供",
+    topicPlanningSource: "非实时趋势",
+    topicPublishedAt: "发布时间",
+    topicCapturedAt: "抓取时间",
+    topicOpenSource: "查看来源 ↗",
     prepChecklist: "开拍前确认",
     selectedRouteLabel: "当前拍摄路线",
+    coverCopyLabel: "封面文案",
+    bgmLabel: "背景乐建议",
     filmingTip: "拍摄提示",
     callToAction: "结尾行动",
     nextToTopics: "下一步：看选题适配",
@@ -74,8 +82,16 @@
     topicAdvice: "使用建議",
     topicFallbackSource: "用戶填寫 / 內容規劃",
     topicFallbackAdvice: "發佈當天再核對平台語境及熱度，避免生硬追逐熱點。",
+    topicLiveSource: "可追溯外部來源",
+    topicUserSource: "用戶提供",
+    topicPlanningSource: "非實時趨勢",
+    topicPublishedAt: "發佈時間",
+    topicCapturedAt: "擷取時間",
+    topicOpenSource: "查看來源 ↗",
     prepChecklist: "開拍前確認",
     selectedRouteLabel: "目前拍攝路線",
+    coverCopyLabel: "封面文案",
+    bgmLabel: "背景音樂建議",
     filmingTip: "拍攝提示",
     callToAction: "結尾行動",
     nextToTopics: "下一步：查看選題配對",
@@ -114,8 +130,16 @@
     topicAdvice: "How to use it",
     topicFallbackSource: "User brief / editorial planning",
     topicFallbackAdvice: "Recheck the platform context and momentum on publishing day. Do not force the connection.",
+    topicLiveSource: "Traceable external source",
+    topicUserSource: "Provided by the user",
+    topicPlanningSource: "Non-live planning trend",
+    topicPublishedAt: "Published",
+    topicCapturedAt: "Captured",
+    topicOpenSource: "Open source ↗",
     prepChecklist: "Before filming",
     selectedRouteLabel: "Selected filming route",
+    coverCopyLabel: "Cover copy",
+    bgmLabel: "Background music",
     filmingTip: "Filming tip",
     callToAction: "Closing action",
     nextToTopics: "Next: review topic fit",
@@ -129,6 +153,99 @@
     recommendationRecommended: "Recommended",
     recommendationConsider: "Worth testing",
     recommendationSkip: "Use with caution"
+  });
+  Object.assign(copy["zh-CN"], {
+    generationModeTitle: "选择生成方式",
+    ruleModeTitle: "规则 Demo",
+    ruleModeBody: "稳定、零成本，调用规则预览接口，适合快速试用。",
+    modelModeTitle: "真实模型",
+    modelModeBody: "调用团队配置的国产 OpenAI-compatible 模型，需要登录。",
+    feedTitle: "外部热点源（可选）",
+    feedLabel: "RSS / Atom 地址",
+    feedHint: "每行一个，可填写“来源名称 | https://...”或直接填写 URL；外部源不可用时仍会返回季节性与常青选题。",
+    feedPlaceholder: "农业资讯 | https://example.com/feed.xml",
+    ruleState: "规则 Demo 模式",
+    modelState: "真实模型模式",
+    ruleCostTitle: "本次使用零成本规则预览",
+    ruleCostBody: "调用 /v1/marketing/preview；结果会明确标注实际 provider。",
+    modelCostTitle: "本次使用团队配置模型",
+    modelCostBody: "调用 /v1/marketing/generate；模型不可用时会明确标注 degraded 降级状态。",
+    generateRule: "生成规则预览",
+    generateModel: "使用真实模型生成",
+    providerLabel: "Provider",
+    modelLabel: "模型",
+    providerRuleStatus: "规则预览",
+    providerModelStatus: "模型生成",
+    providerDegradedStatus: "已降级到规则方案",
+    loginRequired: "真实模型模式需要先登录团队工作台。",
+    invalidFeedSource: "RSS / Atom 源格式无效，请每行填写一个 http(s) URL，可在前面加“来源名称 |”。",
+    downloadPackage: "下载发布包",
+    savedDownloadsTitle: "已保存方案发布包",
+    saveToDownload: "请先保存方案，再下载各路线发布包。",
+    downloadingPackage: "正在打包…",
+    downloadError: "发布包下载失败，请确认登录状态和发布平台后重试。"
+  });
+  Object.assign(copy["zh-HK"], {
+    generationModeTitle: "選擇生成方式",
+    ruleModeTitle: "規則 Demo",
+    ruleModeBody: "穩定、零成本，調用規則預覽接口，適合快速試用。",
+    modelModeTitle: "真實模型",
+    modelModeBody: "調用團隊配置的國產 OpenAI-compatible 模型，需要登入。",
+    feedTitle: "外部熱點來源（可選）",
+    feedLabel: "RSS / Atom 地址",
+    feedHint: "每行一個，可填寫「來源名稱 | https://...」或直接填寫 URL；外部來源不可用時仍會返回季節性及常青選題。",
+    feedPlaceholder: "農業資訊 | https://example.com/feed.xml",
+    ruleState: "規則 Demo 模式",
+    modelState: "真實模型模式",
+    ruleCostTitle: "本次使用零成本規則預覽",
+    ruleCostBody: "調用 /v1/marketing/preview；結果會清楚標示實際 provider。",
+    modelCostTitle: "本次使用團隊配置模型",
+    modelCostBody: "調用 /v1/marketing/generate；模型不可用時會清楚標示 degraded 降級狀態。",
+    generateRule: "生成規則預覽",
+    generateModel: "使用真實模型生成",
+    providerLabel: "Provider",
+    modelLabel: "模型",
+    providerRuleStatus: "規則預覽",
+    providerModelStatus: "模型生成",
+    providerDegradedStatus: "已降級至規則方案",
+    loginRequired: "真實模型模式需要先登入團隊工作台。",
+    invalidFeedSource: "RSS / Atom 來源格式無效，請每行填寫一個 http(s) URL，可在前面加「來源名稱 |」。",
+    downloadPackage: "下載發佈包",
+    savedDownloadsTitle: "已儲存方案發佈包",
+    saveToDownload: "請先儲存方案，再下載各路線發佈包。",
+    downloadingPackage: "正在打包…",
+    downloadError: "發佈包下載失敗，請確認登入狀態及發佈平台後再試。"
+  });
+  Object.assign(copy.en, {
+    generationModeTitle: "Choose how to generate",
+    ruleModeTitle: "Rules demo",
+    ruleModeBody: "Stable and zero-cost. Uses the rules preview endpoint for quick trials.",
+    modelModeTitle: "Live model",
+    modelModeBody: "Uses the team's domestic OpenAI-compatible model. Sign-in is required.",
+    feedTitle: "External trend feeds (optional)",
+    feedLabel: "RSS / Atom URLs",
+    feedHint: "One per line. Use “Source name | https://...” or a plain URL. Seasonal and evergreen ideas remain available when feeds are offline.",
+    feedPlaceholder: "Agriculture news | https://example.com/feed.xml",
+    ruleState: "Rules demo mode",
+    modelState: "Live model mode",
+    ruleCostTitle: "This run uses the zero-cost rules preview",
+    ruleCostBody: "Calls /v1/marketing/preview and reports the provider that actually responded.",
+    modelCostTitle: "This run uses the configured team model",
+    modelCostBody: "Calls /v1/marketing/generate and clearly reports any degraded fallback.",
+    generateRule: "Generate rules preview",
+    generateModel: "Generate with live model",
+    providerLabel: "Provider",
+    modelLabel: "Model",
+    providerRuleStatus: "Rules preview",
+    providerModelStatus: "Model generation",
+    providerDegradedStatus: "Degraded to rules",
+    loginRequired: "Sign in to the team workspace before using live model mode.",
+    invalidFeedSource: "Invalid RSS / Atom source. Enter one http(s) URL per line, optionally preceded by “Source name |”.",
+    downloadPackage: "Download publishing kit",
+    savedDownloadsTitle: "Saved-plan publishing kits",
+    saveToDownload: "Save the plan before downloading its route publishing kits.",
+    downloadingPackage: "Packaging…",
+    downloadError: "Could not download the publishing kit. Check your sign-in and publishing platform, then retry."
   });
 
   const demoCases = {
@@ -144,7 +261,7 @@
           description: "自然成熟后采摘，清甜多汁，适合家庭鲜食和日常做菜。农场会在采摘当天完成分选和装箱。",
           sellingPoints: "自然成熟，清甜多汁，当天分选",
           audience: "重视新鲜食材的年轻家庭",
-          trend: "当季蔬果和家庭餐桌"
+          trend: ""
         },
         "zh-HK": {
           productName: "時令番茄",
@@ -152,7 +269,7 @@
           description: "自然成熟後採摘，清甜多汁，適合家庭鮮食及日常煮食。農場會在採摘當日完成分選及裝箱。",
           sellingPoints: "自然成熟，清甜多汁，當日分選",
           audience: "重視新鮮食材的年輕家庭",
-          trend: "時令蔬果與家庭餐桌"
+          trend: ""
         },
         en: {
           productName: "Seasonal tomatoes",
@@ -160,7 +277,7 @@
           description: "Naturally ripened tomatoes for fresh family meals and everyday cooking. Each harvest is graded and packed by the farm on the same day.",
           sellingPoints: "naturally ripened, juicy, graded on harvest day",
           audience: "young families who care about fresh ingredients",
-          trend: "seasonal produce and everyday family meals"
+          trend: ""
         }
       }
     },
@@ -237,6 +354,34 @@
   const content = document.querySelector("#result-content");
   const demoStatus = document.querySelector("#demo-case-status");
   const demoButtons = [...document.querySelectorAll("[data-demo-case]")];
+  document.querySelector(".demo-cases").insertAdjacentHTML("afterend", `
+    <fieldset class="generation-mode-fieldset">
+      <legend><b>00</b><span data-copy="generationModeTitle"></span></legend>
+      <div class="generation-mode-grid" role="radiogroup" data-copy-aria="generationModeTitle">
+        <label>
+          <input type="radio" name="generation_mode" value="rules" checked>
+          <span><b data-copy="ruleModeTitle"></b><small data-copy="ruleModeBody"></small></span>
+        </label>
+        <label>
+          <input type="radio" name="generation_mode" value="model">
+          <span><b data-copy="modelModeTitle"></b><small data-copy="modelModeBody"></small></span>
+        </label>
+      </div>
+    </fieldset>
+  `);
+  document.querySelector(".submit-row").insertAdjacentHTML("beforebegin", `
+    <fieldset class="feed-source-fieldset">
+      <legend><b>04</b><span data-copy="feedTitle"></span></legend>
+      <label class="field">
+        <span data-copy="feedLabel"></span>
+        <textarea name="feed_sources" rows="3" maxlength="4000" data-copy-placeholder="feedPlaceholder"></textarea>
+      </label>
+      <p class="field-hint" data-copy="feedHint"></p>
+    </fieldset>
+  `);
+  document.querySelector("#open-saved-plan").insertAdjacentHTML("afterend", `
+    <div id="route-downloads" class="route-downloads" hidden></div>
+  `);
   const requestedLocale = new URLSearchParams(window.location.search).get("lang");
   let locale = copy[requestedLocale]
     ? requestedLocale
@@ -246,7 +391,29 @@
   let activeTab = "strategy";
   let selectedVideoIndex = 0;
   let selectedDemo = null;
+  let lastGenerationMode = "rules";
+  let savedPlanId = "";
   const tabOrder = ["strategy", "topics", "routes", "prep", "live", "calendar"];
+
+  function generationMode() {
+    return form.elements.generation_mode.value === "model" ? "model" : "rules";
+  }
+
+  function syncGenerationMode() {
+    const mode = generationMode();
+    const state = document.querySelector(".demo-state b");
+    const costTitle = document.querySelector(".submit-row strong");
+    const costBody = document.querySelector(".submit-row p span");
+    const generateCopy = form.querySelector(".generate-button span");
+    state.dataset.copy = mode === "model" ? "modelState" : "ruleState";
+    costTitle.dataset.copy = mode === "model" ? "modelCostTitle" : "ruleCostTitle";
+    costBody.dataset.copy = mode === "model" ? "modelCostBody" : "ruleCostBody";
+    generateCopy.dataset.copy = mode === "model" ? "generateModel" : "generateRule";
+    state.textContent = copy[locale][state.dataset.copy];
+    costTitle.textContent = copy[locale][costTitle.dataset.copy];
+    costBody.textContent = copy[locale][costBody.dataset.copy];
+    generateCopy.textContent = copy[locale][generateCopy.dataset.copy];
+  }
 
   function applyLocale(next) {
     locale = copy[next] ? next : "zh-CN";
@@ -263,7 +430,12 @@
       const value = copy[locale][node.dataset.copyAria];
       if (value) node.setAttribute("aria-label", value);
     });
+    document.querySelectorAll("[data-copy-placeholder]").forEach((node) => {
+      const value = copy[locale][node.dataset.copyPlaceholder];
+      if (value) node.setAttribute("placeholder", value);
+    });
     document.querySelectorAll("[data-locale]").forEach((button) => button.classList.toggle("active", button.dataset.locale === locale));
+    syncGenerationMode();
     if (result) render();
   }
 
@@ -294,6 +466,8 @@
     if (!demo || !values) return;
 
     selectedDemo = caseId;
+    form.elements.generation_mode.value = "rules";
+    syncGenerationMode();
     form.elements.persona.value = demo.persona;
     document.querySelectorAll("[name=goals]").forEach((input) => {
       input.checked = demo.goals.includes(input.value);
@@ -333,6 +507,30 @@
   function score(value) {
     const number = Number(value);
     return Number.isFinite(number) && number >= 0 ? Math.min(100, Math.round(number)) : null;
+  }
+
+  function dateTime(value) {
+    if (!value) return "";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "";
+    const localeName = locale === "en" ? "en-GB" : locale === "zh-HK" ? "zh-HK" : "zh-CN";
+    return new Intl.DateTimeFormat(localeName, {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(parsed);
+  }
+
+  function safeSourceUrl(value) {
+    if (!value) return "";
+    try {
+      const parsed = new URL(value);
+      return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : "";
+    } catch {
+      return "";
+    }
   }
 
   function firstDefined(...values) {
@@ -398,6 +596,9 @@
   }
 
   async function readApiError(response) {
+    if (response.status === 401 || response.status === 403) {
+      return copy[locale].loginRequired;
+    }
     try {
       const payload = await response.json();
       const detail = Array.isArray(payload?.detail)
@@ -417,8 +618,132 @@
     return copy[locale].genericError;
   }
 
+  function parseFeedSources(value) {
+    const sources = [];
+    const seen = new Set();
+    for (const line of String(value || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean)) {
+      const separator = line.indexOf("|");
+      const explicitLabel = separator >= 0 ? line.slice(0, separator).trim() : "";
+      const rawUrl = separator >= 0 ? line.slice(separator + 1).trim() : line;
+      let parsed;
+      try {
+        parsed = new URL(rawUrl);
+      } catch {
+        throw new Error(copy[locale].invalidFeedSource);
+      }
+      if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname) {
+        throw new Error(copy[locale].invalidFeedSource);
+      }
+      if (seen.has(parsed.href)) continue;
+      seen.add(parsed.href);
+      sources.push({
+        url: parsed.href,
+        label: (explicitLabel || parsed.hostname).slice(0, 120)
+      });
+      if (sources.length === 12) break;
+    }
+    return sources;
+  }
+
+  async function discoverTopics(payload, feedSources) {
+    const manualTrend = payload.trend
+      ? [{
+          title: payload.trend,
+          source_label: locale === "en" ? "User-selected topic" : locale === "zh-HK" ? "用戶選擇" : "用户选择"
+        }]
+      : [];
+    try {
+      const response = await fetch("/v1/trends/discover", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          product_name: payload.product_name,
+          selling_points: payload.selling_points,
+          audience: payload.audience,
+          platform: payload.platform,
+          manual_trends: manualTrend,
+          feed_sources: feedSources,
+          limit: 6
+        })
+      });
+      if (!response.ok) return {items: [], warnings: [], used_fallback: true, metric_note: ""};
+      return response.json();
+    } catch {
+      return {items: [], warnings: [], used_fallback: true, metric_note: ""};
+    }
+  }
+
+  function normalizeDiscoveredTopics(discovery) {
+    return list(discovery?.items).map((item) => ({
+      ...item?.candidate,
+      fit_score: item?.fit_score,
+      recommendation: item?.recommendation,
+      explanation: item?.recommendation_reason,
+      usage_caution: discovery?.metric_note,
+      fit: item?.fit
+    }));
+  }
+
+  function renderProviderMeta() {
+    if (!result) return;
+    const degraded = Boolean(result.degraded);
+    const statusKey = degraded
+      ? "providerDegradedStatus"
+      : lastGenerationMode === "model"
+        ? "providerModelStatus"
+        : "providerRuleStatus";
+    const details = [
+      `${copy[locale].providerLabel}: ${text(result.provider, "unknown")}`,
+      result.model ? `${copy[locale].modelLabel}: ${result.model}` : "",
+      Number.isFinite(result.latency_ms) ? `${result.latency_ms}ms` : ""
+    ].filter(Boolean);
+    const meta = document.querySelector("#provider-meta");
+    meta.dataset.generationMode = lastGenerationMode;
+    meta.dataset.degraded = String(degraded);
+    meta.innerHTML = `
+      <b class="provider-status ${degraded ? "degraded" : ""}">${escape(copy[locale][statusKey])}</b>
+      <span>${escape(details.join(" · "))}</span>
+      ${result.notice ? `<small>${escape(result.notice)}</small>` : ""}
+    `;
+  }
+
+  function routeIdFor(video, index) {
+    const route = routeFor(video, index);
+    return text(route.route_id, video.route_id);
+  }
+
+  function routeDownloadButton(routeId, label, compact = false) {
+    if (!routeId) return "";
+    return `
+      <button
+        type="button"
+        class="route-download${compact ? " compact" : ""}"
+        data-download-route="${escape(routeId)}"
+        ${savedPlanId ? "" : "disabled"}
+        title="${escape(savedPlanId ? copy[locale].downloadPackage : copy[locale].saveToDownload)}"
+      >${escape(compact ? label : copy[locale].downloadPackage)}</button>
+    `;
+  }
+
+  function renderSavedRouteDownloads() {
+    const container = document.querySelector("#route-downloads");
+    if (!savedPlanId || !result) {
+      container.hidden = true;
+      container.innerHTML = "";
+      return;
+    }
+    const buttons = list(result.videos).map((video, index) => {
+      const route = routeFor(video, index);
+      return routeDownloadButton(routeIdFor(video, index), text(route.name, video.angle), true);
+    }).join("");
+    container.innerHTML = `<span>${escape(copy[locale].savedDownloadsTitle)}</span>${buttons}`;
+    container.hidden = !buttons;
+  }
+
   function render() {
     if (!result) return;
+    renderProviderMeta();
+    renderSavedRouteDownloads();
     if (activeTab === "strategy") {
       const productProfile = result.product_profile || {};
       const strategy = result.strategy || {};
@@ -441,10 +766,23 @@
       }];
       content.innerHTML = topics.map((topic, index) => {
         const fitScore = score(firstDefined(topic.total_score, topic.fit_score, topic.score));
+        const liveSource = ["rss", "atom", "douyin-open-platform"].includes(topic.source_type);
+        const manualSource = topic.source_type === "manual";
+        const planningSource = ["seasonal", "evergreen"].includes(topic.source_type);
         const sourceType = [
           text(topic.signal_type, topic.source_type),
           text(topic.source_label, topic.source_name)
         ].filter(Boolean).join(" · ") || copy[locale].topicFallbackSource;
+        const sourceStatus = liveSource
+          ? copy[locale].topicLiveSource
+          : manualSource
+            ? copy[locale].topicUserSource
+            : planningSource
+              ? copy[locale].topicPlanningSource
+              : copy[locale].topicNotRealtime;
+        const publishedAt = dateTime(topic.published_at);
+        const capturedAt = dateTime(topic.captured_at);
+        const sourceUrl = safeSourceUrl(topic.source_url);
         const recommendation = topic.recommendation === "recommended"
           ? copy[locale].recommendationRecommended
           : topic.recommendation === "skip"
@@ -457,8 +795,11 @@
             <dl class="signal-meta">
               <div><dt>${escape(copy[locale].topicSourceType)}</dt><dd>${escape(sourceType)}</dd></div>
               <div><dt>${escape(copy[locale].topicFitScore)}</dt><dd>${fitScore === null ? escape(copy[locale].scorePending) : `${fitScore}/100`}</dd></div>
+              ${publishedAt ? `<div><dt>${escape(copy[locale].topicPublishedAt)}</dt><dd>${escape(publishedAt)}</dd></div>` : ""}
+              ${capturedAt ? `<div><dt>${escape(copy[locale].topicCapturedAt)}</dt><dd>${escape(capturedAt)}</dd></div>` : ""}
             </dl>
-            <p class="realtime-note">${escape(copy[locale].topicNotRealtime)}</p>
+            <p class="realtime-note">${escape(sourceStatus)}</p>
+            ${sourceUrl ? `<p><a href="${escape(sourceUrl)}" target="_blank" rel="noopener noreferrer">${escape(copy[locale].topicOpenSource)}</a></p>` : ""}
             <p>${escape(text(topic.explanation, topic.content_angle, result.trend?.integration_method))}</p>
             <div class="advice-box"><strong>${escape(copy[locale].topicAdvice)}</strong><span>${escape(text(topic.usage_caution, topic.advice, result.trend?.caution, copy[locale].topicFallbackAdvice))}</span></div>
           </article>`;
@@ -487,8 +828,11 @@
               <div><strong>${escape(copy[locale].whyWorks)}</strong><p>${escape(text(route.selection_reason, review.why_it_may_work, review.reason, strengths.join("；"), route.best_for, route.positioning, video.hook))}</p></div>
               <div class="quality-score"><strong>${escape(copy[locale].qualityScore)}</strong><b>${routeScore === null ? escape(copy[locale].scorePending) : `${routeScore}<small>/100</small>`}</b></div>
             </div>
-            <div class="advice-box"><strong>${escape(copy[locale].improvements)}</strong><span>${escape(improvements.join("；") || copy[locale].noImprovement)}</span></div>
-            <button type="button" class="route-select" data-select-route="${index}" aria-pressed="${selected}">${escape(selected ? copy[locale].routeSelected : copy[locale].chooseRoute)}</button>
+            <div class="advice-box"><strong>${escape(copy[locale].improvements)}</strong><span>${escape(improvements.map((item) => String(item).replace(/[。；;.!！?？]+$/u, "")).join("；") || copy[locale].noImprovement)}</span></div>
+            <div class="route-card-actions">
+              <button type="button" class="route-select" data-select-route="${index}" aria-pressed="${selected}">${escape(selected ? copy[locale].routeSelected : copy[locale].chooseRoute)}</button>
+              ${routeDownloadButton(routeIdFor(video, index), text(route.name, video.angle))}
+            </div>
           </article>`;
       }).join("") + flowFooter("prep", copy[locale].nextToPrep);
     } else if (activeTab === "prep") {
@@ -499,7 +843,7 @@
         ? list(result.next_step.checklist)
         : list(result.next_actions);
       content.innerHTML = `
-        <article class="result-card prep-hero"><span>${escape(copy[locale].selectedRouteLabel)}</span><h3>${escape(text(route.name, video.angle, video.title))}</h3><p><strong>${escape(copy[locale].hookLabel)}：</strong>${escape(video.hook)}</p><p>${escape(video.script)}</p><div class="tag-row">${[video.cover_text, video.background_music].filter(Boolean).map((item) => `<b>${escape(item)}</b>`).join("")}</div></article>
+        <article class="result-card prep-hero"><span>${escape(copy[locale].selectedRouteLabel)}</span><h3>${escape(text(route.name, video.angle, video.title))}</h3><p><strong>${escape(copy[locale].hookLabel)}：</strong>${escape(video.hook)}</p><p>${escape(video.script)}</p><div class="tag-row">${video.cover_text ? `<b><small>${escape(copy[locale].coverCopyLabel)}</small>${escape(video.cover_text)}</b>` : ""}${video.background_music ? `<b><small>${escape(copy[locale].bgmLabel)}</small>${escape(video.background_music)}</b>` : ""}</div></article>
         <article class="result-card"><span>${escape(copy[locale].prepChecklist)}</span><ol class="shot-list prep-list">${list(video.shots).map((shot) => `<li><b>${escape(shot.seconds)}</b><span>${escape(shot.visual)}</span><span>${escape(shot.voiceover)}</span>${shot.filming_tip ? `<small><strong>${escape(copy[locale].filmingTip)}：</strong>${escape(shot.filming_tip)}</small>` : ""}</li>`).join("")}</ol></article>
         ${checklist.length ? `<article class="result-card"><span>${escape(copy[locale].prepChecklist)}</span><ul class="check-list">${checklist.map((item) => `<li>${escape(item)}</li>`).join("")}</ul></article>` : ""}
         ${video.call_to_action ? `<article class="result-card action-card"><span>${escape(copy[locale].callToAction)}</span><h3>${escape(video.call_to_action)}</h3></article>` : ""}
@@ -547,14 +891,50 @@
       trend: values.get("trend").trim()
     };
     try {
-      const response = await fetch("/v1/marketing/preview", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      const feedSources = parseFeedSources(values.get("feed_sources"));
+      const mode = generationMode();
+      const discovery = await discoverTopics(payload, feedSources);
+      const discoveredTopics = normalizeDiscoveredTopics(discovery);
+      let selectedTopic = discoveredTopics.find((topic) => topic.title === payload.trend);
+      if (!payload.trend) {
+        selectedTopic = discoveredTopics.find((topic) => topic.recommendation === "recommended")
+          || discoveredTopics.find((topic) => topic.recommendation === "consider")
+          || discoveredTopics[0];
+        if (selectedTopic?.title) payload.trend = selectedTopic.title;
+      }
+      if (selectedTopic?.title && selectedTopic?.captured_at) {
+        payload.trend_snapshot = {
+          title: selectedTopic.title,
+          source_url: selectedTopic.source_url || null,
+          source_label: selectedTopic.source_label,
+          source_type: selectedTopic.source_type,
+          published_at: selectedTopic.published_at || null,
+          captured_at: selectedTopic.captured_at,
+          fit_score: Number(selectedTopic.fit_score || 0),
+          recommendation: selectedTopic.recommendation,
+          recommendation_reason: selectedTopic.explanation
+        };
+      }
+      const token = localStorage.getItem("heyu_token") || "";
+      const endpoint = mode === "model" ? "/v1/marketing/generate" : "/v1/marketing/preview";
+      const headers = {"Content-Type":"application/json"};
+      if (mode === "model" && token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch(endpoint, {method:"POST",headers,body:JSON.stringify(payload)});
       if (!response.ok) throw new Error(await readApiError(response));
       result = await response.json();
+      result.topic_matches = discoveredTopics;
+      result.trend_discovery = {
+        used_fallback: Boolean(discovery?.used_fallback),
+        warnings: list(discovery?.warnings),
+        metric_note: discovery?.metric_note || ""
+      };
       lastPayload = payload;
+      lastGenerationMode = mode;
+      savedPlanId = "";
       document.querySelector("#open-saved-plan").hidden = true;
       document.querySelector("#save-result").textContent = copy[locale].saveResult;
       document.querySelector("#result-product").textContent = payload.product_name;
-      document.querySelector("#provider-meta").textContent = [result.provider, result.model, Number.isFinite(result.latency_ms) ? `${result.latency_ms}ms` : ""].filter(Boolean).join(" · ");
+      renderProviderMeta();
       loading.hidden = true; resultState.hidden = false;
       selectedVideoIndex = recommendedIndex();
       setActiveTab("strategy", false);
@@ -569,6 +949,9 @@
       button.disabled = false;
       demoButtons.forEach((demoButton) => demoButton.disabled = false);
     }
+  });
+  form.querySelectorAll('[name="generation_mode"]').forEach((input) => {
+    input.addEventListener("change", syncGenerationMode);
   });
 
   document.querySelectorAll(".result-tabs button").forEach((tab) => tab.addEventListener("click", () => setActiveTab(tab.dataset.tab)));
@@ -599,10 +982,11 @@
     if (!result || !lastPayload) return;
     const token = localStorage.getItem("heyu_token") || "";
     const platformName = text(result.strategy?.platform_name, lastPayload.platform);
+    const {topic_matches: _topicMatches, trend_discovery: _trendDiscovery, ...persistedContent} = result;
     const snapshot = {
       title: `${lastPayload.product_name} · ${platformName}`,
       request_payload: lastPayload,
-      content: result,
+      content: persistedContent,
       change_summary: copy[locale].initialSaveSummary
     };
     if (!token) {
@@ -627,16 +1011,73 @@
       }
       if (!response.ok) throw new Error(copy[locale].saveError);
       const saved = await response.json();
+      savedPlanId = saved.id;
       button.textContent = copy[locale].savedResult;
       const link = document.querySelector("#open-saved-plan");
       link.href = `/workspace/plans?plan=${encodeURIComponent(saved.id)}`;
       link.hidden = false;
+      render();
     } catch (error) {
       button.textContent = copy[locale].saveResult;
       alert(error instanceof Error ? error.message : copy[locale].saveError);
     } finally {
       button.disabled = false;
     }
+  });
+
+  async function downloadRoutePackage(routeId, button) {
+    if (!savedPlanId) {
+      alert(copy[locale].saveToDownload);
+      return;
+    }
+    const token = localStorage.getItem("heyu_token") || "";
+    if (!token) {
+      alert(copy[locale].loginRequired);
+      return;
+    }
+    const supportedRoutes = new Set(["practical-hook", "people-story", "playful-contrast"]);
+    if (!supportedRoutes.has(routeId)) {
+      alert(copy[locale].downloadError);
+      return;
+    }
+    const before = button.textContent;
+    button.disabled = true;
+    button.textContent = copy[locale].downloadingPackage;
+    try {
+      const response = await fetch(
+        `/v1/marketing-plans/${encodeURIComponent(savedPlanId)}/export?route_id=${encodeURIComponent(routeId)}`,
+        {headers: {Authorization: `Bearer ${token}`}}
+      );
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(copy[locale].loginRequired);
+      }
+      if (!response.ok) throw new Error(copy[locale].downloadError);
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+      const filename = encodedName
+        ? decodeURIComponent(encodedName)
+        : plainName || `${lastPayload?.product_name || "heyu-plan"}-${routeId}.zip`;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : copy[locale].downloadError);
+    } finally {
+      button.disabled = false;
+      button.textContent = before;
+    }
+  }
+
+  resultState.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-download-route]");
+    if (button) downloadRoutePackage(button.dataset.downloadRoute, button);
   });
   applyLocale(locale);
 })();
