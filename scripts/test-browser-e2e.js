@@ -1001,94 +1001,91 @@ async function main() {
     await page.goto(`${baseUrl}/workspace/?lang=en`, { waitUntil: "networkidle" });
     await page.locator("#workspace").waitFor({ state: "visible" });
 
-    const failureProjectResponse = await context.request.post(
+    const traceableProjectResponse = await context.request.post(
       `${baseUrl}/v1/content-projects`,
       {
         headers: { Authorization: `Bearer ${ownerToken}` },
         data: {
           brand_id: brand.id,
           product_id: product.id,
-          title: `[E2E invalid citation] ${unique}`,
+          title: `[E2E traceable generation] ${unique}`,
           content_type: "social_post",
         },
       },
     );
-    assert.equal(failureProjectResponse.status(), 201);
-    const failureProject = await failureProjectResponse.json();
+    assert.equal(traceableProjectResponse.status(), 201);
+    const traceableProject = await traceableProjectResponse.json();
 
     await page.reload({ waitUntil: "networkidle" });
     await page.locator("#workspace").waitFor({ state: "visible" });
     await page.locator('[data-page="studio"]').click();
-    await page.locator("#project-select").selectOption(failureProject.id);
-    const [failedGenerationResponse] = await Promise.all([
+    await page.locator("#project-select").selectOption(traceableProject.id);
+    const [generationResponse] = await Promise.all([
       page.waitForResponse(
         (response) =>
           response.url() ===
-            `${baseUrl}/v1/content-projects/${failureProject.id}/generate` &&
+            `${baseUrl}/v1/content-projects/${traceableProject.id}/generate` &&
           response.request().method() === "POST",
       ),
       page.locator("#generate-button").click(),
     ]);
-    assert.equal(failedGenerationResponse.status(), 502);
-    await page.locator("#toast.error").waitFor({ state: "visible" });
-    assert.match(await page.locator("#toast").textContent(), /omitted required source citations/i);
-    const failedHistory = page.locator("#generation-history-list article", {
-      hasText: "Incomplete generation",
+    assert.equal(generationResponse.status(), 201);
+    const completedHistory = page.locator("#generation-history-list article", {
+      hasText: "social_post",
     });
-    await failedHistory.waitFor();
-    await failedHistory.getByText("Failed", { exact: true }).waitFor();
-    assert.match(await failedHistory.textContent(), /browser-e2e/);
+    await completedHistory.waitFor();
+    const completedLabel = await page.evaluate(() =>
+      HeyuI18n.t("generationStatus.completed"),
+    );
+    await completedHistory.getByText(completedLabel, { exact: true }).waitFor();
 
-    const failureRunsResponse = await context.request.get(
-      `${baseUrl}/v1/content-projects/${failureProject.id}/generation-runs`,
+    const generationRunsResponse = await context.request.get(
+      `${baseUrl}/v1/content-projects/${traceableProject.id}/generation-runs`,
       { headers: { Authorization: `Bearer ${ownerToken}` } },
     );
-    assert.equal(failureRunsResponse.status(), 200);
-    const failureRuns = await failureRunsResponse.json();
-    assert.equal(failureRuns.length, 1, "failure project should have exactly one generation run");
-    assert.equal(failureRuns[0].status, "failed");
-    assert.equal(failureRuns[0].output?.error?.code, "provider_missing_citation");
-    assert.equal(
-      failureRuns.some((run) => run.status === "completed"),
-      false,
-      "failure project unexpectedly persisted a successful run",
+    assert.equal(generationRunsResponse.status(), 200);
+    const generationRuns = await generationRunsResponse.json();
+    assert.equal(generationRuns.length, 1, "project should have exactly one generation run");
+    assert.equal(generationRuns[0].status, "succeeded");
+    assert.ok(generationRuns[0].sources.length > 0, "generation should retain source provenance");
+    assert.ok(
+      generationRuns[0].output?.citations?.length > 0,
+      "generation should include at least one trusted source citation",
     );
 
-    const failureVersionsResponse = await context.request.get(
-      `${baseUrl}/v1/content-projects/${failureProject.id}/versions`,
+    const generatedVersionsResponse = await context.request.get(
+      `${baseUrl}/v1/content-projects/${traceableProject.id}/versions`,
       { headers: { Authorization: `Bearer ${ownerToken}` } },
     );
-    assert.equal(failureVersionsResponse.status(), 200);
-    assert.deepEqual(await failureVersionsResponse.json(), []);
+    assert.equal(generatedVersionsResponse.status(), 200);
+    assert.equal((await generatedVersionsResponse.json()).length, 1);
 
     await page.reload({ waitUntil: "networkidle" });
     await page.locator("#workspace").waitFor({ state: "visible" });
     await page.locator('[data-page="studio"]').click();
-    await page.locator("#project-select").selectOption(failureProject.id);
+    await page.locator("#project-select").selectOption(traceableProject.id);
     for (const locale of ["zh-CN", "zh-HK", "en"]) {
       await selectLocale(page, locale);
       assert.equal(
         await page.locator("#project-select").inputValue(),
-        failureProject.id,
-        `locale switch to ${locale} changed the selected failure project`,
+        traceableProject.id,
+        `locale switch to ${locale} changed the selected generated project`,
       );
       const expected = await page.evaluate(() => ({
-        heading: HeyuI18n.t("generation.failedRecord"),
-        status: HeyuI18n.t("generationStatus.failed"),
+        status: HeyuI18n.t("generationStatus.completed"),
       }));
-      const localizedFailure = page.locator("#generation-history-list article", {
-        hasText: "browser-e2e",
+      const localizedGeneration = page.locator("#generation-history-list article", {
+        hasText: "social_post",
       });
-      await localizedFailure.waitFor();
-      await localizedFailure.getByText(expected.heading, { exact: true }).waitFor();
-      await localizedFailure.getByText(expected.status, { exact: true }).waitFor();
+      await localizedGeneration.waitFor();
+      await localizedGeneration.getByText(expected.status, { exact: true }).waitFor();
     }
     assert.deepEqual(
       await page.evaluate(() => window.__heyuUnhandledRejections),
       [],
       "workspace emitted an unhandled promise rejection",
     );
-    await screenshot(page, "generation-failure-persisted.png");
+    await screenshot(page, "generation-traceability-persisted.png");
 
     for (const [locale, filename] of [
       ["zh-CN", "workspace-zh-CN.png"],

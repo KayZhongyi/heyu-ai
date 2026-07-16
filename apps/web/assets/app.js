@@ -31,7 +31,10 @@ const roleLabel=role=>t(`role.${role}`)===`role.${role}`?role:t(`role.${role}`);
 const enumLabel=(prefix,value)=>{const key=`${prefix}.${value}`;const label=t(key);return label===key?value:label};
 const contentTypeLabel=value=>enumLabel("contentType",value);
 const contentStatusLabel=value=>enumLabel("contentStatus",value);
-const generationStatusLabel=value=>enumLabel("generationStatus",value);
+const generationStatusLabel=value=>enumLabel(
+  "generationStatus",
+  value==="succeeded"?"completed":value,
+);
 const severityLabel=value=>enumLabel("severity",value);
 const fieldSeparator=()=>t("punctuation.fieldSeparator");
 const roleOptions=(selected="",allowOwner=true)=>["owner","admin","product_manager","creator","reviewer","viewer"].filter(role=>allowOwner||role!=="owner").map(role=>`<option value="${role}"${role===selected?" selected":""}>${roleLabel(role)}</option>`).join("");
