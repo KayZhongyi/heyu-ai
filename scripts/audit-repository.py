@@ -64,7 +64,11 @@ SECRET_PATTERNS = [
             r"""(?ix)
             \b(?:api[_-]?key|access[_-]?token|client[_-]?secret|app[_-]?secret)
             \s*[:=]\s*
-            ["']?(?P<value>[^\s"'#]{24,})
+            (?P<value>
+                ["'][^"'\r\n]{24,}["']
+                |
+                [A-Za-z0-9_./+=:-]{24,}(?=\s*(?:\#|$))
+            )
             """
         ),
     ),
@@ -81,8 +85,9 @@ GENERIC_SECRET_PLACEHOLDERS = {
 
 
 def is_placeholder_secret(value: str) -> bool:
-    normalized = value.lower()
-    return "${" in value or any(
+    unquoted = value.strip("\"'")
+    normalized = unquoted.lower()
+    return "${" in unquoted or any(
         placeholder in normalized for placeholder in GENERIC_SECRET_PLACEHOLDERS
     )
 

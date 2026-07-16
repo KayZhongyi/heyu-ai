@@ -10,6 +10,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $api = Join-Path $root "apps\api"
 $python = Join-Path $root ".venv\Scripts\python.exe"
 $data = Join-Path $root "data"
+$pidPath = Join-Path $data "heyu-server.pid"
 
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
     throw "Heyu AI is not installed. Run the setup launcher first."
@@ -40,10 +41,12 @@ Write-Host "Starting Heyu AI: $workspaceUrl"
 $server = Start-Process -FilePath $python `
     -ArgumentList @("-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "$Port") `
     -WorkingDirectory $api -WindowStyle Hidden -PassThru
+Set-Content -LiteralPath $pidPath -Value $server.Id -Encoding ASCII -NoNewline
 
 for ($attempt = 0; $attempt -lt 60; $attempt++) {
     Start-Sleep -Milliseconds 500
     if ($server.HasExited) {
+        Remove-Item -LiteralPath $pidPath -Force -ErrorAction SilentlyContinue
         throw "Heyu AI exited unexpectedly with code $($server.ExitCode)."
     }
     try {
@@ -59,4 +62,5 @@ for ($attempt = 0; $attempt -lt 60; $attempt++) {
 }
 
 Stop-Process -Id $server.Id -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $pidPath -Force -ErrorAction SilentlyContinue
 throw "Heyu AI did not become healthy within 30 seconds."

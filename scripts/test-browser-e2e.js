@@ -87,6 +87,133 @@ async function expectReadOnlyNotice(page, locale) {
   return noticeText;
 }
 
+async function expectSimpleModeLocale(page, locale, expectedCases, expectedPlatforms) {
+  await page.goto(`${baseUrl}/create/?lang=${locale}`, { waitUntil: "networkidle" });
+  assert.equal(await page.locator("[data-demo-case]").count(), 3);
+  for (const label of expectedCases) {
+    await page.getByText(label, { exact: true }).waitFor();
+  }
+  for (const label of expectedPlatforms) {
+    await page.getByText(label, { exact: true }).waitFor();
+  }
+  const generationLabels = {
+    "zh-CN": ["选择生成方式", "规则 Demo", "真实模型", "外部热点源（可选）"],
+    "zh-HK": ["選擇生成方式", "規則 Demo", "真實模型", "外部熱點來源（可選）"],
+    en: ["Choose how to generate", "Rules demo", "Live model", "External trend feeds (optional)"],
+  };
+  for (const label of generationLabels[locale]) {
+    await page.getByText(label, { exact: true }).waitFor();
+  }
+  assert.equal(
+    await page.locator('[name="generation_mode"][value="rules"]').isChecked(),
+    true,
+    `${locale} did not default to the rules demo`,
+  );
+  const visibleText = await page.locator("body").innerText();
+  assert.doesNotMatch(
+    visibleText,
+    /�|(?:Ã.|Â.|â€|ðŸ)|(?:绂捐|鍐滀|闁嬪|鐢熸垚)/,
+    `simple mode ${locale} contains mojibake`,
+  );
+  await expectNoHorizontalOverflow(page, `simple mode ${locale}`);
+}
+
+async function generateDemoCase(
+  page,
+  caseId,
+  expectedProduct,
+  expectedPlatformValue,
+  expectedPlatformName,
+  expectedNextActionsLabel,
+) {
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.url() === `${baseUrl}/v1/marketing/preview` &&
+      response.request().method() === "POST",
+  );
+  await page.locator(`[data-demo-case="${caseId}"]`).click();
+  const response = await responsePromise;
+  assert.equal(response.status(), 200, `${caseId} preview request failed`);
+  await page.locator("#result-state").waitFor({ state: "visible" });
+  assert.equal(await page.locator("#provider-meta").getAttribute("data-generation-mode"), "rules");
+  assert.equal(await page.locator("#provider-meta").getAttribute("data-degraded"), "false");
+  assert.equal((await page.locator("#result-product").textContent()).trim(), expectedProduct);
+  assert.equal(
+    await page.locator(`[data-demo-case="${caseId}"]`).evaluate((node) =>
+      node.classList.contains("active"),
+    ),
+    true,
+    `${caseId} demo button was not marked active`,
+  );
+  assert.equal(
+    await page.locator(`[name="platform"][value="${expectedPlatformValue}"]`).isChecked(),
+    true,
+    `${caseId} did not select ${expectedPlatformValue}`,
+  );
+  assert.equal(await page.locator(".result-tabs button").count(), 6);
+  const strategyCards = page.locator("#result-content .result-card");
+  assert.ok((await strategyCards.count()) >= 2);
+  await strategyCards.nth(1).getByText(expectedPlatformName, { exact: false }).waitFor();
+  const nextActionsCard = strategyCards.filter({ hasText: expectedNextActionsLabel });
+  await nextActionsCard.waitFor();
+  const nextActions = nextActionsCard.locator("li");
+  assert.ok(
+    (await nextActions.count()) >= 3 && (await nextActions.count()) <= 6,
+    `${caseId} next actions must contain 3 to 6 items`,
+  );
+  for (let index = 0; index < await nextActions.count(); index += 1) {
+    assert.ok((await nextActions.nth(index).innerText()).trim(), "next action must not be empty");
+  }
+
+  await page.locator('[data-tab="topics"]').click();
+  assert.ok(await page.locator("#result-content .topic-card").count());
+  await page.locator('[data-tab="routes"]').click();
+  assert.equal(await page.locator("#result-content .route-card").count(), 3);
+  assert.equal(await page.locator("#result-content .route-card.recommended").count(), 1);
+  await page.locator('[data-select-route="1"]').click();
+  assert.equal(await page.locator("#result-content .route-card.selected").count(), 1);
+  await page.locator('[data-tab="prep"]').click();
+  assert.ok(await page.locator("#result-content .prep-hero").count());
+  await page.locator('[data-tab="live"]').click();
+  assert.ok(await page.locator("#result-content .result-card").count());
+  await page.locator('[data-tab="calendar"]').click();
+  assert.equal(await page.locator("#result-content .day-list > li").count(), 7);
+  assert.ok(await page.locator("#result-content [data-save-plan]").count());
+  const resultText = await page.locator("#result-state").innerText();
+  assert.doesNotMatch(
+    resultText,
+    /�|(?:Ã.|Â.|â€|ðŸ)|(?:绂捐|鍐滀|闁嬪|鐢熸垚)/,
+    `${caseId} result contains mojibake`,
+  );
+}
+
+async function expectLocalizedClaimError(page, locale, riskyDescription, expectedMessage) {
+  await page.goto(`${baseUrl}/create/?lang=${locale}`, { waitUntil: "networkidle" });
+  await page.locator('[name="product_name"]').fill(
+    locale === "en" ? "Risk check tomatoes" : "宣传检查番茄",
+  );
+  await page.locator('[name="product_description"]').fill(riskyDescription);
+
+  let dialogMessage = "";
+  const dialogHandled = new Promise((resolve) => {
+    page.once("dialog", async (dialog) => {
+      dialogMessage = dialog.message();
+      await dialog.accept();
+      resolve();
+    });
+  });
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.url() === `${baseUrl}/v1/marketing/preview` &&
+      response.request().method() === "POST",
+  );
+  await page.locator('#marketing-form [type="submit"]').click();
+  const response = await responsePromise;
+  assert.equal(response.status(), 422, `${locale} risky claim was not rejected`);
+  await dialogHandled;
+  assert.equal(dialogMessage, expectedMessage, `${locale} claim error was not localized`);
+}
+
 async function main() {
   const browser = await chromium.launch({
     ...(executablePath ? { executablePath } : {}),
@@ -110,16 +237,158 @@ async function main() {
       });
     });
 
-    for (const [locale, expected, filename] of [
-      ["zh-CN", "进入工作台", "landing-zh-CN.png"],
-      ["zh-HK", "進入工作區", "landing-zh-HK.png"],
-      ["en", "Open workspace", "landing-en.png"],
+    for (const [locale, filename] of [
+      ["zh-CN", "landing-zh-CN.png"],
+      ["zh-HK", "landing-zh-HK.png"],
+      ["en", "landing-en.png"],
     ]) {
       await page.goto(`${baseUrl}/?lang=${locale}`, { waitUntil: "networkidle" });
-      await assert.doesNotReject(() => page.getByText(expected, { exact: false }).first().waitFor());
+      await page.locator(".hero-identity").waitFor();
+      await page.locator('.hero-actions a[href="/create/"]').waitFor();
       await expectNoHorizontalOverflow(page, `landing ${locale}`);
       await screenshot(page, filename);
     }
+
+    for (const [locale, cases, platforms, nextActionsLabel] of [
+      [
+        "zh-CN",
+        [
+          ["tomato", "番茄", "当季番茄", "douyin", "抖音"],
+          ["tea", "高山茶叶", "高山云雾茶", "xiaohongshu", "小红书"],
+          ["fruit", "当季水果", "岭南当季水果礼盒", "wechat-channels", "视频号"],
+        ],
+        ["抖音", "小红书", "视频号", "快手"],
+        "接下来就这样做",
+      ],
+      [
+        "zh-HK",
+        [
+          ["tomato", "番茄", "時令番茄", "douyin", "抖音"],
+          ["tea", "高山茶葉", "高山雲霧茶", "xiaohongshu", "小紅書"],
+          ["fruit", "時令水果", "嶺南時令水果禮盒", "wechat-channels", "視頻號"],
+        ],
+        ["抖音", "小紅書", "視頻號", "快手"],
+        "接下來就這樣做",
+      ],
+      [
+        "en",
+        [
+          ["tomato", "Tomatoes", "Seasonal tomatoes", "douyin", "Douyin"],
+          ["tea", "High-mountain tea", "High-mountain mist tea", "xiaohongshu", "Xiaohongshu"],
+          ["fruit", "Seasonal fruit", "Lingnan seasonal fruit box", "wechat-channels", "WeChat Channels"],
+        ],
+        ["Douyin", "Xiaohongshu", "WeChat Channels", "Kuaishou"],
+        "What to do next",
+      ],
+    ]) {
+      await expectSimpleModeLocale(
+        page,
+        locale,
+        cases.map(([, label]) => label),
+        platforms,
+      );
+      await screenshot(page, `simple-mode-${locale}.png`);
+      for (const [caseId, , product, platformValue, platformName] of cases) {
+        await generateDemoCase(
+          page,
+          caseId,
+          product,
+          platformValue,
+          platformName,
+          nextActionsLabel,
+        );
+        await screenshot(
+          page,
+          locale === "zh-CN"
+            ? `simple-mode-${caseId}.png`
+            : `simple-mode-${locale}-${caseId}.png`,
+        );
+      }
+    }
+
+    await page.goto(`${baseUrl}/create/?lang=zh-CN`, { waitUntil: "networkidle" });
+    await generateDemoCase(
+      page,
+      "tomato",
+      "当季番茄",
+      "douyin",
+      "抖音",
+      "接下来就这样做",
+    );
+    const productBeforeLocaleSwitch = await page.locator("#result-product").textContent();
+    for (const [locale, tabLabel] of [
+      ["zh-HK", "創意路線"],
+      ["en", "Creative routes"],
+      ["zh-CN", "创意路线"],
+    ]) {
+      await selectLocale(page, locale);
+      assert.equal(
+        await page.locator("#result-product").textContent(),
+        productBeforeLocaleSwitch,
+        `locale switch to ${locale} changed the generated product`,
+      );
+      await page.getByRole("button", { name: tabLabel, exact: true }).waitFor();
+    }
+
+    for (const [locale, description, message] of [
+      [
+        "zh-CN",
+        "自然成熟的番茄，可以降血糖，适合每天食用。",
+        "输入中包含需要核验的医疗、认证或绝对化宣传，请修改后再生成。",
+      ],
+      [
+        "zh-HK",
+        "自然成熟的番茄，可以降血糖，適合每天食用。",
+        "輸入中包含需要核實的醫療、認證或絕對化宣傳，請修改後再生成。",
+      ],
+      [
+        "en",
+        "Naturally ripened tomatoes that treat cancer and suit everyday meals.",
+        "The brief contains a medical, certification or absolute claim that must be verified before generation.",
+      ],
+    ]) {
+      await expectLocalizedClaimError(page, locale, description, message);
+    }
+
+    const simpleMobileContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+    });
+    const simpleMobilePage = await simpleMobileContext.newPage();
+    const simpleMobileErrors = [];
+    simpleMobilePage.on("pageerror", (error) => simpleMobileErrors.push(error.message));
+    await simpleMobilePage.goto(`${baseUrl}/create/?lang=zh-CN`, {
+      waitUntil: "networkidle",
+    });
+    await generateDemoCase(
+      simpleMobilePage,
+      "tomato",
+      "当季番茄",
+      "douyin",
+      "抖音",
+      "接下来就这样做",
+    );
+    await expectNoHorizontalOverflow(simpleMobilePage, "simple mode 390px");
+    await screenshot(simpleMobilePage, "simple-mode-390px.png");
+    assert.deepEqual(simpleMobileErrors, [], `simple mode page errors: ${simpleMobileErrors}`);
+    await simpleMobileContext.close();
+
+    const englishMobileContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+    });
+    const englishMobilePage = await englishMobileContext.newPage();
+    await englishMobilePage.goto(`${baseUrl}/create/?lang=en`, { waitUntil: "networkidle" });
+    await generateDemoCase(
+      englishMobilePage,
+      "fruit",
+      "Lingnan seasonal fruit box",
+      "wechat-channels",
+      "WeChat Channels",
+      "What to do next",
+    );
+    await englishMobilePage.locator('[data-tab="strategy"]').click();
+    await expectNoHorizontalOverflow(englishMobilePage, "English fruit strategy 390px");
+    await screenshot(englishMobilePage, "simple-mode-en-fruit-strategy-390px.png");
+    await englishMobileContext.close();
 
     await page.goto(`${baseUrl}/workspace/?lang=zh-CN`, { waitUntil: "networkidle" });
     const bootstrap = page.locator("#bootstrap-form");
@@ -147,6 +416,241 @@ async function main() {
     await selectLocale(page, "en");
     const ownerToken = await page.evaluate(() => localStorage.getItem("heyu_token"));
     assert.ok(ownerToken, "owner token missing after bootstrap");
+
+    await page.goto(`${baseUrl}/create/?lang=en`, { waitUntil: "networkidle" });
+    await generateDemoCase(
+      page,
+      "tomato",
+      "Seasonal tomatoes",
+      "douyin",
+      "Douyin",
+      "What to do next",
+    );
+    let trendRequestPayload;
+    await page.route(
+      "**/v1/trends/discover",
+      async (route) => {
+        trendRequestPayload = route.request().postDataJSON();
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            items: [
+              {
+                candidate: {
+                  title: "seasonal produce and everyday family meals",
+                  source_url: "https://feeds.example.test/agriculture.xml",
+                  source_label: "Agriculture feed",
+                  captured_at: "2026-07-16T00:00:00Z",
+                  published_at: "2026-07-15T00:00:00Z",
+                  source_type: "rss",
+                  summary: "A traceable RSS item for the browser path.",
+                },
+                fit: {
+                  product: { score: 90, explanation: "Product fit" },
+                  selling_points: { score: 88, explanation: "Selling point fit" },
+                  audience: { score: 84, explanation: "Audience fit" },
+                  platform: { score: 82, explanation: "Platform fit" },
+                  timeliness: { score: 86, explanation: "Timely" },
+                  filmability: { score: 91, explanation: "Easy to film" },
+                },
+                fit_score: 87,
+                recommendation: "recommended",
+                recommendation_reason: "Relevant and practical.",
+              },
+            ],
+            warnings: [],
+            used_fallback: false,
+            metric_note: "Fit score is not a real-time popularity metric.",
+          }),
+        });
+      },
+      { times: 1 },
+    );
+    await page
+      .locator('[name="feed_sources"]')
+      .fill("Agriculture feed | https://feeds.example.test/agriculture.xml");
+    await page.locator('[name="generation_mode"][value="model"]').check();
+    await page.getByText("Live model mode", { exact: true }).waitFor();
+    const liveGenerationResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() === `${baseUrl}/v1/marketing/generate` &&
+        response.request().method() === "POST",
+    );
+    await page.locator('#marketing-form [type="submit"]').click();
+    const liveGenerationResponse = await liveGenerationResponsePromise;
+    assert.equal(liveGenerationResponse.status(), 200, "live model generation request failed");
+    assert.ok(trendRequestPayload, "trend discovery request was not captured");
+    assert.deepEqual(trendRequestPayload.feed_sources, [
+      {
+        url: "https://feeds.example.test/agriculture.xml",
+        label: "Agriculture feed",
+      },
+    ]);
+    assert.equal(
+      liveGenerationResponse.request().headers().authorization,
+      `Bearer ${ownerToken}`,
+      "live model generation did not use the signed-in team token",
+    );
+    const liveGeneration = await liveGenerationResponse.json();
+    const providerMeta = page.locator("#provider-meta");
+    await providerMeta.waitFor();
+    assert.equal(await providerMeta.getAttribute("data-generation-mode"), "model");
+    assert.equal(
+      await providerMeta.getAttribute("data-degraded"),
+      String(Boolean(liveGeneration.degraded)),
+    );
+    assert.match(await providerMeta.innerText(), new RegExp(liveGeneration.provider, "i"));
+    const createMarketingPlanResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() === `${baseUrl}/v1/marketing-plans` &&
+        response.request().method() === "POST",
+    );
+    await page.locator("#save-result").click();
+    const createMarketingPlanResponse = await createMarketingPlanResponsePromise;
+    assert.equal(createMarketingPlanResponse.status(), 201, "owner could not save tomato plan");
+    const savedMarketingPlan = await createMarketingPlanResponse.json();
+    assert.equal(savedMarketingPlan.current_version.version_number, 1);
+    assert.match(savedMarketingPlan.product_name, /tomato/i);
+    await page.locator("#open-saved-plan").waitFor({ state: "visible" });
+    const savedRouteDownloads = page.locator("#route-downloads [data-download-route]");
+    assert.equal(await savedRouteDownloads.count(), 3, "saved plan did not expose all route kits");
+    let exportAuthorization = "";
+    await page.route(
+      `**/v1/marketing-plans/${savedMarketingPlan.id}/export?route_id=practical-hook`,
+      async (route) => {
+        exportAuthorization = route.request().headers().authorization || "";
+        await route.fulfill({
+          status: 200,
+          contentType: "application/zip",
+          headers: {
+            "Content-Disposition": "attachment; filename=seasonal-tomatoes-practical-hook.zip",
+          },
+          body: Buffer.from("browser-e2e-publishing-kit"),
+        });
+      },
+      { times: 1 },
+    );
+    const routeDownloadPromise = page.waitForEvent("download");
+    await page
+      .locator('#route-downloads [data-download-route="practical-hook"]')
+      .click();
+    const routeDownload = await routeDownloadPromise;
+    assert.equal(
+      routeDownload.suggestedFilename(),
+      "seasonal-tomatoes-practical-hook.zip",
+    );
+    assert.equal(
+      exportAuthorization,
+      `Bearer ${ownerToken}`,
+      "publishing kit export did not use the signed-in team token",
+    );
+    await Promise.all([
+      page.waitForURL(
+        `${baseUrl}/workspace/plans?plan=${encodeURIComponent(savedMarketingPlan.id)}`,
+      ),
+      page.locator("#open-saved-plan").click(),
+    ]);
+    await page.locator("#workspace").waitFor({ state: "visible" });
+    await page.locator('[data-page-panel="plans"]').waitFor({ state: "visible" });
+    await page.locator("#marketing-plan-detail").waitFor({ state: "visible" });
+    await page.locator("#marketing-plan-title", { hasText: /tomato/i }).waitFor();
+    assert.equal(
+      await page.locator("#marketing-plan-preview .plan-video-card").count(),
+      3,
+      "saved plan did not render three video concepts",
+    );
+    assert.equal(
+      await page.locator("#marketing-plan-preview .plan-calendar article").count(),
+      7,
+      "saved plan did not render the seven-day operating plan",
+    );
+
+    const updatedPositioning = `E2E tomato positioning ${unique}`;
+    await page.locator(".plan-editor-wrap").evaluate((element) => {
+      element.open = true;
+    });
+    const initialPlanContent = JSON.parse(
+      await page.locator("#marketing-plan-editor").inputValue(),
+    );
+    initialPlanContent.product_profile.one_line_value = updatedPositioning;
+    await page
+      .locator("#marketing-plan-editor")
+      .fill(JSON.stringify(initialPlanContent, null, 2));
+    await page
+      .locator("#marketing-plan-change-summary")
+      .fill("Browser E2E positioning update");
+    const versionResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() ===
+          `${baseUrl}/v1/marketing-plans/${savedMarketingPlan.id}/versions` &&
+        response.request().method() === "POST",
+    );
+    await page.locator("#save-marketing-plan-version").click();
+    const versionResponse = await versionResponsePromise;
+    assert.equal(versionResponse.status(), 201, "owner could not save marketing plan v2");
+    const versionedMarketingPlan = await versionResponse.json();
+    assert.equal(versionedMarketingPlan.current_version.version_number, 2);
+    assert.equal(
+      versionedMarketingPlan.current_version.content.product_profile.one_line_value,
+      updatedPositioning,
+    );
+    const marketingPlanVersionButtons = page.locator("#marketing-plan-versions button");
+    await marketingPlanVersionButtons.nth(1).waitFor();
+    assert.equal(await marketingPlanVersionButtons.count(), 2);
+
+    const versionOneButton = page.locator(
+      '#marketing-plan-versions button:has(b:text-is("v1"))',
+    );
+    const versionTwoButton = page.locator(
+      '#marketing-plan-versions button:has(b:text-is("v2"))',
+    );
+    await versionOneButton.click();
+    const versionOneContent = JSON.parse(
+      await page.locator("#marketing-plan-editor").inputValue(),
+    );
+    assert.notEqual(
+      versionOneContent.product_profile.one_line_value,
+      updatedPositioning,
+      "saving v2 overwrote v1",
+    );
+    await versionTwoButton.click();
+    assert.equal(
+      JSON.parse(await page.locator("#marketing-plan-editor").inputValue()).product_profile
+        .one_line_value,
+      updatedPositioning,
+      "v2 could not be reopened",
+    );
+
+    const copyResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() ===
+          `${baseUrl}/v1/marketing-plans/${savedMarketingPlan.id}/copy` &&
+        response.request().method() === "POST",
+    );
+    await page.locator("#copy-marketing-plan").click();
+    const copyResponse = await copyResponsePromise;
+    assert.equal(copyResponse.status(), 201, "owner could not copy marketing plan");
+    const copiedMarketingPlan = await copyResponse.json();
+    assert.notEqual(copiedMarketingPlan.id, savedMarketingPlan.id);
+    assert.equal(copiedMarketingPlan.current_version.version_number, 1);
+    await page.waitForURL(
+      `${baseUrl}/workspace/plans?plan=${encodeURIComponent(copiedMarketingPlan.id)}`,
+    );
+    assert.equal(await page.locator("#marketing-plan-version-count").textContent(), "1");
+
+    const localizedPlanHeadings = new Set();
+    for (const locale of ["zh-CN", "zh-HK", "en"]) {
+      await selectLocale(page, locale);
+      const expectedHeading = await page.evaluate(() => HeyuI18n.t("marketingPlans.heading"));
+      const heading = page.locator('[data-i18n="marketingPlans.heading"]');
+      await heading.waitFor({ state: "visible" });
+      assert.equal((await heading.textContent()).trim(), expectedHeading);
+      localizedPlanHeadings.add(expectedHeading);
+    }
+    await screenshot(page, "marketing-plan-owner-v2-copy.png");
+
+    await openWorkspacePage(page, "assets");
     const brandsResponse = await context.request.get(`${baseUrl}/v1/brands`, {
       headers: { Authorization: `Bearer ${ownerToken}` },
     });
@@ -210,6 +714,17 @@ async function main() {
     });
     assert.equal(projectResponse.status(), 201);
     const project = await projectResponse.json();
+    const secondProjectResponse = await context.request.post(`${baseUrl}/v1/content-projects`, {
+      headers: { Authorization: `Bearer ${ownerToken}` },
+      data: {
+        brand_id: brand.id,
+        product_id: product.id,
+        title: `Project switch regression ${unique}`,
+        content_type: "title_and_cover",
+      },
+    });
+    assert.equal(secondProjectResponse.status(), 201);
+    const secondProject = await secondProjectResponse.json();
 
     await page.reload({ waitUntil: "networkidle" });
     await page.locator("#workspace").waitFor({ state: "visible" });
@@ -233,6 +748,16 @@ async function main() {
     await page.locator("#project-select").selectOption(project.id);
     await page.locator("#generate-button").click();
     await page.locator("#content-toolbar").waitFor({ state: "visible" });
+    await page.locator("#edit-version").waitFor({ state: "visible" });
+    assert.notEqual(await page.locator("#version-editor").inputValue(), "");
+
+    await page.locator("#project-select").selectOption(secondProject.id);
+    await page.locator("#content-toolbar").waitFor({ state: "hidden" });
+    await page.locator("#edit-version").waitFor({ state: "hidden" });
+    assert.equal(await page.locator("#version-editor").inputValue(), "");
+    assert.equal(await page.locator("#generation-output").textContent(), "");
+    assert.equal(await page.locator("#generation-provenance").count(), 0);
+    await page.locator("#project-select").selectOption(project.id);
 
     await page.locator('[data-page="assets"]').click();
     const productCard = page.locator("#asset-list article", {
@@ -477,94 +1002,91 @@ async function main() {
     await page.goto(`${baseUrl}/workspace/?lang=en`, { waitUntil: "networkidle" });
     await page.locator("#workspace").waitFor({ state: "visible" });
 
-    const failureProjectResponse = await context.request.post(
+    const traceableProjectResponse = await context.request.post(
       `${baseUrl}/v1/content-projects`,
       {
         headers: { Authorization: `Bearer ${ownerToken}` },
         data: {
           brand_id: brand.id,
           product_id: product.id,
-          title: `[E2E invalid citation] ${unique}`,
+          title: `[E2E traceable generation] ${unique}`,
           content_type: "social_post",
         },
       },
     );
-    assert.equal(failureProjectResponse.status(), 201);
-    const failureProject = await failureProjectResponse.json();
+    assert.equal(traceableProjectResponse.status(), 201);
+    const traceableProject = await traceableProjectResponse.json();
 
     await page.reload({ waitUntil: "networkidle" });
     await page.locator("#workspace").waitFor({ state: "visible" });
     await page.locator('[data-page="studio"]').click();
-    await page.locator("#project-select").selectOption(failureProject.id);
-    const [failedGenerationResponse] = await Promise.all([
+    await page.locator("#project-select").selectOption(traceableProject.id);
+    const [generationResponse] = await Promise.all([
       page.waitForResponse(
         (response) =>
           response.url() ===
-            `${baseUrl}/v1/content-projects/${failureProject.id}/generate` &&
+            `${baseUrl}/v1/content-projects/${traceableProject.id}/generate` &&
           response.request().method() === "POST",
       ),
       page.locator("#generate-button").click(),
     ]);
-    assert.equal(failedGenerationResponse.status(), 502);
-    await page.locator("#toast.error").waitFor({ state: "visible" });
-    assert.match(await page.locator("#toast").textContent(), /omitted required source citations/i);
-    const failedHistory = page.locator("#generation-history-list article", {
-      hasText: "Incomplete generation",
+    assert.equal(generationResponse.status(), 201);
+    const completedHistory = page.locator("#generation-history-list article", {
+      hasText: "social_post",
     });
-    await failedHistory.waitFor();
-    await failedHistory.getByText("Failed", { exact: true }).waitFor();
-    assert.match(await failedHistory.textContent(), /browser-e2e/);
+    await completedHistory.waitFor();
+    const completedLabel = await page.evaluate(() =>
+      HeyuI18n.t("generationStatus.completed"),
+    );
+    await completedHistory.getByText(completedLabel, { exact: true }).waitFor();
 
-    const failureRunsResponse = await context.request.get(
-      `${baseUrl}/v1/content-projects/${failureProject.id}/generation-runs`,
+    const generationRunsResponse = await context.request.get(
+      `${baseUrl}/v1/content-projects/${traceableProject.id}/generation-runs`,
       { headers: { Authorization: `Bearer ${ownerToken}` } },
     );
-    assert.equal(failureRunsResponse.status(), 200);
-    const failureRuns = await failureRunsResponse.json();
-    assert.equal(failureRuns.length, 1, "failure project should have exactly one generation run");
-    assert.equal(failureRuns[0].status, "failed");
-    assert.equal(failureRuns[0].output?.error?.code, "provider_missing_citation");
-    assert.equal(
-      failureRuns.some((run) => run.status === "completed"),
-      false,
-      "failure project unexpectedly persisted a successful run",
+    assert.equal(generationRunsResponse.status(), 200);
+    const generationRuns = await generationRunsResponse.json();
+    assert.equal(generationRuns.length, 1, "project should have exactly one generation run");
+    assert.equal(generationRuns[0].status, "succeeded");
+    assert.ok(generationRuns[0].sources.length > 0, "generation should retain source provenance");
+    assert.ok(
+      generationRuns[0].output?.citations?.length > 0,
+      "generation should include at least one trusted source citation",
     );
 
-    const failureVersionsResponse = await context.request.get(
-      `${baseUrl}/v1/content-projects/${failureProject.id}/versions`,
+    const generatedVersionsResponse = await context.request.get(
+      `${baseUrl}/v1/content-projects/${traceableProject.id}/versions`,
       { headers: { Authorization: `Bearer ${ownerToken}` } },
     );
-    assert.equal(failureVersionsResponse.status(), 200);
-    assert.deepEqual(await failureVersionsResponse.json(), []);
+    assert.equal(generatedVersionsResponse.status(), 200);
+    assert.equal((await generatedVersionsResponse.json()).length, 1);
 
     await page.reload({ waitUntil: "networkidle" });
     await page.locator("#workspace").waitFor({ state: "visible" });
     await page.locator('[data-page="studio"]').click();
-    await page.locator("#project-select").selectOption(failureProject.id);
+    await page.locator("#project-select").selectOption(traceableProject.id);
     for (const locale of ["zh-CN", "zh-HK", "en"]) {
       await selectLocale(page, locale);
       assert.equal(
         await page.locator("#project-select").inputValue(),
-        failureProject.id,
-        `locale switch to ${locale} changed the selected failure project`,
+        traceableProject.id,
+        `locale switch to ${locale} changed the selected generated project`,
       );
       const expected = await page.evaluate(() => ({
-        heading: HeyuI18n.t("generation.failedRecord"),
-        status: HeyuI18n.t("generationStatus.failed"),
+        status: HeyuI18n.t("generationStatus.completed"),
       }));
-      const localizedFailure = page.locator("#generation-history-list article", {
-        hasText: "browser-e2e",
+      const localizedGeneration = page.locator("#generation-history-list article", {
+        hasText: "social_post",
       });
-      await localizedFailure.waitFor();
-      await localizedFailure.getByText(expected.heading, { exact: true }).waitFor();
-      await localizedFailure.getByText(expected.status, { exact: true }).waitFor();
+      await localizedGeneration.waitFor();
+      await localizedGeneration.getByText(expected.status, { exact: true }).waitFor();
     }
     assert.deepEqual(
       await page.evaluate(() => window.__heyuUnhandledRejections),
       [],
       "workspace emitted an unhandled promise rejection",
     );
-    await screenshot(page, "generation-failure-persisted.png");
+    await screenshot(page, "generation-traceability-persisted.png");
 
     for (const [locale, filename] of [
       ["zh-CN", "workspace-zh-CN.png"],
@@ -650,6 +1172,17 @@ async function main() {
 
     const inviteContext = await browser.newContext({ viewport: { width: 1050, height: 800 } });
     const invitePage = await inviteContext.newPage();
+    const invitePageErrors = [];
+    invitePage.on("pageerror", (error) => invitePageErrors.push(error.message));
+    await invitePage.addInitScript(() => {
+      window.__heyuUnhandledRejections = [];
+      window.addEventListener("unhandledrejection", (event) => {
+        const reason = event.reason;
+        window.__heyuUnhandledRejections.push(
+          reason instanceof Error ? reason.message : String(reason),
+        );
+      });
+    });
     await invitePage.goto(`${baseUrl}/workspace/#invite=${encodeURIComponent(invitation.token)}`, {
       waitUntil: "networkidle",
     });
@@ -728,6 +1261,59 @@ async function main() {
     assert.equal(viewerResponse.status(), 200);
     assert.equal((await viewerResponse.json()).role, "viewer");
 
+    await openWorkspacePage(invitePage, "plans");
+    await invitePage
+      .locator(
+        `[data-open-marketing-plan="${copiedMarketingPlan.id}"], [data-open-marketing-plan="${savedMarketingPlan.id}"]`,
+      )
+      .first()
+      .click();
+    await invitePage.locator("#marketing-plan-detail").waitFor({ state: "visible" });
+    await invitePage.locator("#marketing-plan-preview", { hasText: /tomato/i }).waitFor();
+    await expectHiddenOrAbsent(
+      invitePage,
+      "#import-marketing-plan",
+      "marketing plan import control",
+    );
+    await expectHiddenOrAbsent(
+      invitePage,
+      "#save-marketing-plan-version",
+      "marketing plan version save control",
+    );
+    await expectHiddenOrAbsent(
+      invitePage,
+      "#copy-marketing-plan",
+      "marketing plan copy control",
+    );
+    await expectHiddenOrAbsent(invitePage, ".plan-editor-wrap", "marketing plan editor");
+
+    const viewerPlanResponse = await inviteContext.request.get(
+      `${baseUrl}/v1/marketing-plans/${savedMarketingPlan.id}`,
+      { headers: { Authorization: `Bearer ${viewerToken}` } },
+    );
+    assert.equal(viewerPlanResponse.status(), 200, "viewer could not read marketing plan");
+    const viewerPlan = await viewerPlanResponse.json();
+    const viewerVersionResponse = await inviteContext.request.post(
+      `${baseUrl}/v1/marketing-plans/${savedMarketingPlan.id}/versions`,
+      {
+        headers: { Authorization: `Bearer ${viewerToken}` },
+        data: {
+          request_payload: viewerPlan.current_version.request_payload,
+          content: viewerPlan.current_version.content,
+          change_summary: "Viewer must not save",
+        },
+      },
+    );
+    assert.equal(viewerVersionResponse.status(), 403, "viewer created a marketing plan version");
+    const viewerCopyResponse = await inviteContext.request.post(
+      `${baseUrl}/v1/marketing-plans/${savedMarketingPlan.id}/copy`,
+      {
+        headers: { Authorization: `Bearer ${viewerToken}` },
+        data: {},
+      },
+    );
+    assert.equal(viewerCopyResponse.status(), 403, "viewer copied a marketing plan");
+
     const readOnlyNotices = {};
     for (const [locale, filename] of [
       ["zh-CN", "viewer-readonly-zh-CN.png"],
@@ -785,12 +1371,33 @@ async function main() {
     await screenshot(invitePage, "workspace-700px.png");
 
     await invitePage.setViewportSize({ width: 390, height: 844 });
-    await invitePage.reload({ waitUntil: "networkidle" });
+    await invitePage.goto(
+      `${baseUrl}/workspace/plans?plan=${encodeURIComponent(copiedMarketingPlan.id)}&lang=en`,
+      { waitUntil: "networkidle" },
+    );
     await invitePage.locator("#workspace").waitFor({ state: "visible" });
-    await expectNoHorizontalOverflow(invitePage, "workspace 390px");
-    await screenshot(invitePage, "workspace-390px.png");
+    await invitePage.locator('[data-page-panel="plans"]').waitFor({ state: "visible" });
+    await invitePage.locator("#marketing-plan-detail").waitFor({ state: "visible" });
+    await expectNoHorizontalOverflow(invitePage, "marketing plan workspace 390px");
+    await screenshot(invitePage, "marketing-plan-viewer-390px.png");
+    assert.deepEqual(
+      await invitePage.evaluate(() => window.__heyuUnhandledRejections || []),
+      [],
+      "viewer workspace emitted an unhandled promise rejection",
+    );
+    assert.deepEqual(
+      invitePageErrors,
+      [],
+      `viewer workspace page errors: ${invitePageErrors.join("\n")}`,
+    );
+    assert.equal(localizedPlanHeadings.size, 3, "marketing plan heading was not trilingual");
     await inviteContext.close();
     assert.deepEqual(pageErrors, [], `browser page errors: ${pageErrors.join("\n")}`);
+    assert.deepEqual(
+      await page.evaluate(() => window.__heyuUnhandledRejections || []),
+      [],
+      "browser unhandled promise rejections",
+    );
     await context.tracing.stop({ path: path.join(outputDir, "trace.zip") });
     await context.close();
 

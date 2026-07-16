@@ -163,6 +163,7 @@ class AcceptanceRun:
 
     def run(self) -> None:
         self.step("health and web surfaces", self._health_and_surfaces)
+        self.step("farmer marketing plan preview", self._marketing_preview)
         self.step("organization bootstrap and authentication boundary", self._bootstrap)
         self.step("brand and product assets", self._assets)
         self.step("trusted knowledge lifecycle", self._knowledge)
@@ -177,8 +178,17 @@ class AcceptanceRun:
         health = self.client.request("GET", "/health", authenticated=False)
         self.require(health.get("status") == "ok", "health status is not ok")
         landing = self.client.request("GET", "/", authenticated=False)
+        simple_mode = self.client.request("GET", "/create/", authenticated=False)
         workspace = self.client.request("GET", "/workspace/", authenticated=False)
         self.require("禾语 AI" in landing, "landing page brand marker is missing")
+        self.require(
+            'id="marketing-form"' in simple_mode,
+            "farmer simple-mode form is missing",
+        )
+        self.require(
+            simple_mode.count("data-demo-case=") == 3,
+            "farmer simple mode does not expose all three demo cases",
+        )
         self.require(
             'id="bootstrap-form"' in workspace, "workspace bootstrap form is missing"
         )
@@ -189,7 +199,50 @@ class AcceptanceRun:
         return {
             "health": health["status"],
             "landing_bytes": len(landing.encode("utf-8")),
+            "simple_mode_bytes": len(simple_mode.encode("utf-8")),
+            "simple_mode_demo_cases": 3,
             "workspace_bytes": len(workspace.encode("utf-8")),
+        }
+
+    def _marketing_preview(self) -> dict[str, Any]:
+        plan = self.client.request(
+            "POST",
+            "/v1/marketing/preview",
+            {
+                "locale": "zh-CN",
+                "persona": "farmer",
+                "goals": ["sell", "gain-followers"],
+                "product_name": "当季番茄",
+                "origin": "广东清远",
+                "product_description": (
+                    "自然成熟后采摘，适合家庭鲜食和日常做菜，采摘当天完成分选和装箱。"
+                ),
+                "selling_points": ["自然成熟", "清甜多汁", "当天分选"],
+                "audience": "重视新鲜食材的年轻家庭",
+                "platform": "douyin",
+                "tone": "plain",
+                "trend": "当季蔬果和家庭餐桌",
+            },
+            expected=200,
+            authenticated=False,
+        )
+        self.require(
+            len(plan.get("videos", [])) == 3, "preview did not return three videos"
+        )
+        self.require(
+            len(plan.get("livestream", [])) >= 4,
+            "preview did not return the livestream outline",
+        )
+        self.require(
+            len(plan.get("seven_day_plan", [])) == 7,
+            "preview did not return a seven-day operating plan",
+        )
+        return {
+            "provider": plan.get("provider"),
+            "model": plan.get("model"),
+            "videos": len(plan["videos"]),
+            "livestream_sections": len(plan["livestream"]),
+            "operating_days": len(plan["seven_day_plan"]),
         }
 
     def _bootstrap(self) -> dict[str, Any]:

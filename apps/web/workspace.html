@@ -21,9 +21,10 @@
       <nav>
         <span class="nav-label">工作空间</span>
         <button class="nav active" data-page="overview" data-index="01">经营概览</button>
+        <button class="nav" data-page="plans" data-index="02" data-i18n="workspace.page.plans">经营方案库</button>
         <span class="nav-label">智能资产</span>
-        <button class="nav" data-page="assets" data-index="02">品牌与农产品</button>
-        <button class="nav" data-page="knowledge" data-index="03">可信知识库</button>
+        <button class="nav" data-page="assets" data-index="03">品牌与农产品</button>
+        <button class="nav" data-page="knowledge" data-index="03">内容资料库</button>
         <button class="nav" data-page="campaigns" data-index="04" data-i18n="campaign.page">营销活动包</button>
         <button class="nav" data-page="studio" data-index="05">内容创作台</button>
         <button class="nav" data-page="operations" data-index="06">发布与运营</button>
@@ -33,7 +34,7 @@
         <button class="nav member-nav" data-page="members" data-index="09" hidden>团队与权限</button>
       </nav>
       <div class="sidebar-note">
-        <b><i></i>可信引擎运行中</b>
+        <b><i></i>内容工作台运行中</b>
         <span>生成内容保留知识来源、模型参数与版本记录。</span>
       </div>
     </aside>
@@ -58,7 +59,7 @@
         <div>
           <span class="pill">本地工作空间</span>
           <h2>进入禾语内容工作台</h2>
-          <p>管理品牌与产品资料、审核知识来源，并创建可追溯的营销内容。</p>
+          <p>管理品牌与产品资料，协作生产短视频、直播与新媒体营销内容。</p>
         </div>
         <div class="auth-forms">
         <div class="auth-tabs" role="tablist" aria-label="进入工作台方式">
@@ -110,14 +111,14 @@
             <div class="hero-status"><span>今日工作焦点</span><strong><i></i><span id="focus-status">工作空间已就绪</span></strong><small id="focus-detail">先完善知识，再开始创作</small></div>
           </div>
           <div class="metric-grid">
-            <article class="metric-primary"><span>可信知识</span><strong id="knowledge-count">0</strong><small>已审核、可用于生成</small></article>
+            <article class="metric-primary"><span>可用资料</span><strong id="knowledge-count">0</strong><small>已审核、可用于生成</small></article>
             <article><span>品牌资产</span><strong id="brand-count">0</strong><small>已建档品牌</small></article>
             <article><span>农产品</span><strong id="product-count">0</strong><small>结构化产品档案</small></article>
             <article><span>内容项目</span><strong id="project-count">0</strong><small>脚本与直播话术</small></article>
           </div>
           <div class="overview-stage">
             <section class="journey-panel">
-              <div class="panel-heading"><div><p class="eyebrow">VALUE JOURNEY</p><h2>可信内容生产链</h2></div><span class="quiet-meta">从事实到发布</span></div>
+              <div class="panel-heading"><div><p class="eyebrow">VALUE JOURNEY</p><h2>内容生产与运营流程</h2></div><span class="quiet-meta">从资料到经营</span></div>
               <div class="flow">
                 <article><b>01</b><h3>品牌建档</h3><p>沉淀故事、产品参数与禁止表述。</p></article>
                 <article><b>02</b><h3>知识审核</h3><p>仅通过审核的事实进入 AI 上下文。</p></article>
@@ -128,9 +129,69 @@
             <aside class="next-action" id="next-action">
               <span>NEXT / 01</span>
               <h2 id="next-action-title">从最关键的资料开始。</h2>
-              <p id="next-action-copy">先建立品牌和产品档案，再录入一条经过审核的事实，AI 才能生成可信内容。</p>
+              <p id="next-action-copy">先建立品牌和产品档案，再添加一条可用资料，开始生成第一份内容。</p>
               <button class="light-action jump" id="next-action-button" data-target="assets">建立第一份档案 <b>→</b></button>
             </aside>
+          </div>
+        </section>
+
+        <section class="page" data-page-panel="plans">
+          <div class="plans-hero">
+            <div>
+              <p class="eyebrow">MARKETING PLAN LIBRARY</p>
+              <h2 data-i18n="marketingPlans.heading">把每次生成，变成可继续经营的方案</h2>
+              <p data-i18n="marketingPlans.intro">保存简单模式生成的完整内容包，随时再次打开、调整、复制，并保留每一次修改。</p>
+            </div>
+            <a class="primary plans-create-link" href="/create/" data-write-scope="content" data-i18n="marketingPlans.create">生成新方案</a>
+          </div>
+          <div id="marketing-plan-import" class="pending-plan-banner" data-business-data hidden>
+            <div>
+              <strong data-i18n="marketingPlans.pendingImport">刚才生成的方案还没有保存</strong>
+              <span data-i18n="marketingPlans.pendingImportCopy">登录成功后可将它保存到当前团队工作台。</span>
+            </div>
+            <button class="primary" id="import-marketing-plan" data-write-scope="content" data-i18n="marketingPlans.importNow">立即保存</button>
+          </div>
+          <div class="plan-library-layout">
+            <aside class="panel plan-library-sidebar">
+              <div class="panel-heading">
+                <div><p class="eyebrow">SAVED PLANS</p><h2 data-i18n="marketingPlans.saved">已保存方案</h2></div>
+                <span class="pill" id="marketing-plan-count">0</span>
+              </div>
+              <div id="marketing-plan-list" class="plan-list empty" data-business-data></div>
+            </aside>
+            <section class="panel plan-detail-panel">
+              <div id="marketing-plan-empty" class="plan-empty-state">
+                <span class="plan-empty-orbit" aria-hidden="true"></span>
+                <h2 data-i18n="marketingPlans.emptyTitle">从一份可执行的经营方案开始</h2>
+                <p data-i18n="marketingPlans.empty">这里会集中保存视频脚本、直播话术与七天运营计划。</p>
+              </div>
+              <div id="marketing-plan-detail" hidden>
+                <div class="panel-heading plan-detail-heading">
+                  <div>
+                    <p class="eyebrow" data-i18n="marketingPlans.current">CURRENT PLAN</p>
+                    <h2 id="marketing-plan-title"></h2>
+                    <div id="marketing-plan-meta" class="source-meta"></div>
+                  </div>
+                  <div class="row-actions">
+                    <button id="copy-marketing-plan" data-write-scope="content" data-i18n="marketingPlans.copy">复制方案</button>
+                  </div>
+                </div>
+                <div id="marketing-plan-preview" class="marketing-plan-preview" data-business-data></div>
+                <details class="plan-editor-wrap" data-write-scope="content">
+                  <summary data-i18n="marketingPlans.edit">调整并保存新版本</summary>
+                  <label><span data-i18n="marketingPlans.contentJson">结构化内容</span><textarea id="marketing-plan-editor" rows="18" spellcheck="false"></textarea></label>
+                  <label><span data-i18n="marketingPlans.changeSummary">本次调整说明</span><input id="marketing-plan-change-summary" maxlength="255" data-i18n-placeholder="marketingPlans.changeSummaryPlaceholder"></label>
+                  <button class="primary wide" id="save-marketing-plan-version" data-i18n="marketingPlans.saveVersion">保存为新版本</button>
+                </details>
+                <section class="plan-history">
+                  <div class="panel-heading">
+                    <div><p class="eyebrow">VERSION HISTORY</p><h3 data-i18n="marketingPlans.versionHistory">版本记录</h3></div>
+                    <span class="pill" id="marketing-plan-version-count">0</span>
+                  </div>
+                  <div id="marketing-plan-versions" class="version-timeline"></div>
+                </section>
+              </div>
+            </section>
           </div>
         </section>
 
@@ -145,14 +206,14 @@
         <section class="page" data-page-panel="knowledge">
           <div class="two-col">
             <form class="panel" id="knowledge-form" data-write-scope="content">
-              <h2>录入可信资料</h2>
+              <h2>添加产品与品牌资料</h2>
               <div class="file-import">
                 <div>
-                  <p class="eyebrow">LOCAL TEXT IMPORT</p>
-                  <strong>从本地文本资料开始</strong>
-                  <small>支持 UTF-8 TXT、Markdown、CSV，最大 1 MB。原文件不会上传，只保存文本和来源指纹。</small>
+                  <p class="eyebrow">DOCUMENT IMPORT</p>
+                  <strong>从本地资料建立内容资产</strong>
+                  <small>支持 TXT、Markdown、CSV、PDF 与 PPTX。系统先抽取文字供你确认，不会把原文件永久保存。</small>
                 </div>
-                <label class="file-picker">选择文件<input id="knowledge-file" type="file" accept=".txt,.md,.markdown,.csv,text/plain,text/markdown,text/csv"></label>
+                <label class="file-picker">选择文件<input id="knowledge-file" type="file" accept=".txt,.md,.markdown,.csv,.pdf,.pptx,text/plain,text/markdown,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation"></label>
                 <span id="knowledge-file-status" class="file-status">也可以直接在下方手工录入</span>
               </div>
               <input name="source_filename" type="hidden">
@@ -371,7 +432,7 @@
         <section class="page" data-page-panel="studio">
           <div class="two-col studio-grid">
             <form class="panel" id="project-form" data-write-scope="content"><input name="id" type="hidden"><h2 id="project-form-title">创建内容任务</h2><label>任务名称<input name="title" placeholder="番茄采摘季首发视频" required></label><label>品牌<select name="brand_id" class="brand-select" required></select></label><label>产品<select name="product_id" class="product-select" required></select></label><label>内容类型<select name="content_type"><option value="short_video_30s">30 秒短视频</option><option value="short_video_60s">60 秒短视频</option><option value="mobile_shooting_checklist">手机拍摄清单</option><option value="livestream_opening">直播开场</option><option value="livestream_product_pitch">直播产品讲解</option><option value="livestream_interaction">直播互动</option><option value="comment_reply">评论回复</option><option value="social_post">社交媒体文案</option><option value="title_and_cover">标题与封面文案</option></select></label><div class="form-grid"><label>发布平台<input name="platform" value="抖音"></label><label>内容语气<input name="tone" value="真诚、有烟火气"></label></div><label>目标受众<textarea name="target_audience"></textarea></label><label>传播目标<textarea name="objective"></textarea></label><label>额外要求<textarea name="extra_requirements"></textarea></label><button class="primary" id="project-save-button">创建任务</button><button class="ghost wide" id="project-edit-cancel" type="button" hidden>取消编辑</button></form>
-            <div class="panel result-panel"><div class="panel-heading"><div><p class="eyebrow">AI STUDIO</p><h2>生成结果</h2></div><span class="pill">可信来源限定</span></div><label>选择任务<select id="project-select"></select></label><button class="primary wide" id="generate-button" data-write-scope="content">生成内容脚本</button><div class="content-toolbar" id="content-toolbar" hidden><button type="button" data-result-mode="preview" class="active">阅读稿</button><button type="button" data-result-mode="json">结构化 JSON</button><button type="button" id="copy-content">复制阅读稿</button><button type="button" id="download-content">下载 TXT</button><button type="button" id="download-json">下载 JSON</button></div><div id="generation-preview" data-business-data class="generation-preview">请先建立品牌、产品和至少一条审核通过的知识资料。</div><pre id="generation-output" data-business-data hidden></pre><div id="edit-version" data-write-scope="content" hidden><label>人工修改版本<textarea id="version-editor" rows="12"></textarea></label><label>修改说明<input id="change-summary" value="人工优化脚本表达"></label><button class="primary wide" id="save-version-button" type="button">保存为新版本</button></div><div class="generation-history"><div class="panel-heading"><div><p class="eyebrow">PROVENANCE HISTORY</p><h2>生成记录</h2></div><span class="quiet-meta">持久化记录</span></div><div id="generation-history-list" data-business-data class="stack empty">选择任务后查看生成历史</div></div></div>
+            <div class="panel result-panel"><div class="panel-heading"><div><p class="eyebrow">AI STUDIO</p><h2>生成结果</h2></div><span class="pill">使用已审核资料</span></div><label>选择任务<select id="project-select"></select></label><button class="primary wide" id="generate-button" data-write-scope="content">生成内容脚本</button><div class="content-toolbar" id="content-toolbar" hidden><button type="button" data-result-mode="preview" class="active">阅读稿</button><button type="button" data-result-mode="json">结构化 JSON</button><button type="button" id="copy-content">复制阅读稿</button><button type="button" id="download-content">下载 TXT</button><button type="button" id="download-json">下载 JSON</button></div><div id="generation-preview" data-business-data class="generation-preview">请先建立品牌、产品和至少一条审核通过的知识资料。</div><pre id="generation-output" data-business-data hidden></pre><div id="edit-version" data-write-scope="content" hidden><label>人工修改版本<textarea id="version-editor" rows="12"></textarea></label><label>修改说明<input id="change-summary" value="人工优化脚本表达"></label><button class="primary wide" id="save-version-button" type="button">保存为新版本</button></div><div class="generation-history"><div class="panel-heading"><div><p class="eyebrow">PROVENANCE HISTORY</p><h2>生成记录</h2></div><span class="quiet-meta">持久化记录</span></div><div id="generation-history-list" data-business-data class="stack empty">选择任务后查看生成历史</div></div></div>
           </div>
           <div class="section-head"><div><p class="eyebrow">CONTENT BRIEFS</p><h2>已有内容任务</h2></div><span class="quiet-meta">修改只影响后续生成</span></div>
 <div id="project-list" class="card-list empty" data-business-data>暂无内容任务</div>
@@ -382,6 +443,34 @@
         </section>
 
         <section class="page" data-page-panel="operations">
+          <section class="panel operation-import-panel" data-write-scope="content">
+            <div class="panel-heading">
+              <div><p class="eyebrow">OPERATION DATA RETURN</p><h2 data-operation-copy="import.heading">批量回传运营数据</h2></div>
+              <span class="pill" data-operation-copy="import.format">CSV / XLSX</span>
+            </div>
+            <p class="panel-intro" data-operation-copy="import.intro">上传平台导出的数据文件，先检查字段匹配、发布记录匹配与逐行错误，再确认写入数据快照。</p>
+            <form id="operation-import-form">
+              <div class="operation-import-controls">
+                <label class="file-picker operation-file-picker">
+                  <span data-operation-copy="import.chooseFile">选择运营数据文件</span>
+                  <input id="operation-import-file" name="file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+                </label>
+                <span id="operation-import-file-status" class="file-status" data-operation-copy="import.fileHint">支持 UTF-8 CSV 与 XLSX，最大 20 MB</span>
+              </div>
+              <details class="operation-mapping">
+                <summary data-operation-copy="import.mappingSummary">高级：自定义字段映射</summary>
+                <label>
+                  <span data-operation-copy="import.mappingLabel">字段映射 JSON（可留空自动识别）</span>
+                  <textarea id="operation-field-mapping" rows="4" spellcheck="false" data-operation-placeholder="import.mappingPlaceholder"></textarea>
+                </label>
+              </details>
+              <div class="row-actions">
+                <button class="primary" id="operation-preview-button" type="submit" data-operation-copy="import.preview">预览匹配结果</button>
+                <button id="operation-confirm-button" type="button" disabled data-operation-copy="import.confirm">确认导入有效匹配行</button>
+              </div>
+            </form>
+            <div id="operation-import-preview" class="operation-import-preview" data-business-data hidden></div>
+          </section>
           <div class="two-col">
             <form id="publication-form" class="panel" data-write-scope="content">
               <div class="panel-heading"><div><p class="eyebrow">PUBLISH</p><h2>登记发布内容</h2></div><span class="pill">仅限已审核版本</span></div>
@@ -396,8 +485,8 @@
               <button class="primary">保存发布记录</button>
             </form>
             <div class="panel">
-              <div class="panel-heading"><div><p class="eyebrow">OPERATIONS</p><h2>发布与数据快照</h2></div><span class="pill">保留历史</span></div>
-              <p class="panel-intro">每次数据录入都会形成独立快照，不覆盖历史数据，也不计算未经验证的“爆款分数”。</p>
+              <div class="panel-heading"><div><p class="eyebrow">OPERATIONS</p><h2 data-operation-copy="loop.heading">发布、复盘与改进</h2></div><span class="pill" data-operation-copy="loop.history">保留历史</span></div>
+              <p class="panel-intro" data-operation-copy="loop.intro">每次数据录入都会形成独立快照。可基于最新快照生成规则复盘，把建议保存为改进简报，再创建关联的下一轮草稿。</p>
 <div id="publication-list" class="stack empty" data-business-data>暂无发布记录</div>
             </div>
           </div>

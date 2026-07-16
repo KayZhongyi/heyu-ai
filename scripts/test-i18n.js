@@ -45,7 +45,7 @@ for (const locale of ["zh-HK", "en"]) {
     "工作空间",
     "经营概览",
     "品牌与农产品",
-    "可信知识库",
+    "内容资料库",
     "内容创作台",
     "团队与权限",
   ]) {
@@ -85,6 +85,61 @@ assert.ok(
 assert.ok(
   appSource.includes('name="allowed_claims"'),
   "farmer evidence claims must use explicit multi-select controls",
+);
+
+const marketingSource = fs.readFileSync(
+  path.join(root, "apps", "web", "assets", "marketing.js"),
+  "utf8",
+);
+for (const key of [
+  "generationModeTitle",
+  "ruleModeTitle",
+  "modelModeTitle",
+  "feedTitle",
+  "feedHint",
+  "providerDegradedStatus",
+  "loginRequired",
+  "invalidFeedSource",
+  "downloadPackage",
+  "savedDownloadsTitle",
+  "saveToDownload",
+  "downloadingPackage",
+  "downloadError",
+]) {
+  assert.equal(
+    (marketingSource.match(new RegExp(`${key}:`, "g")) || []).length,
+    3,
+    `marketing copy key ${key} must exist in all three locales`,
+  );
+}
+assert.ok(
+  marketingSource.includes('name="generation_mode"'),
+  "marketing must expose an explicit rules/live-model selector",
+);
+assert.ok(
+  marketingSource.includes('"/v1/marketing/preview"') &&
+    marketingSource.includes('"/v1/marketing/generate"'),
+  "marketing generation modes must use their distinct API endpoints",
+);
+assert.ok(
+  marketingSource.includes("feed_sources: feedSources"),
+  "trend discovery must submit parsed feed_sources",
+);
+assert.ok(
+  marketingSource.includes('meta.dataset.degraded = String(degraded)'),
+  "marketing results must expose degraded provider state",
+);
+assert.ok(
+  marketingSource.includes("/marketing-plans/${encodeURIComponent(savedPlanId)}/export?route_id="),
+  "saved marketing routes must use the publishing-kit export endpoint",
+);
+assert.ok(
+  marketingSource.includes("Authorization: `Bearer ${token}`"),
+  "publishing-kit downloads must send the bearer token",
+);
+assert.ok(
+  marketingSource.includes("await response.blob()"),
+  "publishing-kit downloads must consume the ZIP response as a blob",
 );
 
 console.log("i18n dictionaries: PASS");

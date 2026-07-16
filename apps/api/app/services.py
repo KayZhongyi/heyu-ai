@@ -1,7 +1,8 @@
 import hashlib
 import re
 import time
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from typing import Literal, TypedDict, overload
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -17,6 +18,7 @@ from app.ai import (
     validate_campaign_brief_output,
     validate_generation_output,
 )
+from app.knowledge_indexing import index_knowledge_source, retrieve_knowledge_context
 from app.models import (
     AuditEvent,
     Brand,
@@ -33,6 +35,8 @@ from app.models import (
     GenerationStatus,
     ImprovementBrief,
     KnowledgeSource,
+    MarketingPlan,
+    MarketingPlanVersion,
     PerformanceSnapshot,
     Product,
     Publication,
@@ -41,14 +45,17 @@ from app.models import (
     new_id,
     utc_now,
 )
+from app.provider_connections import resolve_organization_ai_provider
 from app.schemas import (
     Actor,
     AssetReview,
     BrandCreate,
     BrandUpdate,
     CampaignBriefRevisionCreate,
+    CampaignBriefRevisionRead,
     CampaignClaimEvidenceMapRead,
     CampaignFarmerEvidenceSnapshotCreate,
+    CampaignFarmerEvidenceSnapshotRead,
     CampaignItemCreate,
     CampaignItemLink,
     CampaignItemUpdate,
@@ -58,7 +65,9 @@ from app.schemas import (
     CampaignPackageUpdate,
     CampaignProgress,
     CampaignSupplySnapshotCreate,
+    CampaignSupplySnapshotRead,
     ContentProjectCreate,
+    ContentProjectRead,
     ContentProjectUpdate,
     ContentReview,
     ContentVersionCreate,
@@ -67,12 +76,32 @@ from app.schemas import (
     KnowledgeReview,
     KnowledgeSourceCreate,
     KnowledgeSourceRevisionCreate,
+    MarketingPlanCopyCreate,
+    MarketingPlanCreate,
+    MarketingPlanDetailRead,
+    MarketingPlanRead,
+    MarketingPlanVersionCreate,
+    MarketingPlanVersionRead,
     PerformanceSnapshotCreate,
     ProductCreate,
     ProductUpdate,
     PublicationCreate,
     VideoDiagnosisCreate,
 )
+
+
+class ContentFreshness(TypedDict):
+    brief_current: bool
+    supply_current: bool
+    farmer_evidence_current: bool
+    content_current: bool
+    stale_reasons: list[str]
+
+
+class ContentAvailability(ContentFreshness):
+    publishable: bool
+    publication_blockers: list[str]
+
 
 FARMER_CLAIM_PATTERNS: dict[str, tuple[str, ...]] = {
     "general_support": (
@@ -409,6 +438,253 @@ def create_brand(db: Session, actor: Actor, data: BrandCreate) -> Brand:
     return brand
 
 
+def _marketing_plan_version_read(version: MarketingPlanVersion) -> MarketingPlanVersionRead:
+    return MarketingPlanVersionRead(
+        id=version.id,
+        organization_id=version.organization_id,
+        marketing_plan_id=version.marketing_plan_id,
+        version_number=version.version_number,
+        request_payload=version.request_payload,
+        content=version.content,
+        provider=version.provider,
+        model=version.model,
+        degraded=version.degraded,
+        change_summary=version.change_summary,
+        created_by=version.created_by,
+        created_at=version.created_at,
+    )
+
+
+def _tenant_marketing_plan(db: Session, actor: Actor, plan_id: str) -> MarketingPlan:
+    plan = db.scalar(
+        select(MarketingPlan).where(
+            MarketingPlan.id == plan_id,
+            MarketingPlan.organization_id == actor.organization_id,
+        )
+    )
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Marketing plan not found")
+    return plan
+
+
+def _marketing_plan_versions(db: Session, plan: MarketingPlan) -> list[MarketingPlanVersion]:
+    return list(
+        db.scalars(
+            select(MarketingPlanVersion)
+            .where(
+                MarketingPlanVersion.marketing_plan_id == plan.id,
+                MarketingPlanVersion.organization_id == plan.organization_id,
+            )
+            .order_by(MarketingPlanVersion.version_number.desc())
+        )
+    )
+
+
+@overload
+def _marketing_plan_read(
+    db: Session,
+    plan: MarketingPlan,
+    *,
+    include_versions: Literal[False] = False,
+) -> MarketingPlanRead: ...
+
+
+@overload
+def _marketing_plan_read(
+    db: Session,
+    plan: MarketingPlan,
+    *,
+    include_versions: Literal[True],
+) -> MarketingPlanDetailRead: ...
+
+
+def _marketing_plan_read(
+    db: Session,
+    plan: MarketingPlan,
+    *,
+    include_versions: bool = False,
+) -> MarketingPlanRead | MarketingPlanDetailRead:
+    versions = _marketing_plan_versions(db, plan)
+    if not versions:
+        raise HTTPException(status_code=409, detail="Marketing plan has no versions")
+    payload = {
+        "id": plan.id,
+        "organization_id": plan.organization_id,
+        "title": plan.title,
+        "locale": plan.locale,
+        "product_name": plan.product_name,
+        "platform": plan.platform,
+        "created_by": plan.created_by,
+        "created_at": plan.created_at,
+        "updated_at": plan.updated_at,
+        "current_version": _marketing_plan_version_read(versions[0]),
+    }
+    if include_versions:
+        return MarketingPlanDetailRead(
+            **payload,
+            versions=[_marketing_plan_version_read(version) for version in versions],
+        )
+    return MarketingPlanRead(**payload)
+
+
+def _new_marketing_plan_version(
+    actor: Actor,
+    plan: MarketingPlan,
+    data: MarketingPlanCreate | MarketingPlanVersionCreate,
+    version_number: int,
+) -> MarketingPlanVersion:
+    return MarketingPlanVersion(
+        organization_id=actor.organization_id,
+        marketing_plan_id=plan.id,
+        version_number=version_number,
+        request_payload=data.request_payload.model_dump(mode="json", exclude_none=True),
+        content=data.content.model_dump(mode="json"),
+        provider=data.content.provider,
+        model=data.content.model,
+        degraded=data.content.degraded,
+        change_summary=data.change_summary,
+        created_by=actor.user_id,
+    )
+
+
+def create_marketing_plan(
+    db: Session, actor: Actor, data: MarketingPlanCreate
+) -> MarketingPlanDetailRead:
+    plan = MarketingPlan(
+        organization_id=actor.organization_id,
+        title=data.title,
+        locale=data.request_payload.locale,
+        product_name=data.request_payload.product_name,
+        platform=data.request_payload.platform,
+        created_by=actor.user_id,
+    )
+    db.add(plan)
+    db.flush()
+    version = _new_marketing_plan_version(actor, plan, data, 1)
+    db.add(version)
+    db.flush()
+    audit(
+        db,
+        actor,
+        "marketing_plan.created",
+        "marketing_plan",
+        plan.id,
+        {"version_id": version.id, "version_number": version.version_number},
+    )
+    db.commit()
+    db.refresh(plan)
+    return _marketing_plan_read(db, plan, include_versions=True)
+
+
+def list_marketing_plans(db: Session, actor: Actor) -> list[MarketingPlanRead]:
+    plans = db.scalars(
+        select(MarketingPlan)
+        .where(MarketingPlan.organization_id == actor.organization_id)
+        .order_by(MarketingPlan.updated_at.desc(), MarketingPlan.created_at.desc())
+    )
+    return [_marketing_plan_read(db, plan) for plan in plans]
+
+
+def get_marketing_plan(db: Session, actor: Actor, plan_id: str) -> MarketingPlanDetailRead:
+    return _marketing_plan_read(
+        db,
+        _tenant_marketing_plan(db, actor, plan_id),
+        include_versions=True,
+    )
+
+
+def create_marketing_plan_version(
+    db: Session,
+    actor: Actor,
+    plan_id: str,
+    data: MarketingPlanVersionCreate,
+) -> MarketingPlanDetailRead:
+    plan = _tenant_marketing_plan(db, actor, plan_id)
+    max_version = db.scalar(
+        select(func.max(MarketingPlanVersion.version_number)).where(
+            MarketingPlanVersion.marketing_plan_id == plan.id,
+            MarketingPlanVersion.organization_id == actor.organization_id,
+        )
+    )
+    version = _new_marketing_plan_version(actor, plan, data, (max_version or 0) + 1)
+    plan.locale = data.request_payload.locale
+    plan.product_name = data.request_payload.product_name
+    plan.platform = data.request_payload.platform
+    plan.updated_at = utc_now()
+    db.add(version)
+    flush_or_conflict(
+        db,
+        "A newer marketing plan version was created concurrently; refresh and try again",
+    )
+    audit(
+        db,
+        actor,
+        "marketing_plan.version_created",
+        "marketing_plan",
+        plan.id,
+        {
+            "version_id": version.id,
+            "version_number": version.version_number,
+            "change_summary": version.change_summary,
+        },
+    )
+    db.commit()
+    db.refresh(plan)
+    return _marketing_plan_read(db, plan, include_versions=True)
+
+
+def copy_marketing_plan(
+    db: Session,
+    actor: Actor,
+    plan_id: str,
+    data: MarketingPlanCopyCreate,
+) -> MarketingPlanDetailRead:
+    source = _tenant_marketing_plan(db, actor, plan_id)
+    source_versions = _marketing_plan_versions(db, source)
+    if not source_versions:
+        raise HTTPException(status_code=409, detail="Marketing plan has no versions")
+    source_version = source_versions[0]
+    copied = MarketingPlan(
+        organization_id=actor.organization_id,
+        title=data.title or f"{source.title} (copy)",
+        locale=source.locale,
+        product_name=source.product_name,
+        platform=source.platform,
+        created_by=actor.user_id,
+    )
+    db.add(copied)
+    db.flush()
+    copied_version = MarketingPlanVersion(
+        organization_id=actor.organization_id,
+        marketing_plan_id=copied.id,
+        version_number=1,
+        request_payload=source_version.request_payload,
+        content=source_version.content,
+        provider=source_version.provider,
+        model=source_version.model,
+        degraded=source_version.degraded,
+        change_summary=source_version.change_summary,
+        created_by=actor.user_id,
+    )
+    db.add(copied_version)
+    db.flush()
+    audit(
+        db,
+        actor,
+        "marketing_plan.copied",
+        "marketing_plan",
+        copied.id,
+        {
+            "source_plan_id": source.id,
+            "source_version_id": source_version.id,
+            "version_id": copied_version.id,
+        },
+    )
+    db.commit()
+    db.refresh(copied)
+    return _marketing_plan_read(db, copied, include_versions=True)
+
+
 def list_brands(db: Session, actor: Actor) -> list[Brand]:
     return list(
         db.scalars(
@@ -494,12 +770,12 @@ def _reset_asset_review(asset: Brand | Product) -> None:
     asset.reviewed_at = None
 
 
-def _submit_asset(
+def _submit_asset[AssetT: (Brand, Product)](
     db: Session,
     actor: Actor,
-    asset: Brand | Product,
+    asset: AssetT,
     entity_type: str,
-) -> Brand | Product:
+) -> AssetT:
     if asset.status != ReviewStatus.draft:
         raise HTTPException(
             status_code=409,
@@ -512,13 +788,13 @@ def _submit_asset(
     return asset
 
 
-def _review_asset(
+def _review_asset[AssetT: (Brand, Product)](
     db: Session,
     actor: Actor,
-    asset: Brand | Product,
+    asset: AssetT,
     entity_type: str,
     data: AssetReview,
-) -> Brand | Product:
+) -> AssetT:
     if data.status not in {ReviewStatus.approved, ReviewStatus.rejected}:
         raise HTTPException(status_code=422, detail="Review must approve or reject")
     if asset.status != ReviewStatus.pending_review:
@@ -752,6 +1028,8 @@ def review_knowledge_source(
     )
     db.commit()
     db.refresh(source)
+    if source.status == ReviewStatus.approved:
+        source = index_knowledge_source(db, actor, source.id)
     return source
 
 
@@ -943,7 +1221,7 @@ def _content_version_freshness(
     current_supply: CampaignSupplySnapshot | None = None,
     current_farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
     current_brief: CampaignBriefRevision | None = None,
-) -> dict:
+) -> ContentFreshness:
     campaign = campaign or _campaign_for_project(db, version.project_id, organization_id)
     stale_reasons: list[str] = []
     if campaign is None:
@@ -954,7 +1232,10 @@ def _content_version_freshness(
         brief_current = bool(current_brief and version.brief_revision_id == current_brief.id)
         if not brief_current:
             stale_reasons.append("brief_missing" if current_brief is None else "brief_replaced")
-        elif not _campaign_claim_evidence_map(db, campaign, current_brief).complete:
+        elif (
+            current_brief is not None
+            and not _campaign_claim_evidence_map(db, campaign, current_brief).complete
+        ):
             brief_current = False
             stale_reasons.append("claim_evidence_stale")
         current_supply = current_supply or _current_campaign_supply(
@@ -1000,7 +1281,13 @@ def _content_version_freshness(
                 stale_reasons.append("farmer_claims_unauthorized")
 
     content_claims_current = True
-    if campaign and brief_current and supply_current:
+    if (
+        campaign
+        and brief_current
+        and supply_current
+        and current_brief is not None
+        and current_supply is not None
+    ):
         content_claim_blockers = _campaign_content_claim_blockers(
             db,
             campaign,
@@ -1033,7 +1320,7 @@ def _publication_blockers(
     current_supply: CampaignSupplySnapshot | None = None,
     current_farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
     current_brief: CampaignBriefRevision | None = None,
-    freshness: dict | None = None,
+    freshness: ContentFreshness | None = None,
 ) -> list[str]:
     freshness = freshness or _content_version_freshness(
         db,
@@ -1098,7 +1385,7 @@ def _content_version_availability(
     current_supply: CampaignSupplySnapshot | None = None,
     current_farmer_evidence: CampaignFarmerEvidenceSnapshot | None = None,
     current_brief: CampaignBriefRevision | None = None,
-) -> dict:
+) -> ContentAvailability:
     freshness = _content_version_freshness(
         db,
         organization_id,
@@ -1180,28 +1467,21 @@ def _campaign_item_view(
     )
     publication = publications[0] if publications else None
 
-    def farmer_evidence_current(version: ContentVersion | None) -> bool:
-        return bool(
-            version
-            and _content_version_availability(
-                db,
-                item.organization_id,
-                version,
-                campaign=campaign,
-                current_brief=current_brief,
-                current_supply=current_supply,
-                current_farmer_evidence=current_farmer_evidence,
-            )["farmer_evidence_current"]
+    def version_availability(version: ContentVersion | None) -> ContentAvailability | None:
+        if version is None:
+            return None
+        return _content_version_availability(
+            db,
+            item.organization_id,
+            version,
+            campaign=campaign,
+            current_brief=current_brief,
+            current_supply=current_supply,
+            current_farmer_evidence=current_farmer_evidence,
         )
 
-    approved_current = bool(
-        approved
-        and current_brief
-        and approved.brief_revision_id == current_brief.id
-        and current_supply
-        and approved.supply_snapshot_id == current_supply.id
-        and farmer_evidence_current(approved)
-    )
+    approved_availability = version_availability(approved)
+    approved_current = bool(approved_availability and approved_availability["publishable"])
     published_version = (
         db.scalar(
             select(ContentVersion).where(
@@ -1212,16 +1492,11 @@ def _campaign_item_view(
         if publication
         else None
     )
+    published_availability = version_availability(published_version)
     publication_current = bool(
-        publication
-        and current_brief
-        and published_version
-        and published_version.brief_revision_id == current_brief.id
-        and current_supply
-        and published_version.supply_snapshot_id == current_supply.id
-        and farmer_evidence_current(published_version)
+        publication and published_availability and published_availability["publishable"]
     )
-    latest_availability = (
+    latest_availability: ContentAvailability = (
         _content_version_availability(
             db,
             item.organization_id,
@@ -1238,6 +1513,8 @@ def _campaign_item_view(
             "farmer_evidence_current": False,
             "content_current": False,
             "stale_reasons": [],
+            "publishable": False,
+            "publication_blockers": ["content_missing"],
         }
     )
     return CampaignPackageItemRead(
@@ -1245,12 +1522,14 @@ def _campaign_item_view(
             column.name: getattr(item, column.name)
             for column in CampaignPackageItem.__table__.columns
         },
-        project=project,
+        project=ContentProjectRead.model_validate(project),
         latest_version_id=latest.id if latest else None,
         latest_version_status=latest.status if latest else None,
-        approved_version_id=approved.id if approved_current else None,
+        approved_version_id=approved.id if approved is not None and approved_current else None,
         approved_version_count=len(approved_versions),
-        publication_id=publication.id if publication_current else None,
+        publication_id=(
+            publication.id if publication is not None and publication_current else None
+        ),
         publication_count=len(publications),
         supply_current=latest_availability["supply_current"],
         farmer_evidence_current=latest_availability["farmer_evidence_current"],
@@ -1442,9 +1721,17 @@ def _campaign_view(db: Session, campaign: CampaignPackage) -> CampaignPackageRea
             column.name: getattr(campaign, column.name)
             for column in CampaignPackage.__table__.columns
         },
-        current_brief_revision=current_brief,
-        current_supply_snapshot=current_supply,
-        current_farmer_evidence_snapshot=current_farmer_evidence,
+        current_brief_revision=(
+            CampaignBriefRevisionRead.model_validate(current_brief) if current_brief else None
+        ),
+        current_supply_snapshot=(
+            CampaignSupplySnapshotRead.model_validate(current_supply) if current_supply else None
+        ),
+        current_farmer_evidence_snapshot=(
+            CampaignFarmerEvidenceSnapshotRead.model_validate(current_farmer_evidence)
+            if current_farmer_evidence
+            else None
+        ),
         items=items,
         progress=progress,
     )
@@ -1737,7 +2024,7 @@ def _normalized_text(value: object) -> str:
 def _date_variants(value: object) -> set[str]:
     if isinstance(value, datetime):
         value = value.date()
-    if not hasattr(value, "year"):
+    if not isinstance(value, date):
         return set()
     return {
         value.isoformat(),
@@ -3515,9 +3802,39 @@ def generate_content(
     latest_approved_by_group: dict[str, KnowledgeSource] = {}
     for source in approved_sources:
         latest_approved_by_group.setdefault(source.source_group_id, source)
-    sources, context_manifest = select_generation_context(
-        list(latest_approved_by_group.values()), project, brand, product
+    latest_sources = list(latest_approved_by_group.values())
+    retrieval_query = " ".join(
+        (
+            project.title,
+            project.platform,
+            project.target_audience,
+            project.objective,
+            project.extra_requirements,
+            brand.name,
+            product.name,
+            product.origin,
+            " ".join(product.selling_points),
+        )
     )
+    indexed_context = retrieve_knowledge_context(
+        db,
+        actor,
+        query=retrieval_query,
+        source_ids={source.id for source in latest_sources},
+    )
+    sources = list(indexed_context.sources)
+    context_manifest = list(indexed_context.manifest)
+    context_policy = indexed_context.retrieval.strategy
+    fallback_reason = indexed_context.retrieval.fallback_reason
+    if not sources:
+        sources, context_manifest = select_generation_context(
+            latest_sources,
+            project,
+            brand,
+            product,
+        )
+        context_policy = "lexical-v1-fallback"
+        fallback_reason = "knowledge-index-unavailable"
     if not sources:
         raise HTTPException(
             status_code=409,
@@ -3526,7 +3843,11 @@ def generate_content(
                 "linked to this brand or product"
             ),
         )
-    provider = get_ai_provider()
+    provider = resolve_organization_ai_provider(
+        db,
+        actor.organization_id,
+        environment_provider=get_ai_provider(),
+    )
     source_ids = [source.id for source in sources]
     normalized_input = {
         "content_type": project.content_type.value,
@@ -3537,7 +3858,8 @@ def generate_content(
         "extra_requirements": project.extra_requirements,
         "brand_id": brand.id,
         "product_id": product.id,
-        "context_policy": "lexical-v1",
+        "context_policy": context_policy,
+        "context_fallback_reason": fallback_reason,
         "context_sources": context_manifest,
         "campaign_package_id": campaign.id if campaign else None,
         "brief_revision_id": brief.id if brief else None,
@@ -3580,6 +3902,7 @@ def generate_content(
             farmer_evidence,
             brief,
         )
+        normalized_input["provider_attempts"] = list(provider.attempts)
         validated_content = validate_generation_output(
             result.content,
             project.content_type,
@@ -3588,6 +3911,7 @@ def generate_content(
         validate_campaign_brief_output(validated_content, brief)
         _validate_farmer_claims(validated_content, farmer_evidence)
     except FarmerClaimViolation as exc:
+        normalized_input["provider_attempts"] = list(provider.attempts)
         latency_ms = max(1, int((time.perf_counter() - started) * 1000))
         failed_run = GenerationRun(
             organization_id=actor.organization_id,
@@ -3628,6 +3952,7 @@ def generate_content(
         db.commit()
         raise _farmer_claim_http_error(exc) from exc
     except AIProviderError as exc:
+        normalized_input["provider_attempts"] = list(provider.attempts)
         latency_ms = max(1, int((time.perf_counter() - started) * 1000))
         failed_run = GenerationRun(
             organization_id=actor.organization_id,

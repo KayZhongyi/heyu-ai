@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="禾语 AI 农产品新媒体内容工作台：从产品资料到短视频、直播和七天运营计划。">
+  <title>禾语 AI · 助农内容工作台</title>
+  <link rel="stylesheet" href="/assets/marketing.css">
+</head>
+<body>
+  <div class="ambient" aria-hidden="true"><i></i><i></i><i></i></div>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand-mark"><svg viewBox="0 0 48 48" fill="none"><path d="M8 29c11-1 18-7 23-19 8 9 8 20 0 28-8 7-19 4-23-9Z"/><path d="M14 36c8-9 14-14 24-18"/><circle cx="37" cy="14" r="5"/></svg></span>
+      <span><strong>禾语 AI</strong><small>内容经营工作台</small></span>
+    </a>
+    <div class="top-actions">
+      <a class="home-link" href="/" data-copy="homeLink">← 返回首页</a>
+      <span class="demo-state"><i></i><b data-copy="demoMode">零成本演示模式</b></span>
+      <div class="locale-switch" aria-label="语言切换">
+        <button type="button" data-locale="zh-CN">简</button>
+        <button type="button" data-locale="zh-HK">繁</button>
+        <button type="button" data-locale="en">EN</button>
+      </div>
+      <a class="workspace-link" href="/workspace/" data-copy="proWorkspace">团队专业工作台 ↗</a>
+    </div>
+  </header>
+
+  <main class="shell">
+    <nav class="function-breadcrumb" aria-label="当前位置" data-copy-aria="breadcrumbLabel">
+      <a href="/" data-copy="homeName">平台首页</a>
+      <span aria-hidden="true">/</span>
+      <strong data-copy="createName">AI 内容工坊</strong>
+    </nav>
+    <section class="intro">
+      <p class="eyebrow"><span>HEYU CREATE / 01</span></p>
+      <h1 data-copy="headline">把一份农产品资料，<br><em>变成一周能执行的内容。</em></h1>
+      <p data-copy="subhead">先告诉禾语你是谁、想卖什么、准备发到哪里。平台会整理卖点，生成三套差异化短视频、直播话术与七天运营安排。</p>
+      <div class="progress-copy"><b>01</b><span data-copy="stepLabel">填写经营任务</span><i></i><b>02</b><span data-copy="resultLabel">获得内容方案</span></div>
+    </section>
+
+    <section class="creator-grid">
+      <form id="marketing-form" class="brief-panel">
+        <div class="panel-heading">
+          <div><span data-copy="briefKicker">经营简报</span><h2 data-copy="briefTitle">先从你最熟悉的产品开始</h2></div>
+        </div>
+        <div class="demo-cases">
+          <div class="demo-cases-copy">
+            <span data-copy="demoCasesLabel">一键演示案例</span>
+            <small id="demo-case-status" aria-live="polite" data-copy="demoCasesHint">选择后自动填充完整表单并生成预览。</small>
+          </div>
+          <div class="demo-case-buttons" role="group" aria-label="一键演示案例" data-copy-aria="demoCasesLabel">
+            <button type="button" data-demo-case="tomato"><i></i><span data-copy="demoTomato">番茄</span></button>
+            <button type="button" data-demo-case="tea"><i></i><span data-copy="demoTea">高山茶叶</span></button>
+            <button type="button" data-demo-case="fruit"><i></i><span data-copy="demoFruit">当季水果</span></button>
+          </div>
+        </div>
+
+        <fieldset>
+          <legend><b>01</b><span data-copy="identityTitle">你是谁，想完成什么？</span></legend>
+          <label class="field">
+            <span data-copy="identityLabel">经营身份</span>
+            <select name="persona">
+              <option value="farmer" data-copy="personaFarmer">农户 / 家庭农场</option>
+              <option value="cooperative" data-copy="personaCoop">合作社</option>
+              <option value="rural-operator" data-copy="personaOperator">乡村运营团队</option>
+            </select>
+          </label>
+          <div class="field">
+            <span data-copy="goalLabel">本次主要目标（最多三项）</span>
+            <div class="choice-grid goals">
+              <label><input type="checkbox" name="goals" value="sell" checked><span data-copy="goalSell">直接销售</span></label>
+              <label><input type="checkbox" name="goals" value="build-brand"><span data-copy="goalBrand">建立品牌</span></label>
+              <label><input type="checkbox" name="goals" value="gain-followers"><span data-copy="goalFans">积累关注</span></label>
+              <label><input type="checkbox" name="goals" value="promote-tourism"><span data-copy="goalTourism">引流到村</span></label>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend><b>02</b><span data-copy="productTitle">这次要讲什么产品？</span></legend>
+          <div class="two-columns">
+            <label class="field"><span data-copy="productLabel">产品名称</span><input name="product_name" required maxlength="80" placeholder="例如：当季番茄"></label>
+            <label class="field"><span data-copy="originLabel">产地</span><input name="origin" maxlength="120" placeholder="例如：广东清远"></label>
+          </div>
+          <label class="field"><span data-copy="descriptionLabel">用自己的话介绍它</span><textarea name="product_description" required maxlength="1200" rows="5" placeholder="什么时候采摘、吃起来怎样、平时怎么种、适合谁……不需要写得像广告。"></textarea><small><b id="description-count">0</b>/1200</small></label>
+          <label class="field"><span data-copy="pointsLabel">你认为最重要的卖点</span><input name="selling_points" maxlength="240" placeholder="用逗号分隔，例如：自然成熟，清甜多汁，当天采摘"></label>
+          <label class="field"><span data-copy="audienceLabel">最想卖给谁（可选）</span><input name="audience" maxlength="160" placeholder="例如：重视新鲜食材的年轻家庭"></label>
+        </fieldset>
+
+        <fieldset>
+          <legend><b>03</b><span data-copy="channelTitle">准备发布到哪里？</span></legend>
+          <div class="platform-grid">
+            <label><input type="radio" name="platform" value="douyin" checked><span><b data-copy="douyinName">抖音</b><small data-copy="douyinHint">快节奏 · 强开头</small></span></label>
+            <label><input type="radio" name="platform" value="xiaohongshu"><span><b data-copy="redName">小红书</b><small data-copy="redHint">经验感 · 可收藏</small></span></label>
+            <label><input type="radio" name="platform" value="wechat-channels"><span><b data-copy="channelsName">视频号</b><small data-copy="channelsHint">信任感 · 私域连接</small></span></label>
+            <label><input type="radio" name="platform" value="kuaishou"><span><b data-copy="kuaishouName">快手</b><small data-copy="kuaishouHint">真实感 · 强互动</small></span></label>
+          </div>
+          <div class="two-columns">
+            <label class="field"><span data-copy="toneLabel">表达风格</span><select name="tone"><option value="plain" data-copy="tonePlain">朴实自然</option><option value="warm" data-copy="toneWarm">温暖故事</option><option value="lively" data-copy="toneLively">活泼有梗</option><option value="premium" data-copy="tonePremium">克制高级</option></select></label>
+            <label class="field"><span data-copy="trendLabel">想结合的热点（可选）</span><input name="trend" maxlength="240" placeholder="填写已确认的热点，留空也可生成"></label>
+          </div>
+        </fieldset>
+
+        <div class="submit-row">
+          <p><strong data-copy="costTitle">本次演示不消耗模型额度</strong><span data-copy="costBody">使用稳定 Mock 生成器；登录团队账号后可切换国产 OpenAI-compatible API。</span></p>
+          <button class="generate-button" type="submit"><span data-copy="generate">生成完整经营方案</span><b>→</b></button>
+        </div>
+      </form>
+
+      <aside class="result-panel" id="result-panel">
+        <div class="empty-state" id="empty-state">
+          <span class="empty-orbit"><i></i><i></i><b>AI</b></span>
+          <p>OUTPUT PREVIEW</p>
+          <h2 data-copy="emptyTitle">一份输入，<br>得到一组能直接开拍的内容。</h2>
+          <ul>
+            <li><b>03</b><span data-copy="emptyVideos">三条不同角度的短视频</span></li>
+            <li><b>01</b><span data-copy="emptyLive">一套直播话术结构</span></li>
+            <li><b>07</b><span data-copy="emptyPlan">七天发布与复盘计划</span></li>
+          </ul>
+        </div>
+        <div class="loading-state" id="loading-state" hidden>
+          <span class="loader"></span><h2 data-copy="loadingTitle">正在理解产品与经营目标</h2><p data-copy="loadingBody">整理卖点 · 匹配平台 · 设计内容角度 · 编排七天任务</p>
+        </div>
+        <div class="result-state" id="result-state" hidden>
+          <div class="result-header">
+            <div><span data-copy="resultKicker">本次经营方案</span><h2 id="result-product"></h2></div>
+            <button type="button" id="reset-result" data-copy="editBrief">修改简报</button>
+          </div>
+          <nav class="result-tabs" aria-label="方案执行步骤" data-copy-aria="resultStepsLabel">
+            <button type="button" class="active" data-tab="strategy" data-copy="tabStrategy">策略</button>
+            <button type="button" data-tab="topics" data-copy="tabTopics">选题适配</button>
+            <button type="button" data-tab="routes" data-copy="tabRoutes">创意路线</button>
+            <button type="button" data-tab="prep" data-copy="tabPrep">拍摄准备</button>
+            <button type="button" data-tab="live" data-copy="tabLive">直播</button>
+            <button type="button" data-tab="calendar" data-copy="tabCalendar">7天计划</button>
+          </nav>
+          <div id="result-content" class="result-content"></div>
+          <div class="result-meta">
+            <span id="provider-meta"></span>
+            <div class="result-actions">
+              <button type="button" id="copy-result" data-copy="copyResult">复制当前方案</button>
+              <button type="button" id="save-result" class="save-result" data-copy="saveResult">保存到经营方案库</button>
+              <a id="open-saved-plan" href="/workspace/plans" hidden data-copy="openSavedPlan">打开已保存方案</a>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <footer><span>禾语 AI · Farmer-first content operations</span><span data-copy="footer">从一句农家话，到一周新媒体经营方案。</span></footer>
+  <script src="/assets/marketing.js"></script>
+</body>
+</html>

@@ -1,138 +1,134 @@
-# MVP product specification
+# 禾语 AI 产品范围
 
-Product name: **禾语 AI / Heyu AI**
+## 产品定位
 
-Positioning: an agricultural content and operations workspace that helps real
-products be described accurately, consistently, and with traceable evidence.
+禾语 AI 是面向农户、合作社和乡村运营团队的一站式 AI 新媒体内容生产与经营平台。
 
-## Primary users
+平台首先帮助用户把熟悉的农产品资料变成可以拍摄、发布和持续执行的内容方案；知识库、版本、审核、权限和运营证据作为后台能力，帮助团队沉淀长期品牌资产。
 
-1. Organization Owner: controls membership and organization boundaries.
-2. Admin: manages the team except for granting Owner.
-3. Product Manager: maintains brand, product, and reviewed knowledge.
-4. Creator: creates briefs, generates content, and prepares revisions.
-5. Reviewer: makes explicit knowledge and content decisions.
-6. Viewer: reads authorized records without write access.
+## 两种使用模式
 
-## First complete workflow
+### 农户简单模式
 
-1. Bootstrap an organization and first Owner.
-2. Invite team members through expiring, single-use links.
-3. Create and maintain a brand and agricultural product.
-4. Enter or import knowledge, submit it, and approve verified sources.
-5. Create and later correct a structured content brief.
-6. Generate source-backed content through the provider gateway.
-7. Edit the result into append-only versions.
-8. Submit brand, product, knowledge, and content drafts for explicit approval
-   or rejection.
-9. Register an approved version as externally published.
-10. Append observed performance snapshots.
-11. Record an evidence-led human diagnosis.
-12. Convert findings into an improvement brief.
-13. Explicitly create a successor draft and return it to normal review.
-14. Inspect the audit trail and provenance throughout.
+农户简单模式以一次经营任务为单位：
 
-## Content types
+1. 选择身份和经营目标；
+2. 录入农产品、产地、卖点和目标受众；
+3. 选择抖音、小红书、视频号或快手；
+4. 获得产品画像与平台策略；
+5. 获得三条不同角度的短视频；
+6. 获得分镜、拍摄提示与背景乐方向；
+7. 获得直播话术和七天运营计划。
 
-- 30-second short-video script
-- 60-second short-video script
-- Livestream opening
-- Single-product livestream pitch
-- Audience-interaction prompts
-- Comment replies
-- Social post
-- Titles and cover copy
+公共预览默认使用零成本确定性 Provider。真实模型生成需要登录并由负责人配置 OpenAI-compatible 服务。
 
-The deterministic provider returns format-specific structures rather than
-renaming one generic script. The browser provides a human-readable preview and
-zero-cost TXT/JSON export without discarding the underlying structured data.
+### 团队专业模式
 
-## Language experience
+团队专业模式面向需要长期经营和多人协作的团队：
 
-The interface supports Simplified Chinese (`zh-CN`), Hong Kong Traditional
-Chinese (`zh-HK`), and English (`en`). Hong Kong Traditional Chinese is an
-explicit product locale, not an automatic character conversion; terms such as
-儲存、連結、檔案、影片 and 團隊 are selected for a natural Hong Kong interface.
+1. 建立组织和成员角色；
+2. 维护品牌与农产品档案；
+3. 导入和维护知识库；
+4. 创建内容任务并生成结构化内容；
+5. 保存人工修改形成的新版本；
+6. 提交和审核品牌、产品、知识及内容；
+7. 登记发布版本和表现数据；
+8. 记录人工诊断、改进 Brief 和后续草稿；
+9. 检查来源、版本和审计记录。
 
-Locale switching changes UI copy, dynamic validation and feedback, dates, and
-content presentation. It must never translate or overwrite organization names,
-brands, product facts, knowledge, briefs, or other user-entered business data.
+## 核心用户
 
-## Team onboarding
+1. 农户或家庭农场：快速获得能直接拍摄和执行的内容。
+2. 合作社：统一多个产品和成员的内容表达。
+3. 乡村运营团队：管理品牌、内容、活动和长期运营。
+4. Owner：控制组织和成员边界。
+5. Admin：管理团队和系统配置。
+6. Product Manager：维护品牌、产品和知识。
+7. Creator：创建任务、生成和修改内容。
+8. Reviewer：作出明确审核决定。
+9. Viewer：读取授权记录，不进行写操作。
 
-An Owner or Admin can invite Admin, Product Manager, Creator, Reviewer, or
-Viewer. Admin cannot invite Owner. A high-entropy token is returned once; only
-its SHA-256 hash, normalized email, role, expiry, and state are stored.
-Existing users authenticate with their existing password. New users choose a
-password during acceptance.
+## 当前内容类型
 
-Owner and Admin can list organization-scoped invitation records without
-revealing tokens. A pending, unexpired invitation can be revoked explicitly;
-the original link becomes unusable immediately and a replacement invitation
-can then be created for the same normalized email. Admin cannot create or
-revoke an Owner invitation.
+- 30 秒短视频；
+- 60 秒短视频；
+- 手机拍摄清单；
+- 直播开场；
+- 单品直播讲解；
+- 直播互动；
+- 评论回复；
+- 社交媒体文案；
+- 标题与封面文案；
+- 三条差异化视频、直播结构和七天运营计划。
 
-The invitation state transitions are:
+输出保留结构化 JSON，同时提供适合阅读、复制和下载的界面。
 
-```text
-Pending → Accepted
-Pending → Revoked
-Pending → Expired
-```
+## 知识库
 
-The local MVP exposes the link for manual sharing. Email delivery and account
-recovery are not current capabilities. Authentication and invitation entry
-points use persistent, privacy-preserving abuse limits with standard retry
-responses; these controls do not by themselves authorize public deployment.
+知识库是内容生产的底层产品记忆，而不是农户首次使用时必须理解的复杂审核工具。
 
-## Product principles
+当前支持：
 
-- MVP means minimum scope, not disposable engineering.
-- Human approval remains authoritative.
-- Brand and product facts follow
-  `draft → pending_review → approved/rejected`.
-- Editing a brand or product clears its reviewer metadata and blocks new
-  generation until it is approved again.
-- Only approved knowledge can support generated claims.
-- Knowledge follows `draft → pending_review → approved/rejected`.
-- Reviewed knowledge is corrected through a new linear revision, never an
-  overwrite or history fork.
-- Content follows the same explicit review-state principle and append-only
-  version history.
-- A SHA-256 digest proves submitted-text identity, not factual truth.
-- Provider behavior stays behind one internal boundary.
-- Every generation preserves normalized input, output, provider/model, prompt
-  version, source/context evidence, status, and latency.
-- External-provider failures remain visible as durable generation records
-  rather than disappearing as untraceable HTTP errors.
-- Only output matching the requested content type and citing sources selected
-  for that exact run can become a content version.
-- Context selection is bounded before any provider call.
-- Tenant isolation is a tested security invariant.
-- Metrics remain raw timestamped observations; no invented cross-platform
-  score or viral prediction is shown.
-- Diagnosis is immutable evidence-led human review.
-- No diagnosis automatically modifies approved or published content.
+- TXT、Markdown、CSV、PDF 和 PPTX；
+- PDF/PPTX 本地文字提取与分段预览；
+- 品牌和产品关联；
+- SHA-256 内容指纹；
+- `draft → pending_review → approved/rejected`；
+- 审核后通过新修订纠正，不覆盖原记录；
+- `lexical-v1` 有界词法检索；
+- 生成上下文、来源清单、字符数量和截断状态记录。
 
-## Honest capability boundaries
+当前不支持扫描 PDF OCR、DOCX 导入、表格/图片语义提取或完整向量 RAG。下一阶段将在现有版本、来源、权限和审计结构上加入混合检索。
 
-- `DeterministicProvider` is not a real language model.
-- `lexical-v1` is not semantic RAG or vector retrieval.
-- Publication registration is not automatic social-platform publishing.
-- Performance snapshots are not automatic analytics ingestion.
-- Video diagnosis is not automatic video understanding.
-- PDF, DOCX, and PPTX extraction are not supported by the current importer.
-- The architecture anticipates commercial use, but the current release is not
-  approved for unsupervised internet operation.
+## 模型与降级
 
-## Release levels
+- `DeterministicProvider` 和 `DeterministicMarketingProvider` 用于零成本演示、测试和离线使用，不是真实大语言模型。
+- OpenAI-compatible Provider 用于连接经负责人授权的模型服务。
+- 公共营销预览不会调用付费模型。
+- 登录后的营销生成支持 TTL 缓存和最大条目限制。
+- 配置的模型出现网络、超时或结构校验失败时，可显式降级为 Mock，并返回 `degraded=true` 和说明。
+- API Key 不进入浏览器、不写入日志、不提交仓库。
 
-1. **Competition/local demo:** supervised local workflow with synthetic or
-   explicitly authorized data and the zero-cost provider.
-2. **Engineering MVP:** reproducible install, current migrations, green CI for
-   the exact commit, documented limitations, recovery evidence, and human
-   acceptance.
-3. **Public commercial operation:** engineering MVP plus abuse controls,
-   complete invitation/account lifecycle, production observability, privacy
-   and retention policy, recovery objectives, security review, and an approved
-   external-model data-processing arrangement.
+## 国际化
+
+界面支持：
+
+- 简体中文 `zh-CN`；
+- 香港繁体中文 `zh-HK`；
+- 英文 `en`。
+
+切换语言可以改变界面、动态提示、日期和内容展示，但不得翻译或覆盖组织名、品牌名、产品资料、知识和其他用户业务数据。
+
+## 产品原则
+
+- MVP 是最小可用范围，不是一次性玩具。
+- 先回答“农户能不能用”和“用了之后效果好不好”。
+- 不把审核、合规或溯源作为首页主叙事，但保留为后台护栏。
+- 不虚构热点、销量、爆款概率或第三方平台授权。
+- 内容和知识版本不可覆盖。
+- 组织隔离由服务端执行，不能只靠前端隐藏。
+- 真实模型输出必须经过结构校验。
+- 公开演示不能无限消耗模型额度。
+- 未经负责人确认，不调用付费服务、不公开私密资料、不部署生产环境。
+
+## 当前能力与后续方向
+
+当前已经完成农户核心内容闭环、团队专业工作台、三语界面、知识库、模型适配、Mock/缓存降级和本地运行基础。
+
+下一阶段重点：
+
+1. 用脱敏农产品题集评估真实国产模型；
+2. 将农户简单模式与长期知识库连接；
+3. 增加合规热点来源、时效记录和匹配逻辑；
+4. 增加运营数据批量导入和内容迭代建议；
+5. 建设混合 RAG；
+6. 完成正式商业部署所需的隐私、监控、备份恢复和安全验收。
+
+发布登记目前不是自动发布，表现数据主要由人工录入，视频诊断目前也是人工流程。
+
+## 发布层级
+
+1. **比赛/本地 Demo**：使用合成或明确授权资料，零成本 Provider，人工监督。
+2. **工程 MVP**：可重复安装、迁移可用、质量门禁通过、可重置演示、文档与代码一致。
+3. **稳定 Beta**：真实模型完成质量评测，知识库连接核心流程，关键运营反馈可回流。
+4. **正式商业运行**：完成生产监控、隐私与保留政策、恢复目标、安全验收和模型数据处理安排。

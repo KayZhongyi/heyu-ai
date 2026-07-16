@@ -15,9 +15,13 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./agri_content.db"
     ai_provider: str = "mock"
     ai_model: str = "deterministic-v1"
+    ai_embedding_model: str = ""
     ai_base_url: str = ""
     ai_api_key: str = ""
     ai_timeout_seconds: float = 45.0
+    marketing_cache_ttl_seconds: int = 900
+    marketing_cache_max_entries: int = 256
+    marketing_fallback_to_mock: bool = True
     cors_origins: str = "http://localhost:3000"
     auto_create_schema: bool = True
     abuse_limits_enabled: bool = True
@@ -100,6 +104,8 @@ class Settings(BaseSettings):
             "INVITATION_INSPECT_LIMIT_WINDOW_SECONDS": self.invitation_inspect_limit_window_seconds,
             "INVITATION_ACCEPT_LIMIT_ATTEMPTS": self.invitation_accept_limit_attempts,
             "INVITATION_ACCEPT_LIMIT_WINDOW_SECONDS": self.invitation_accept_limit_window_seconds,
+            "MARKETING_CACHE_TTL_SECONDS": self.marketing_cache_ttl_seconds,
+            "MARKETING_CACHE_MAX_ENTRIES": self.marketing_cache_max_entries,
         }
         for name, value in positive_limits.items():
             if value <= 0:

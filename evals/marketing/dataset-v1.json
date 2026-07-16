@@ -1,0 +1,142 @@
+{
+  "dataset_version": "marketing-offline-v1",
+  "description": "脱敏的禾语 AI 三语农产品内容生产离线评测集。所有人物、合作社与产地描述均为虚构评测资料。",
+  "disclaimer": "规则评分只衡量结构、事实保留、语言、营销表达、平台适配与拍摄执行质量，不代表真实播放量、互动率、成交量或传播效果。",
+  "minimum_overall_score": 80,
+  "minimum_dimension_score": 70,
+  "cases": [
+    {
+      "case_key": "zh-cn-tomato-douyin",
+      "locale": "zh-CN",
+      "tags": [
+        "简体中文",
+        "当季农产品",
+        "抖音",
+        "农户"
+      ],
+      "request": {
+        "locale": "zh-CN",
+        "persona": "farmer",
+        "goals": [
+          "sell",
+          "gain-followers"
+        ],
+        "product_name": "当季番茄",
+        "origin": "岭南青禾农场",
+        "product_description": "番茄自然成熟后分批采摘，果肉清甜多汁；农场在采摘当天完成分选和装箱，适合家庭鲜食与日常做菜。",
+        "selling_points": [
+          "自然成熟",
+          "清甜多汁",
+          "当天分选"
+        ],
+        "audience": "重视新鲜食材、家庭餐桌和产地故事的年轻家庭",
+        "platform": "douyin",
+        "tone": "lively",
+        "trend": "夏日轻食"
+      },
+      "expected_facts": [
+        "当季番茄",
+        "自然成熟",
+        "清甜多汁",
+        "当天分选"
+      ],
+      "forbidden_claims": [
+        "治疗高血糖",
+        "百分之百有效",
+        "全网销量第一"
+      ],
+      "expected_source_ids": [],
+      "citation_policy": "optional-allowlist",
+      "expected_platform": "douyin"
+    },
+    {
+      "case_key": "zh-hk-tea-xiaohongshu",
+      "locale": "zh-HK",
+      "tags": [
+        "香港繁體中文",
+        "合作社",
+        "小紅書",
+        "品牌"
+      ],
+      "request": {
+        "locale": "zh-HK",
+        "persona": "cooperative",
+        "goals": [
+          "sell",
+          "build-brand"
+        ],
+        "product_name": "高山雲霧茶",
+        "origin": "南嶺青嵐合作社",
+        "product_description": "春季嫩葉分批採摘，由合作社統一攤晾、製作和分級；茶湯清爽，帶自然花香，適合日常清飲。",
+        "selling_points": [
+          "高山茶園",
+          "春季嫩葉",
+          "合作社分級",
+          "清爽花香"
+        ],
+        "audience": "關注產地、製作過程與日常飲茶體驗的城市消費者",
+        "platform": "xiaohongshu",
+        "tone": "premium",
+        "trend": "辦公室輕養生"
+      },
+      "expected_facts": [
+        "高山雲霧茶",
+        "高山茶園",
+        "春季嫩葉",
+        "合作社分級"
+      ],
+      "forbidden_claims": [
+        "治療失眠",
+        "國家級認證",
+        "保證減重"
+      ],
+      "expected_source_ids": [],
+      "citation_policy": "optional-allowlist",
+      "expected_platform": "xiaohongshu"
+    },
+    {
+      "case_key": "en-citrus-wechat-channels",
+      "locale": "en",
+      "tags": [
+        "English",
+        "rural operator",
+        "WeChat Channels",
+        "seasonal fruit"
+      ],
+      "request": {
+        "locale": "en",
+        "persona": "rural-operator",
+        "goals": [
+          "sell",
+          "build-brand"
+        ],
+        "product_name": "Seasonal orchard citrus",
+        "origin": "Green Valley Growers",
+        "product_description": "The citrus is harvested in season, sorted by the grower team on the same day, and packed for family sharing and everyday fresh eating.",
+        "selling_points": [
+          "seasonal harvest",
+          "same-day sorting",
+          "grower-team packing"
+        ],
+        "audience": "families interested in seasonal food, practical serving ideas, and grower stories",
+        "platform": "wechat-channels",
+        "tone": "warm",
+        "trend": "weekend family fruit table"
+      },
+      "expected_facts": [
+        "Seasonal orchard citrus",
+        "seasonal harvest",
+        "same-day sorting",
+        "grower-team packing"
+      ],
+      "forbidden_claims": [
+        "cures disease",
+        "guaranteed weight loss",
+        "number one in China"
+      ],
+      "expected_source_ids": [],
+      "citation_policy": "optional-allowlist",
+      "expected_platform": "wechat-channels"
+    }
+  ]
+}

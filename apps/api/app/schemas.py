@@ -1,12 +1,14 @@
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator
 
+from app.marketing import MarketingPlanRequest, MarketingPlanResponse
 from app.models import (
     CampaignStatus,
     ContentType,
     GenerationStatus,
+    KnowledgeIndexStatus,
     KnowledgeKind,
     ReviewStatus,
     Role,
@@ -43,6 +45,62 @@ class Actor(BaseModel):
     user_id: str
     organization_id: str
     role: Role
+
+
+class ProviderConnectionCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    provider_type: Literal["openai-compatible"] = "openai-compatible"
+    base_url: str = Field(min_length=1, max_length=2048)
+    chat_model: str = Field(min_length=1, max_length=120)
+    embedding_model: str = Field(default="", max_length=120)
+    secret_reference: str = Field(min_length=3, max_length=128)
+    enabled: bool = True
+    is_primary: bool = False
+    is_fallback: bool = False
+
+
+class ProviderConnectionUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    base_url: str | None = Field(default=None, min_length=1, max_length=2048)
+    chat_model: str | None = Field(default=None, min_length=1, max_length=120)
+    embedding_model: str | None = Field(default=None, max_length=120)
+    secret_reference: str | None = Field(default=None, min_length=3, max_length=128)
+    enabled: bool | None = None
+    is_primary: bool | None = None
+    is_fallback: bool | None = None
+
+
+class ProviderConnectionRead(BaseModel):
+    id: str
+    organization_id: str
+    name: str
+    provider_type: Literal["openai-compatible"]
+    base_url: str
+    chat_model: str
+    embedding_model: str
+    secret_reference: str
+    secret_configured: bool
+    enabled: bool
+    is_primary: bool
+    is_fallback: bool
+    last_test_status: str
+    last_tested_at: datetime | None
+    last_test_error: str
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProviderConnectionProbe(BaseModel):
+    temporary_api_key: SecretStr | None = Field(default=None, min_length=1, max_length=4096)
+
+
+class ProviderConnectionProbeRead(BaseModel):
+    status: Literal["succeeded", "failed"]
+    provider: str
+    model: str
+    latency_ms: int
+    error: str
 
 
 class MemberRoleUpdate(BaseModel):
@@ -185,11 +243,55 @@ class KnowledgeSourceRead(ORMModel):
     created_by: str
     reviewed_by: str | None
     review_note: str
+    index_status: KnowledgeIndexStatus
+    index_version: int
+    indexed_at: datetime | None
+    index_error: str
+    chunk_count: int
+
+
+class DocumentFragmentRead(BaseModel):
+    kind: str
+    number: int
+    label: str
+    text: str
+
+
+class DocumentImportPreviewRead(BaseModel):
+    filename: str
+    media_type: str
+    content_sha256: str
+    text: str
+    sections: list[DocumentFragmentRead]
+    warnings: list[str]
 
 
 class KnowledgeReview(BaseModel):
     status: ReviewStatus
     note: str = Field(default="", max_length=2000)
+
+
+class KnowledgeSearchPreviewRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=2000)
+    source_ids: list[str] = Field(min_length=1, max_length=50)
+
+
+class KnowledgeSearchHit(BaseModel):
+    source_id: str
+    chunk_id: str
+    title: str
+    citation_label: str
+    excerpt: str
+    locator: dict
+    lexical_rank: int | None
+    vector_rank: int | None
+    rrf_score: float
+
+
+class KnowledgeSearchPreviewRead(BaseModel):
+    strategy: str
+    fallback_reason: str | None
+    hits: list[KnowledgeSearchHit]
 
 
 class ContentProjectCreate(BaseModel):
@@ -221,6 +323,75 @@ class ContentProjectRead(ORMModel):
     tone: str
     extra_requirements: str
     created_by: str
+
+
+class MarketingPlanCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str = Field(min_length=1, max_length=255)
+    request_payload: MarketingPlanRequest
+    content: MarketingPlanResponse
+    change_summary: str = Field(default="", max_length=255)
+
+
+class MarketingPlanVersionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    request_payload: MarketingPlanRequest
+    content: MarketingPlanResponse
+    change_summary: str = Field(default="", max_length=255)
+
+
+class MarketingPlanCopyCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+
+
+class MarketingPlanVersionRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    organization_id: str
+    marketing_plan_id: str
+    version_number: int
+    request_payload: MarketingPlanRequest
+    content: MarketingPlanResponse
+    provider: str
+    model: str
+    degraded: bool
+    change_summary: str
+    created_by: str
+    created_at: datetime
+
+    @field_validator("created_at")
+    @classmethod
+    def ensure_created_at_timezone(cls, value: datetime) -> datetime:
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+class MarketingPlanRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    organization_id: str
+    title: str
+    locale: str
+    product_name: str
+    platform: str
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+    current_version: MarketingPlanVersionRead
+
+    @field_validator("created_at", "updated_at")
+    @classmethod
+    def ensure_plan_timestamp_timezone(cls, value: datetime) -> datetime:
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+class MarketingPlanDetailRead(MarketingPlanRead):
+    versions: list[MarketingPlanVersionRead]
 
 
 class CampaignPackageCreate(BaseModel):
@@ -590,6 +761,91 @@ class PublicationRead(ORMModel):
     created_at: datetime
 
 
+class PublicationExportPayload(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    caption: str = Field(min_length=1, max_length=5000)
+    hashtags: list[str] = Field(default_factory=list, max_length=20)
+    cover_copy: str = Field(default="", max_length=120)
+    subtitles: list[dict] = Field(default_factory=list, max_length=500)
+    shots: list[dict] = Field(default_factory=list, max_length=200)
+    checklist: list[str] = Field(default_factory=list, max_length=100)
+    locale: Literal["zh-CN", "zh-HK", "en"] = "zh-CN"
+
+
+class PublicationTaskCreate(BaseModel):
+    project_id: str
+    content_version_id: str
+    platform: Literal["douyin", "xiaohongshu", "wechat_channels"]
+    execution_mode: Literal["export_only", "mock"] = "export_only"
+    export_payload: PublicationExportPayload
+    scheduled_for: datetime | None = None
+    note: str = Field(default="", max_length=2000)
+
+
+class PublicationTaskRead(ORMModel):
+    id: str
+    organization_id: str
+    project_id: str
+    content_version_id: str
+    platform: str
+    execution_mode: str
+    status: str
+    scheduled_for: datetime | None
+    external_url: str
+    external_content_id: str
+    note: str
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class PlatformExportPackageRead(ORMModel):
+    id: str
+    organization_id: str
+    publication_task_id: str
+    platform: str
+    execution_mode: str
+    content_sha256: str
+    archive_sha256: str
+    archive_size_bytes: int
+    manifest: dict
+    expires_at: datetime | None
+    created_by: str
+    created_at: datetime
+
+
+class PublicationTaskCreated(BaseModel):
+    task: PublicationTaskRead
+    package: PlatformExportPackageRead
+
+
+class PublicationTaskTransition(BaseModel):
+    to_status: Literal[
+        "package_ready",
+        "awaiting_manual_confirmation",
+        "cancelled",
+    ]
+    details: dict = Field(default_factory=dict)
+
+
+class PublicationConfirmation(BaseModel):
+    external_url: str = Field(default="", max_length=2048)
+    external_content_id: str = Field(default="", max_length=255)
+    published_at: datetime | None = None
+    note: str = Field(default="", max_length=2000)
+
+
+class PublicationTaskEventRead(ORMModel):
+    id: str
+    organization_id: str
+    publication_task_id: str
+    from_status: str
+    to_status: str
+    details: dict
+    created_by: str
+    created_at: datetime
+
+
 class PerformanceSnapshotCreate(BaseModel):
     captured_at: datetime
     views: int | None = Field(default=None, ge=0)
@@ -597,10 +853,13 @@ class PerformanceSnapshotCreate(BaseModel):
     comments: int | None = Field(default=None, ge=0)
     shares: int | None = Field(default=None, ge=0)
     saves: int | None = Field(default=None, ge=0)
+    clicks: int | None = Field(default=None, ge=0)
     followers_gained: int | None = Field(default=None, ge=0)
     orders: int | None = Field(default=None, ge=0)
     revenue_minor: int | None = Field(default=None, ge=0)
     currency: str = Field(default="CNY", pattern=r"^[A-Z]{3}$")
+    extra_metrics: dict[str, int | float | str] = Field(default_factory=dict)
+    capture_method: Literal["manual", "file_import", "platform_api"] = "manual"
     note: str = ""
 
 
@@ -614,11 +873,69 @@ class PerformanceSnapshotRead(ORMModel):
     comments: int | None
     shares: int | None
     saves: int | None
+    clicks: int | None
     followers_gained: int | None
     orders: int | None
     revenue_minor: int | None
     currency: str
+    extra_metrics: dict
+    capture_method: str
     note: str
+    created_by: str
+    created_at: datetime
+
+
+class OperationImportRowRead(BaseModel):
+    row_number: int
+    normalized: dict
+    errors: list[dict]
+    source_fingerprint: str
+    duplicate: bool
+    publication_id: str | None
+
+
+class OperationImportPreviewRead(BaseModel):
+    import_kind: Literal["csv", "xlsx"]
+    sheet_name: str | None
+    headers: list[str]
+    field_mapping: dict[str, str]
+    warnings: list[str]
+    total_rows: int
+    valid_rows: int
+    invalid_rows: int
+    matched_rows: int
+    rows: list[OperationImportRowRead]
+
+
+class OperationImportBatchRead(ORMModel):
+    id: str
+    organization_id: str
+    original_filename: str
+    media_type: str
+    file_sha256: str
+    field_mapping: dict
+    warnings: list
+    status: str
+    total_rows: int
+    valid_rows: int
+    invalid_rows: int
+    imported_rows: int
+    duplicate_rows: int
+    created_by: str
+    created_at: datetime
+    committed_at: datetime | None
+
+
+class PerformanceReviewRead(ORMModel):
+    id: str
+    organization_id: str
+    publication_id: str
+    latest_snapshot_id: str
+    methodology: str
+    summary: str
+    signals: list[dict]
+    recommendations: list[dict]
+    limitations: list[str]
     created_by: str
     created_at: datetime
 
@@ -642,6 +959,9 @@ class VideoDiagnosisRead(ORMModel):
     id: str
     organization_id: str
     publication_id: str
+    media_asset_id: str | None
+    analysis_mode: str
+    analysis_metadata: dict
     observed_at: datetime
     title: str
     summary: str
@@ -649,6 +969,60 @@ class VideoDiagnosisRead(ORMModel):
     findings: list[DiagnosisFinding]
     created_by: str
     created_at: datetime
+
+
+class MediaAssetRead(ORMModel):
+    id: str
+    organization_id: str
+    purpose: str
+    original_filename: str
+    media_type: str
+    size_bytes: int
+    sha256: str
+    status: str
+    metadata_json: dict
+    expires_at: datetime | None
+    deleted_at: datetime | None
+    created_by: str
+    created_at: datetime
+
+
+class BackgroundTaskRead(ORMModel):
+    id: str
+    organization_id: str
+    task_type: str
+    payload: dict
+    status: str
+    progress: dict
+    attempt_count: int
+    max_attempts: int
+    error: str
+    created_by: str
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+
+
+class VideoAnalysisUploadRead(BaseModel):
+    asset: MediaAssetRead
+    task: BackgroundTaskRead
+    diagnosis: VideoDiagnosisRead
+
+
+class EvaluationRunRead(ORMModel):
+    id: str
+    organization_id: str
+    evaluation_type: str
+    dataset_version: str
+    evaluator_version: str
+    status: str
+    passed: bool | None
+    overall_score: float | None
+    report: dict
+    error: str
+    created_by: str
+    created_at: datetime
+    finished_at: datetime | None
 
 
 class ImprovementAction(BaseModel):
