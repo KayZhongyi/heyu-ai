@@ -199,6 +199,50 @@ def test_plan_supports_three_product_categories():
         assert len(result.videos) == 3
 
 
+def test_passionfruit_plan_uses_product_specific_actions_and_trend_angle():
+    result = DeterministicMarketingProvider().generate(
+        sample_request(
+            persona="cooperative",
+            goals=["sell", "build-brand", "gain-followers"],
+            product_name="盛夏高山黄金百香果",
+            product_description=(
+                "果园里的黄金百香果自然成熟后分批采摘，金黄色果皮醒目，"
+                "切开后果香明显、汁水充足，酸甜平衡。合作社当天采摘、统一分级，"
+                "既可以直接挖着吃，也适合加入冰水、气泡水或酸奶。"
+            ),
+            selling_points=["自然成熟", "金黄果皮", "果香浓郁", "酸甜多汁", "当天采摘"],
+            audience="喜欢夏日水果、低负担饮品和果园内容的年轻消费者",
+            tone="lively",
+            trend="盛夏第一口：切开黄金百香果，再冲一杯气泡饮",
+        )
+    )
+
+    combined = json.dumps([video.model_dump() for video in result.videos], ensure_ascii=False)
+    actions = ("切开", "挖出果肉", "汁水", "气泡水", "果园采摘", "果皮颜色")
+    assert sum(action in combined for action in actions) >= 5
+    assert "盛夏第一口" in combined
+    assert len({video.shots[0].visual for video in result.videos}) == 3
+    assert all(video.quality_assessment.total_score >= 90 for video in result.videos)
+    assert "无人机" not in combined
+    assert "摄影棚" not in combined
+
+
+def test_tea_plan_uses_brewing_actions_instead_of_fruit_actions():
+    result = DeterministicMarketingProvider().generate(
+        sample_request(
+            product_name="高山单丛茶",
+            origin="广东潮州",
+            product_description="春季采青，经过摊晾和传统工序，香气清晰，适合日常冲泡。",
+            selling_points=["春季采青", "传统工序", "香气清晰"],
+            platform="xiaohongshu",
+        )
+    )
+
+    combined = json.dumps([video.model_dump() for video in result.videos], ensure_ascii=False)
+    assert all(action in combined for action in ("投茶", "注水", "出汤", "叶底"))
+    assert all(action not in combined for action in ("挖出果肉", "果肉汁水", "气泡水"))
+
+
 def test_plan_supports_three_locales():
     provider = DeterministicMarketingProvider()
 

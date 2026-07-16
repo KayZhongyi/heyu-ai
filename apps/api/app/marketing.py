@@ -454,63 +454,143 @@ def _short_product_fact(description: str, *, limit: int = 72) -> str:
     return first_sentence[: limit - 1].rstrip("，,；;。.!！?？ ") + "。"
 
 
-def _product_film_language(product_name: str) -> dict[str, str]:
-    """Return concrete, phone-filmable visual language for common farm products."""
-    normalized = product_name.casefold()
+@dataclass(frozen=True)
+class ProductFilmContext:
+    """Concrete visual actions that can be filmed with one phone."""
+
+    decision_detail: str
+    practical_hook: str
+    evidence_sentence: str
+    proof_action: str
+    process_action: str
+    story_hook: str
+    story_opening: str
+    story_steps: str
+    contrast_action: str
+    use_scene: str
+
+
+def _product_film_language(request: MarketingPlanRequest) -> ProductFilmContext:
+    """Infer product-specific, phone-filmable actions from all supplied facts."""
+    product_name = request.product_name
+    normalized = " ".join(
+        (
+            product_name,
+            request.product_description,
+            *request.selling_points,
+        )
+    ).casefold()
+    if any(token in normalized for token in ("百香果", "熱情果", "热情果", "passion fruit")):
+        return ProductFilmContext(
+            decision_detail="果皮颜色、切面和果肉汁水",
+            practical_hook="这两颗{product}，哪一颗更适合现在吃？先别猜，切开看果肉和汁水。",
+            evidence_sentence="把不同成熟度的果实放在一起，先看果皮颜色，再切开、挖出果肉，观察香气和汁水状态。",
+            proof_action="同框拍两颗不同成熟度的百香果，依次切开、挖出果肉，再倒入冰水或气泡水",
+            process_action="跟拍果园采摘、轻放入筐、分级和装箱，最后切开一颗展示果肉",
+            story_hook="这颗{product}颜色已经很好看了，我们为什么还要等到今天才摘？",
+            story_opening="果园里的果实占满画面，农户摘下一颗、切开，并同步说出第一句话",
+            story_steps="果园采摘、成熟度判断还是百香果气泡饮",
+            contrast_action="左边放刚转色的果实，右边放自然成熟的果实；先让观众选择，再切开对比果肉和汁水",
+            use_scene="直接挖着吃、加入冰水或气泡水的夏日场景",
+        )
     if any(token in normalized for token in ("番茄", "西红柿", "tomato")):
-        return {
-            "decision_detail": "果蒂、果肩和成熟度",
-            "practical_hook": "这两颗{product}，你会先拿哪一颗？别只看红不红，先看果蒂和果肩。",
-            "evidence_sentence": "把两颗成熟度不同的番茄放在一起，看果蒂、果肩，再切开看果肉和汁水。",
-            "proof_action": "把两颗成熟度不同的番茄并排，从果蒂扫到果肩，再切开拍果肉和汁水",
-            "process_action": "用近景跟拍采摘、轻放入筐和分选动作，让种植者边做边讲",
-            "story_hook": "别人摘下来就直接装筐，我们为什么还要把这一筐{product}重新挑一遍？",
-            "story_opening": "一筐番茄占满画面，种植者拿起其中一颗重新分选，并同步说出第一句话",
-            "story_steps": "采摘、分选还是装筐",
-            "contrast_action": "同框放一颗外形规整和一颗外形普通的番茄，先让观众选，再切开对比",
-            "use_scene": "鲜食、做菜或家庭餐桌",
-        }
+        return ProductFilmContext(
+            decision_detail="果蒂、果肩和成熟度",
+            practical_hook="这两颗{product}，你会先拿哪一颗？别只看红不红，先看果蒂和果肩。",
+            evidence_sentence="把两颗成熟度不同的番茄放在一起，看果蒂、果肩，再切开看果肉和汁水。",
+            proof_action="把两颗成熟度不同的番茄并排，从果蒂扫到果肩，再切开拍果肉和汁水",
+            process_action="用近景跟拍采摘、轻放入筐和分选动作，让种植者边做边讲",
+            story_hook="别人摘下来就直接装筐，我们为什么还要把这一筐{product}重新挑一遍？",
+            story_opening="一筐番茄占满画面，种植者拿起其中一颗重新分选，并同步说出第一句话",
+            story_steps="采摘、分选还是装筐",
+            contrast_action="同框放一颗外形规整和一颗外形普通的番茄，先让观众选，再切开对比",
+            use_scene="鲜食、做菜或家庭餐桌",
+        )
     if any(token in normalized for token in ("茶", "tea", "oolong")):
-        return {
-            "decision_detail": "干茶、第一遍出汤和叶底",
-            "practical_hook": "同样是这批{product}，为什么第一遍出汤差这么多？先看干茶和叶底。",
-            "evidence_sentence": "不急着听香气描述，先看干茶、第一遍出汤和泡开后的叶底。",
-            "proof_action": "固定机位拍投茶、注水、第一遍出汤，再给叶底一个近景",
-            "process_action": "用近景跟拍采青、摊晾或冲泡中的一个连续动作，让制茶人边做边讲一个真实工序",
-            "story_hook": "这批{product}已经能继续做了，我们为什么还要多等这一段摊晾？",
-            "story_opening": "摊晾中的茶叶铺满画面，制茶人翻动茶叶并同步说出第一句话",
-            "story_steps": "采青、摊晾还是冲泡",
-            "contrast_action": "先拍不起眼的干茶，再用同一机位切到舒展后的叶底和茶汤",
-            "use_scene": "日常冲泡、办公室或朋友分享",
-        }
+        return ProductFilmContext(
+            decision_detail="干茶、第一遍出汤和叶底",
+            practical_hook="同样是这批{product}，为什么第一遍出汤差这么多？先看干茶和叶底。",
+            evidence_sentence="不急着听香气描述，先看干茶、第一遍出汤和泡开后的叶底。",
+            proof_action="固定机位拍投茶、注水、第一遍出汤，再给叶底一个近景",
+            process_action="用近景跟拍采青、摊晾或冲泡中的一个连续动作，让制茶人边做边讲一个真实工序",
+            story_hook="这批{product}已经能继续做了，我们为什么还要多等这一段摊晾？",
+            story_opening="摊晾中的茶叶铺满画面，制茶人翻动茶叶并同步说出第一句话",
+            story_steps="采青、摊晾还是冲泡",
+            contrast_action="先拍不起眼的干茶，再用同一机位切到舒展后的叶底和茶汤",
+            use_scene="日常冲泡、办公室或朋友分享",
+        )
     if any(
         token in normalized
-        for token in ("水果", "荔枝", "柑", "橙", "桃", "梨", "莓", "fruit", "lychee")
+        for token in (
+            "水果",
+            "果园",
+            "果肉",
+            "荔枝",
+            "柑",
+            "橙",
+            "桃",
+            "梨",
+            "莓",
+            "芒果",
+            "菠萝",
+            "凤梨",
+            "fruit",
+            "lychee",
+            "mango",
+        )
     ):
-        return {
-            "decision_detail": "成熟度、果面和装箱分层",
-            "practical_hook": "这两份{product}看起来都漂亮，哪一份更适合今天吃？先看成熟度和装箱分层。",
-            "evidence_sentence": "先看同一批果实的成熟度和完整度，再看分级、搭配和装箱是否对应食用时间。",
-            "proof_action": "从果面近景拍到称重、切开和装箱，尤其展示最底下一层",
-            "process_action": "用近景跟拍采收、分级、搭配和装箱，让农户边做边讲为什么这样分",
-            "story_hook": "明明这颗{product}更漂亮，装箱时我们为什么把它放到另一组？",
-            "story_opening": "农户从两组水果中拿起一颗重新分级，并同步说出第一句话",
-            "story_steps": "采收、分级、搭配还是装箱",
-            "contrast_action": "把外形更漂亮和更适合现在吃的两份放在一起，请观众先选再揭晓判断方法",
-            "use_scene": "家庭分享、送礼或当季鲜食",
-        }
-    return {
-        "decision_detail": "一个能在镜头里看见的产品细节",
-        "practical_hook": f"这两份{product_name}，你会先选哪一份？别只看第一眼，先看一个能拍出来的细节。",
-        "evidence_sentence": "先把卖点换成一个能拍到的细节，再用同一件产品的动作或前后状态证明。",
-        "proof_action": "把卖点对应的实物、动作或前后状态放在同一画面里",
-        "process_action": "用近景跟拍采收、处理或装箱，让农户边做边讲一个真实决定",
-        "story_hook": f"同样是{product_name}，我们为什么还要多做这一步？",
-        "story_opening": f"{product_name}占满画面，农户拿起产品开始处理，并同步说出第一句话",
-        "story_steps": "采收、处理还是装箱",
-        "contrast_action": "把两种常见选择并排，请观众先选，再用现场细节解释差别",
-        "use_scene": "家庭消费和日常使用",
-    }
+        return ProductFilmContext(
+            decision_detail="成熟度、果面和装箱分层",
+            practical_hook="这两份{product}看起来都漂亮，哪一份更适合今天吃？先看成熟度和装箱分层。",
+            evidence_sentence="先看同一批果实的成熟度和完整度，再看分级、搭配和装箱是否对应食用时间。",
+            proof_action="从果面近景拍到称重、切开和装箱，尤其展示最底下一层",
+            process_action="用近景跟拍采收、分级、搭配和装箱，让农户边做边讲为什么这样分",
+            story_hook="明明这颗{product}更漂亮，装箱时我们为什么把它放到另一组？",
+            story_opening="农户从两组水果中拿起一颗重新分级，并同步说出第一句话",
+            story_steps="采收、分级、搭配还是装箱",
+            contrast_action="把外形更漂亮和更适合现在吃的两份放在一起，请观众先选再揭晓判断方法",
+            use_scene="家庭分享、送礼或当季鲜食",
+        )
+    if any(token in normalized for token in ("大米", "稻米", "小米", "杂粮", "豆", "菌", "菇", "rice", "grain")):
+        return ProductFilmContext(
+            decision_detail="颗粒、淘洗水和煮熟后的状态",
+            practical_hook="同样一把{product}，下锅前先看哪一点？摊开、淘洗，再看颗粒状态。",
+            evidence_sentence="先把产品摊开放大拍颗粒和纹理，再淘洗、浸泡或煮制，展示前后变化。",
+            proof_action="抓取一把产品摊在深色盘中，近拍颗粒，再拍淘洗和煮熟后的状态",
+            process_action="跟拍晾晒、筛选、称重和装袋中的一个连续动作，让农户边做边讲",
+            story_hook="这批{product}已经筛过一遍了，我们为什么装袋前还要再看一次？",
+            story_opening="农户把一把产品摊开在掌心，随后倒入筛盘并同步说出第一句话",
+            story_steps="晾晒、筛选还是煮制效果",
+            contrast_action="把两份颗粒并排，先让观众选，再通过淘洗或煮制后的状态揭晓差别",
+            use_scene="家庭主食、煲粥或日常备餐",
+        )
+    return ProductFilmContext(
+        decision_detail="一个能在镜头里看见的产品细节",
+        practical_hook=f"这两份{product_name}，你会先选哪一份？别只看第一眼，先看一个能拍出来的细节。",
+        evidence_sentence="先把卖点换成一个能拍到的细节，再用同一件产品的动作或前后状态证明。",
+        proof_action="把卖点对应的实物、动作或前后状态放在同一画面里",
+        process_action="用近景跟拍采收、处理或装箱，让农户边做边讲一个真实决定",
+        story_hook=f"同样是{product_name}，我们为什么还要多做这一步？",
+        story_opening=f"{product_name}占满画面，农户拿起产品开始处理，并同步说出第一句话",
+        story_steps="采收、处理还是装箱",
+        contrast_action="把两种常见选择并排，请观众先选，再用现场细节解释差别",
+        use_scene="家庭消费和日常使用",
+    )
+
+
+def _short_trend_angle(trend: str, *, limit: int = 28) -> str:
+    """Keep a trend phrase natural enough to say in the opening seconds."""
+    normalized = " ".join(trend.split()).strip("“”\"' ")
+    candidates = [
+        item.strip(" ：:，,、｜|—-")
+        for item in re.split(r"[：:｜|；;。!?！？\n]", normalized)
+        if item.strip(" ：:，,、｜|—-")
+    ]
+    useful = next((item for item in candidates if 4 <= len(item) <= limit), "")
+    selected = useful or normalized
+    if len(selected) > limit:
+        selected = selected[:limit].rstrip("，,、；;：: ")
+    return selected or trend
 
 
 def _simplified_bgm_directions(platform: Platform) -> dict[str, str]:
@@ -543,28 +623,28 @@ def _simplified_video_blueprints(
     """Build three genuinely different story engines instead of three rewrites."""
     product = request.product_name
     origin = request.origin or "本地农场"
-    film = _product_film_language(product)
+    film = _product_film_language(request)
     music = _simplified_bgm_directions(request.platform)
     practical_cta = (
         f"你挑{product}最先看哪一点？把你的判断留在评论区。"
     )
-    story_cta = f"你更想看{film['story_steps']}？留言选一个，下一条带你看。"
+    story_cta = f"你更想看{film.story_steps}？留言选一个，下一条带你看。"
     contrast_cta = "你刚才选对了吗？把你选这一边的理由留在评论区。"
     blueprints = [
         {
             "route_id": "practical-hook",
             "angle": "实用吸睛",
-            "title": f"{product}怎么挑？先看{film['decision_detail']}",
+            "title": f"{product}怎么挑？先看{film.decision_detail}",
             "cover_text": f"挑{product}先看这里",
-            "hook": film["practical_hook"].format(product=product),
-            "opening_visual": f"{product}清楚入镜；用极近景拍{film['decision_detail']}，手指直接指出要看的位置",
-            "bridge": film["evidence_sentence"],
-            "proof_visual": film["proof_action"],
+            "hook": film.practical_hook.format(product=product),
+            "opening_visual": f"{product}清楚入镜；用极近景拍{film.decision_detail}，手指直接指出要看的位置",
+            "bridge": film.evidence_sentence,
+            "proof_visual": film.proof_action,
             "proof_voice": (
-                f"先看{film['decision_detail']}，再看镜头里的变化；"
+                f"先看{film.decision_detail}，再看镜头里的变化；"
                 f"我们这批{product}最想讲清的是{points[0]}。"
             ),
-            "context_visual": f"把{product}放进{film['use_scene']}的真实使用场景",
+            "context_visual": f"把{product}放进{film.use_scene}的真实使用场景",
             "context_voice": request.product_description.strip(),
             "music": music["practical-hook"],
             "cta": practical_cta,
@@ -574,10 +654,10 @@ def _simplified_video_blueprints(
             "angle": "人物故事",
             "title": f"做{product}，我们为什么一直保留这一步",
             "cover_text": f"{product}背后的一个决定",
-            "hook": film["story_hook"].format(product=product),
-            "opening_visual": f"{product}清楚入镜；{film['story_opening']}",
+            "hook": film.story_hook.format(product=product),
+            "opening_visual": f"{product}清楚入镜；{film.story_opening}",
             "bridge": f"在{origin}，“{points[1]}”不是一句卖点，它就在每天的操作里。",
-            "proof_visual": film["process_action"],
+            "proof_visual": film.process_action,
             "proof_voice": (
                 f"现在做的每一步都能在现场看见；我们保留它，是因为它直接关系到{points[1]}。"
             ),
@@ -594,7 +674,7 @@ def _simplified_video_blueprints(
             "hook": f"先别告诉我答案：左边和右边这两份{product}，你会选哪一份？",
             "opening_visual": f"左右两份{product}同时入镜，画面中央出现两秒倒计时",
             "bridge": f"先选，不急着听答案；真正要看的，是和“{points[2]}”有关的现场细节。",
-            "proof_visual": film["contrast_action"],
+            "proof_visual": film.contrast_action,
             "proof_voice": (
                 f"别只看第一眼，刚才容易忽略的细节，正好能说明{points[2]}。"
             ),
@@ -615,10 +695,10 @@ def _simplified_video_blueprints(
             if trend_angle.endswith(suffix):
                 trend_angle = trend_angle[: -len(suffix)].strip()
                 break
-        trend_angle = trend_angle or trend
+        trend_angle = _short_trend_angle(trend_angle or trend)
         blueprints[0]["bridge"] = (
             f"借“{trend_angle}”这个切口，先把{product}放在镜头前做一个具体选择："
-            f"{film['evidence_sentence']}"
+            f"{film.evidence_sentence}"
         )
         blueprints[1]["bridge"] = (
             f"趁大家在关注“{trend_angle}”，把镜头拉回{origin}："
