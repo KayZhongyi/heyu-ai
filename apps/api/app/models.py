@@ -2,7 +2,18 @@ import uuid
 from datetime import UTC, date, datetime
 from enum import StrEnum
 
-from sqlalchemy import JSON, Date, DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -291,6 +302,7 @@ class KnowledgeSource(Base):
     citation_label: Mapped[str] = mapped_column(String(255), default="")
     source_filename: Mapped[str] = mapped_column(String(255), default="")
     media_type: Mapped[str] = mapped_column(String(120), default="text/plain")
+    document_sections: Mapped[list] = mapped_column(JSON, default=list)
     content_sha256: Mapped[str] = mapped_column(String(64), default="")
     source_group_id: Mapped[str] = mapped_column(String(36), index=True)
     parent_source_id: Mapped[str | None] = mapped_column(
@@ -630,10 +642,40 @@ class ContentVersion(Base):
 
 class Publication(Base):
     __tablename__ = "publications"
+    __table_args__ = (
+        Index(
+            "uq_publications_org_platform_external_content_id",
+            "organization_id",
+            "platform",
+            "external_content_id",
+            unique=True,
+            sqlite_where=text("external_content_id <> ''"),
+            postgresql_where=text("external_content_id <> ''"),
+        ),
+        Index(
+            "uq_publications_org_platform_external_url",
+            "organization_id",
+            "platform",
+            "external_url",
+            unique=True,
+            sqlite_where=text("external_url <> ''"),
+            postgresql_where=text("external_url <> ''"),
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
-    project_id: Mapped[str] = mapped_column(ForeignKey("content_projects.id"), index=True)
-    content_version_id: Mapped[str] = mapped_column(ForeignKey("content_versions.id"), index=True)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("content_projects.id"), index=True)
+    content_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("content_versions.id"), index=True
+    )
+    marketing_plan_id: Mapped[str | None] = mapped_column(
+        ForeignKey("marketing_plans.id"), index=True
+    )
+    marketing_plan_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("marketing_plan_versions.id"), index=True
+    )
+    route_id: Mapped[str] = mapped_column(String(80), default="")
+    calendar_day: Mapped[int | None] = mapped_column()
     platform: Mapped[str] = mapped_column(String(80))
     external_url: Mapped[str] = mapped_column(String(2048), default="")
     external_content_id: Mapped[str] = mapped_column(String(255), default="")
@@ -648,11 +690,26 @@ class PublicationTask(Base):
     __table_args__ = (
         Index("ix_publication_tasks_org_status", "organization_id", "status"),
         Index("ix_publication_tasks_content_platform", "content_version_id", "platform"),
+        Index(
+            "ix_publication_tasks_marketing_platform",
+            "marketing_plan_version_id",
+            "platform",
+        ),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
-    project_id: Mapped[str] = mapped_column(ForeignKey("content_projects.id"), index=True)
-    content_version_id: Mapped[str] = mapped_column(ForeignKey("content_versions.id"), index=True)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("content_projects.id"), index=True)
+    content_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("content_versions.id"), index=True
+    )
+    marketing_plan_id: Mapped[str | None] = mapped_column(
+        ForeignKey("marketing_plans.id"), index=True
+    )
+    marketing_plan_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("marketing_plan_versions.id"), index=True
+    )
+    route_id: Mapped[str] = mapped_column(String(80), default="")
+    calendar_day: Mapped[int | None] = mapped_column()
     platform: Mapped[str] = mapped_column(String(80))
     execution_mode: Mapped[str] = mapped_column(String(32), default="export_only")
     status: Mapped[str] = mapped_column(String(32), default="draft")

@@ -1,7 +1,23 @@
 const inviteFragment=new URLSearchParams(location.hash.replace(/^#/,"")).get("invite")||"";
 if(inviteFragment)history.replaceState(null,"","/workspace/");
-const state={token:localStorage.getItem("heyu_token")||"",actor:null,members:[],invitations:[],brands:[],products:[],knowledge:[],campaigns:[],campaignBriefRevisions:[],campaignBriefMaps:{},campaignSupplySnapshots:[],campaignFarmerEvidenceSnapshots:[],marketingPlans:[],currentMarketingPlan:null,selectedMarketingVersion:null,projects:[],versions:[],generationRuns:[],publications:[],performanceReviews:{},operationImportFile:null,operationImportPreview:null,audit:[],currentVersion:null,inviteToken:inviteFragment};
+const state={token:localStorage.getItem("heyu_token")||"",actor:null,members:[],invitations:[],providers:[],brands:[],products:[],knowledge:[],knowledgeDocumentSections:[],campaigns:[],campaignBriefRevisions:[],campaignBriefMaps:{},campaignSupplySnapshots:[],campaignFarmerEvidenceSnapshots:[],marketingPlans:[],currentMarketingPlan:null,selectedMarketingVersion:null,projects:[],versions:[],generationRuns:[],publicationTasks:[],publications:[],performanceReviews:{},operationImportFile:null,operationImportPreview:null,audit:[],currentVersion:null,inviteToken:inviteFragment};
 const t=(key,variables={})=>HeyuI18n.t(key,variables);
+const providerMessages={
+  "zh-CN":{
+    pageTitle:"模型连接",heading:"连接国产与 OpenAI-compatible 模型",intro:"平台默认保留无密钥规则 Demo；需要真实生成时，由管理员配置服务地址与模型名称，并使用临时密钥先测试连接。",create:"添加模型连接",edit:"编辑模型连接",serverSecret:"服务端密钥引用",name:"连接名称",namePlaceholder:"例如：国内生产模型",baseUrl:"API Base URL",chatModel:"对话模型",chatModelPlaceholder:"模型标识",embeddingModel:"向量模型（可选）",embeddingModelPlaceholder:"Embedding 模型标识",secretReference:"环境变量名",secretNote:"这里只保存环境变量名，不把 API Key 写入数据库或浏览器。",enabled:"启用连接",primary:"设为主模型",fallback:"设为备用模型",save:"保存连接",saveChanges:"保存修改",cancel:"取消编辑",list:"已配置连接",testIntro:"测试连接时可输入一次性临时 API Key；密钥只随本次测试请求发送，不会保存。",empty:"还没有配置真实模型，规则 Demo 仍可正常使用。",configured:"服务端密钥已配置",notConfigured:"服务端密钥未配置",test:"测试连接",testing:"正在测试…",temporaryKey:"临时 API Key（可选）",editAction:"编辑",deleteAction:"删除",deleteConfirm:"确定删除这个模型连接吗？",saved:"模型连接已保存。",deleted:"模型连接已删除。",testSucceeded:"连接成功：{model}，耗时 {latency} ms",testFailed:"连接失败：{error}",statusNever:"尚未测试",statusSucceeded:"最近测试成功",statusFailed:"最近测试失败",primaryBadge:"主模型",fallbackBadge:"备用模型",disabledBadge:"已停用"
+  },
+  "zh-HK":{
+    pageTitle:"模型連接",heading:"連接國產與 OpenAI-compatible 模型",intro:"平台預設保留無密鑰規則 Demo；需要真實生成時，由管理員設定服務地址與模型名稱，並使用臨時密鑰先測試連接。",create:"新增模型連接",edit:"編輯模型連接",serverSecret:"伺服器密鑰引用",name:"連接名稱",namePlaceholder:"例如：國內生產模型",baseUrl:"API Base URL",chatModel:"對話模型",chatModelPlaceholder:"模型識別名稱",embeddingModel:"向量模型（可選）",embeddingModelPlaceholder:"Embedding 模型識別名稱",secretReference:"環境變數名稱",secretNote:"這裏只保存環境變數名稱，不會把 API Key 寫入資料庫或瀏覽器。",enabled:"啟用連接",primary:"設為主要模型",fallback:"設為備用模型",save:"保存連接",saveChanges:"保存修改",cancel:"取消編輯",list:"已設定連接",testIntro:"測試連接時可輸入一次性臨時 API Key；密鑰只會隨本次測試請求傳送，不會保存。",empty:"尚未設定真實模型，規則 Demo 仍可正常使用。",configured:"伺服器密鑰已設定",notConfigured:"伺服器密鑰未設定",test:"測試連接",testing:"正在測試…",temporaryKey:"臨時 API Key（可選）",editAction:"編輯",deleteAction:"刪除",deleteConfirm:"確定刪除這個模型連接嗎？",saved:"模型連接已保存。",deleted:"模型連接已刪除。",testSucceeded:"連接成功：{model}，耗時 {latency} ms",testFailed:"連接失敗：{error}",statusNever:"尚未測試",statusSucceeded:"最近測試成功",statusFailed:"最近測試失敗",primaryBadge:"主要模型",fallbackBadge:"備用模型",disabledBadge:"已停用"
+  },
+  en:{
+    pageTitle:"Model connections",heading:"Connect Chinese and OpenAI-compatible models",intro:"The keyless rules demo remains available by default. Administrators can add a service endpoint and model names, then test them with a temporary key before live generation.",create:"Add model connection",edit:"Edit model connection",serverSecret:"Server-side secret reference",name:"Connection name",namePlaceholder:"For example: China production model",baseUrl:"API Base URL",chatModel:"Chat model",chatModelPlaceholder:"Model identifier",embeddingModel:"Embedding model (optional)",embeddingModelPlaceholder:"Embedding model identifier",secretReference:"Environment variable name",secretNote:"Only the environment variable name is stored. The API key is never written to the database or browser.",enabled:"Enable connection",primary:"Use as primary model",fallback:"Use as fallback model",save:"Save connection",saveChanges:"Save changes",cancel:"Cancel editing",list:"Configured connections",testIntro:"You may enter a one-time API key when testing. It is sent only with that probe and is not stored.",empty:"No live model is configured yet. The rules demo remains fully available.",configured:"Server secret configured",notConfigured:"Server secret not configured",test:"Test connection",testing:"Testing…",temporaryKey:"Temporary API key (optional)",editAction:"Edit",deleteAction:"Delete",deleteConfirm:"Delete this model connection?",saved:"Model connection saved.",deleted:"Model connection deleted.",testSucceeded:"Connected to {model} in {latency} ms",testFailed:"Connection failed: {error}",statusNever:"Not tested yet",statusSucceeded:"Latest test succeeded",statusFailed:"Latest test failed",primaryBadge:"Primary",fallbackBadge:"Fallback",disabledBadge:"Disabled"
+  },
+};
+const providerText=(key,variables={})=>{
+  const locale=providerMessages[HeyuI18n.getLocale()]?HeyuI18n.getLocale():"zh-CN";
+  let value=providerMessages[locale][key]||providerMessages["zh-CN"][key]||key;
+  return value.replace(/\{(\w+)\}/g,(_,name)=>variables[name]??`{${name}}`);
+};
 const operationMessages={
   "zh-CN":{
     "import.heading":"批量回传运营数据","import.format":"CSV / XLSX","import.intro":"上传平台导出的数据文件，先检查字段匹配、发布记录匹配与逐行错误，再确认写入数据快照。","import.chooseFile":"选择运营数据文件","import.fileHint":"支持 UTF-8 CSV 与 XLSX，最大 20 MB","import.mappingSummary":"高级：自定义字段映射","import.mappingLabel":"字段映射 JSON（可留空自动识别）","import.mappingPlaceholder":"例如：{\"渠道\":\"platform\",\"帖子编号\":\"external_content_id\",\"曝光\":\"views\"}","import.preview":"预览匹配结果","import.previewing":"正在预览…","import.confirm":"确认导入有效匹配行","import.importing":"正在导入…","import.selected":"已选择：{name}","import.summary":"共 {total} 行 · {valid} 行格式有效 · {matched} 行匹配发布 · {invalid} 行有误","import.sheet":"工作表：{name}","import.mapping":"识别字段","import.warnings":"文件提示","import.row":"行","import.publicationMatch":"发布匹配","import.data":"规范化数据","import.errors":"错误","import.matched":"已匹配","import.unmatched":"未匹配","import.duplicate":"重复数据","import.valid":"可导入","import.noErrors":"无","import.moreRows":"仅显示前 {count} 行，请根据汇总确认完整文件。","import.noMatchedRows":"没有可导入的有效匹配行。请检查平台与平台内容 ID / 外部链接。","import.invalidMapping":"字段映射必须是有效的 JSON 对象。","import.completed":"导入完成：写入 {imported} 行，跳过 {duplicates} 行重复数据。","import.previewRequired":"请先预览当前文件。",
@@ -69,8 +85,8 @@ const formData=form=>Object.fromEntries(new FormData(form));
 const lines=value=>value.split("\n").map(v=>v.trim()).filter(Boolean);
 const toast=(message,error=false)=>{const el=$("#toast");el.textContent=message;el.className=`show${error?" error":""}`;clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.className="",3000)};
 const escapeHtml=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const fileBaseName=name=>name.replace(/\.(txt|md|markdown|csv|pdf|pptx)$/i,"");
-const knowledgeMediaType=file=>file.type||({txt:"text/plain",md:"text/markdown",markdown:"text/markdown",csv:"text/csv",pdf:"application/pdf",pptx:"application/vnd.openxmlformats-officedocument.presentationml.presentation"}[file.name.split(".").pop().toLowerCase()]||"text/plain");
+const fileBaseName=name=>name.replace(/\.(txt|md|markdown|csv|pdf|pptx|docx)$/i,"");
+const knowledgeMediaType=file=>file.type||({txt:"text/plain",md:"text/markdown",markdown:"text/markdown",csv:"text/csv",pdf:"application/pdf",pptx:"application/vnd.openxmlformats-officedocument.presentationml.presentation",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"}[file.name.split(".").pop().toLowerCase()]||"text/plain");
 const request=async(fn,success)=>{try{await fn();if(success)toast(success)}catch(error){toast(error.message,true)}};
 const resultContent=()=>state.currentVersion?.content||null;
 const resultText=()=>HeyuContent.renderContent(resultContent(),{t:HeyuI18n.t,locale:HeyuI18n.getLocale()});
@@ -111,7 +127,32 @@ const downloadCampaignPresentation=async campaign=>{
   link.click();
   setTimeout(()=>URL.revokeObjectURL(link.href),0);
 };
-const workspacePages=["overview","plans","assets","knowledge","campaigns","studio","operations","review","audit","members"];
+const downloadPublicationPackage=async task=>{
+  const response=await apiFile(`/v1/publication-tasks/${task.id}/packages/latest/download`);
+  const blob=await response.blob();
+  const plan=state.marketingPlans.find(item=>item.id===task.marketing_plan_id);
+  const basename=HeyuContent.safeFilename(plan?.title||`heyu-publication-${task.calendar_day||""}`);
+  const link=document.createElement("a");
+  link.href=URL.createObjectURL(blob);
+  link.download=`${basename}-${task.platform}.zip`;
+  link.click();
+  setTimeout(()=>URL.revokeObjectURL(link.href),0);
+};
+const downloadMarketingPlanDocument=async format=>{
+  if(!state.currentMarketingPlan)throw new Error(t("marketingPlans.selectFirst"));
+  const version=marketingPlanVersion();
+  const params=new URLSearchParams({format});
+  if(version?.id)params.set("version_id",version.id);
+  const response=await apiFile(`/v1/marketing-plans/${state.currentMarketingPlan.id}/document?${params}`);
+  const blob=await response.blob();
+  const basename=HeyuContent.safeFilename(state.currentMarketingPlan.title||"heyu-marketing-plan");
+  const link=document.createElement("a");
+  link.href=URL.createObjectURL(blob);
+  link.download=`${basename}-v${version?.version_number||1}.${format}`;
+  link.click();
+  setTimeout(()=>URL.revokeObjectURL(link.href),0);
+};
+const workspacePages=["overview","plans","assets","knowledge","campaigns","studio","operations","review","audit","members","providers"];
 const pageFromLocation=()=>{const page=location.pathname.split("/").filter(Boolean)[1]||"overview";return workspacePages.includes(page)?page:"overview"};
 
 function showWorkspace(){
@@ -137,17 +178,18 @@ function navigate(page,push=true){
   if(!workspacePages.includes(page))page="overview";
   $$(".nav").forEach(x=>x.classList.toggle("active",x.dataset.page===page));
   $$(".page").forEach(x=>x.classList.toggle("active",x.dataset.pagePanel===page));
-  $("#page-title").textContent=t(`workspace.page.${page}`);
+  $("#page-title").textContent=page==="providers"?providerText("pageTitle"):t(`workspace.page.${page}`);
   const path=page==="overview"?"/workspace/":`/workspace/${page}`;
   if(push&&location.pathname!==path)history.pushState({page},"",path);
 }
 async function refresh(){
   state.actor=await api("/v1/me");
   const canManageMembers=["owner","admin"].includes(state.actor.role);
-  [state.brands,state.products,state.knowledge,state.campaigns,state.marketingPlans,state.projects,state.publications,state.audit]=await Promise.all([api("/v1/brands"),api("/v1/products"),api("/v1/knowledge"),api("/v1/campaign-packages"),api("/v1/marketing-plans"),api("/v1/content-projects"),api("/v1/publications"),api("/v1/audit-events")]);
-  [state.members,state.invitations]=canManageMembers?await Promise.all([api("/v1/members"),api("/v1/invitations")]):[[],[]];
+  [state.brands,state.products,state.knowledge,state.campaigns,state.marketingPlans,state.projects,state.publicationTasks,state.publications,state.audit]=await Promise.all([api("/v1/brands"),api("/v1/products"),api("/v1/knowledge"),api("/v1/campaign-packages"),api("/v1/marketing-plans"),api("/v1/content-projects"),api("/v1/publication-tasks"),api("/v1/publications"),api("/v1/audit-events")]);
+  [state.members,state.invitations,state.providers]=canManageMembers?await Promise.all([api("/v1/members"),api("/v1/invitations"),api("/v1/provider-connections")]):[[],[],[]];
   $$(".member-nav").forEach(x=>x.hidden=!canManageMembers);
-  if(!canManageMembers&&$(".nav.active")?.dataset.page==="members")navigate("overview");
+  $$(".provider-nav").forEach(x=>x.hidden=!canManageMembers);
+  if(!canManageMembers&&["members","providers"].includes($(".nav.active")?.dataset.page))navigate("overview");
   render();
   const requestedPlan=new URLSearchParams(location.search).get("plan");
   const pendingImport=new URLSearchParams(location.search).get("import")==="1";
@@ -208,6 +250,24 @@ const marketingPlanDate=value=>new Intl.DateTimeFormat(HeyuI18n.getLocale(),{dat
 const marketingPlanVersion=()=>state.selectedMarketingVersion||state.currentMarketingPlan?.current_version||null;
 const marketingPlanSection=(title,body,wide=false)=>`<section class="plan-preview-section${wide?" wide":""}"><p class="eyebrow">${escapeHtml(title)}</p>${body}</section>`;
 const marketingPlanListItems=items=>`<ul>${(items||[]).map(item=>`<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+const marketingRouteIds=["practical-hook","people-story","playful-contrast"];
+const marketingRouteLabel=routeId=>t(`publicationTask.route.${routeId}`);
+const marketingTaskStatusLabel=status=>t(`publicationTask.status.${status}`);
+const publicationTaskPlan=task=>state.marketingPlans.find(item=>item.id===task.marketing_plan_id);
+const calendarTaskForm=day=>{
+  if(!canWriteScope("content"))return "";
+  const routeOptions=marketingRouteIds.map(routeId=>`<option value="${routeId}">${escapeHtml(marketingRouteLabel(routeId))}</option>`).join("");
+  return `<details class="calendar-publication">
+    <summary>${escapeHtml(t("publicationTask.scheduleAction"))}</summary>
+    <form class="marketing-publication-task-form" data-calendar-day="${escapeHtml(day.day)}">
+      <label>${escapeHtml(t("publicationTask.route"))}<select name="route_id">${routeOptions}</select></label>
+      <label>${escapeHtml(t("publicationTask.scheduledFor"))}<input name="scheduled_for" type="datetime-local"></label>
+      <label>${escapeHtml(t("publicationTask.mode"))}<select name="execution_mode"><option value="export_only">${escapeHtml(t("publicationTask.mode.export"))}</option><option value="mock">${escapeHtml(t("publicationTask.mode.mock"))}</option></select></label>
+      <label>${escapeHtml(t("publicationTask.note"))}<input name="note" maxlength="2000" placeholder="${escapeHtml(t("publicationTask.notePlaceholder"))}"></label>
+      <button class="primary" type="submit">${escapeHtml(t("publicationTask.create"))}</button>
+    </form>
+  </details>`;
+};
 function marketingPlanPreviewHtml(content){
   if(!content?.product_profile||!content?.strategy||!Array.isArray(content?.videos))return `<pre>${escapeHtml(JSON.stringify(content,null,2))}</pre>`;
   const profile=content.product_profile;
@@ -215,7 +275,7 @@ function marketingPlanPreviewHtml(content){
   const trend=content.trend||{};
   const videos=content.videos.map((video,index)=>`<article class="plan-video-card"><span>${escapeHtml(t("marketingPlans.videoNumber",{number:index+1}))}</span><h4>${escapeHtml(video.title)}</h4><p>${escapeHtml(video.hook)}</p><small>${escapeHtml(video.angle)}${fieldSeparator()}${escapeHtml(video.background_music)}</small><details><summary>${escapeHtml(t("marketingPlans.openScript"))}</summary><p>${escapeHtml(video.script)}</p><ol>${(video.shots||[]).map(shot=>`<li><b>${escapeHtml(shot.seconds)}</b><span>${escapeHtml(shot.visual)}</span><small>${escapeHtml(shot.voiceover)}</small></li>`).join("")}</ol><strong>${escapeHtml(video.call_to_action)}</strong></details></article>`).join("");
   const livestream=(content.livestream||[]).map(section=>`<article><h4>${escapeHtml(section.section)}</h4>${marketingPlanListItems(section.talking_points)}</article>`).join("");
-  const calendar=(content.seven_day_plan||[]).map(day=>`<article><b>${escapeHtml(t("marketingPlans.day",{day:day.day}))}</b><h4>${escapeHtml(day.objective)}</h4><p>${escapeHtml(day.content)}</p><small>${escapeHtml(day.action)}</small></article>`).join("");
+  const calendar=(content.seven_day_plan||[]).map(day=>`<article><b>${escapeHtml(t("marketingPlans.day",{day:day.day}))}</b><h4>${escapeHtml(day.objective)}</h4><p>${escapeHtml(day.content)}</p><small>${escapeHtml(day.action)}</small>${calendarTaskForm(day)}</article>`).join("");
   return `<div class="plan-preview-grid">${marketingPlanSection(t("marketingPlans.positioning"),`<h3>${escapeHtml(profile.one_line_value)}</h3><p>${escapeHtml(profile.story_angle)}</p>${marketingPlanListItems(profile.core_selling_points)}`)}${marketingPlanSection(t("marketingPlans.strategy"),`<h3>${escapeHtml(strategy.platform_name)}</h3><p>${escapeHtml(strategy.content_focus)}</p><dl><div><dt>${escapeHtml(t("marketingPlans.duration"))}</dt><dd>${escapeHtml(strategy.recommended_duration)}</dd></div><div><dt>${escapeHtml(t("marketingPlans.conversion"))}</dt><dd>${escapeHtml(strategy.conversion_action)}</dd></div></dl>`)}${marketingPlanSection(t("marketingPlans.trend"),`<h3>${escapeHtml(trend.trend_used||t("marketingPlans.noTrend"))}</h3><p>${escapeHtml(trend.integration_method||"")}</p><small>${escapeHtml(trend.caution||"")}</small>`,true)}${marketingPlanSection(t("marketingPlans.videos"),`<div class="plan-video-grid">${videos}</div>`,true)}${marketingPlanSection(t("marketingPlans.livestream"),`<div class="plan-live-grid">${livestream}</div>`,true)}${marketingPlanSection(t("marketingPlans.sevenDays"),`<div class="plan-calendar">${calendar}</div>`,true)}${marketingPlanSection(t("marketingPlans.nextActions"),marketingPlanListItems(content.next_actions),true)}</div>`;
 }
 function renderMarketingPlans(){
@@ -280,8 +340,10 @@ function render(){
   renderCampaigns();
   renderOperationCopy();
   renderOperationImportPreview();
+  renderPublicationTasks();
   renderPublications();
   renderMembers();
+  renderProviders();
   renderMarketingPlans();
 }
 const campaignStatusLabel=value=>t(`campaign.status.${value}`);
@@ -557,18 +619,57 @@ function performanceReviewHtml(publicationId,review){
   const signals=(review.signals||[]).map(item=>`<li><strong>${escapeHtml(item.metric)}</strong><span>${escapeHtml(HeyuI18n.formatNumber(item.value))}</span><small>${escapeHtml(item.basis||"")}</small></li>`).join("")||`<li>${escapeHtml(operationText("review.noSignals"))}</li>`;
   const recommendations=(review.recommendations||[]).map(item=>`<li><strong>${escapeHtml(item.area)}</strong><span>${escapeHtml(item.action)}</span></li>`).join("");
   const limitations=(review.limitations||[]).map(item=>`<li>${escapeHtml(item)}</li>`).join("");
+  const publication=state.publications.find(item=>item.id===publicationId);
+  const canSaveLegacyBrief=canWriteScope("content")&&Boolean(publication?.content_version_id);
+  return `<section class="performance-review"><div class="panel-heading"><div><p class="eyebrow">${escapeHtml(operationText("review.heading"))}</p><h3>${escapeHtml(review.summary)}</h3></div><span class="pill">${escapeHtml(operationText("review.method",{method:review.methodology}))}</span></div><div class="performance-review-grid"><div><h4>${escapeHtml(operationText("review.signals"))}</h4><ul class="review-signals">${signals}</ul></div><div><h4>${escapeHtml(operationText("review.recommendations"))}</h4><ul>${recommendations}</ul></div></div>${limitations?`<details><summary>${escapeHtml(operationText("review.limitations"))}</summary><ul>${limitations}</ul></details>`:""}${canSaveLegacyBrief?`<button type="button" data-save-performance-brief="${publicationId}">${escapeHtml(operationText("review.saveBrief"))}</button>`:""}</section>`;
+}
+function renderPublicationTasks(){
+  const target=$("#publication-task-list");
+  if(!target)return;
   const canOperate=canWriteScope("content");
-  return `<section class="performance-review"><div class="panel-heading"><div><p class="eyebrow">${escapeHtml(operationText("review.heading"))}</p><h3>${escapeHtml(review.summary)}</h3></div><span class="pill">${escapeHtml(operationText("review.method",{method:review.methodology}))}</span></div><div class="performance-review-grid"><div><h4>${escapeHtml(operationText("review.signals"))}</h4><ul class="review-signals">${signals}</ul></div><div><h4>${escapeHtml(operationText("review.recommendations"))}</h4><ul>${recommendations}</ul></div></div>${limitations?`<details><summary>${escapeHtml(operationText("review.limitations"))}</summary><ul>${limitations}</ul></details>`:""}${canOperate?`<button type="button" data-save-performance-brief="${publicationId}">${escapeHtml(operationText("review.saveBrief"))}</button>`:""}</section>`;
+  target.classList.toggle("empty",state.publicationTasks.length===0);
+  target.innerHTML=state.publicationTasks.map(task=>{
+    const plan=publicationTaskPlan(task);
+    const project=task.project_id?state.projects.find(item=>item.id===task.project_id):null;
+    const sourceTitle=task.marketing_plan_id
+      ? plan?.title||t("publicationTask.unknownPlan")
+      : project?.title||t("publicationTask.unknownProject");
+    const scheduled=task.scheduled_for?HeyuI18n.formatDate(task.scheduled_for):t("publicationTask.unscheduled");
+    const metadata=(task.marketing_plan_id
+      ? [t("marketingPlans.day",{day:task.calendar_day||"-"}),marketingRouteLabel(task.route_id),scheduled]
+      : [project?contentTypeLabel(project.content_type):t("publicationTask.contentSource"),scheduled]
+    ).map(value=>`<span>${escapeHtml(value)}</span>`).join("");
+    const download=canOperate&&["package_ready","awaiting_manual_confirmation"].includes(task.status)
+      ? `<button type="button" data-download-publication-package="${task.id}">${escapeHtml(t("publicationTask.download"))}</button>`
+      : "";
+    const ready=canOperate&&task.status==="package_ready"&&task.execution_mode==="export_only"
+      ? `<button type="button" class="primary" data-ready-publication-task="${task.id}">${escapeHtml(t("publicationTask.markReady"))}</button>`
+      : "";
+    const confirm=canOperate&&task.status==="awaiting_manual_confirmation"&&task.execution_mode==="export_only"
+      ? `<details class="publication-confirmation"><summary>${escapeHtml(t("publicationTask.confirmHeading"))}</summary><form class="publication-confirmation-form" data-publication-task-id="${task.id}"><label>${escapeHtml(t("publicationTask.externalUrl"))}<input name="external_url" type="url" placeholder="https://"></label><label>${escapeHtml(t("publicationTask.externalId"))}<input name="external_content_id" maxlength="255"></label><label>${escapeHtml(t("publicationTask.publishedAt"))}<input name="published_at" type="datetime-local"></label><label>${escapeHtml(t("publicationTask.confirmNote"))}<textarea name="note" rows="2" maxlength="2000"></textarea></label><p class="form-note">${escapeHtml(t("publicationTask.confirmHint"))}</p><button class="primary" type="submit">${escapeHtml(t("publicationTask.confirm"))}</button></form></details>`
+      : "";
+    const mockNote=task.execution_mode==="mock"&&task.status==="package_ready"
+      ? `<p class="form-note">${escapeHtml(t("publicationTask.mockNoConfirm"))}</p>`
+      : "";
+    return `<article class="publication-task-card"><div class="panel-heading"><div><p class="eyebrow">${escapeHtml(task.platform)}</p><h3>${escapeHtml(sourceTitle)}</h3></div><span class="badge ${task.status==="published"?"approved":task.status==="cancelled"?"rejected":"pending_review"}">${escapeHtml(marketingTaskStatusLabel(task.status))}</span></div><div class="source-meta">${metadata}</div>${task.note?`<p>${escapeHtml(task.note)}</p>`:""}<div class="row-actions">${download}${ready}</div>${confirm}${mockNote}</article>`;
+  }).join("")||`<p>${escapeHtml(t("publicationTask.empty"))}</p>`;
 }
 function renderPublications(){
   const canOperate=canWriteScope("content");
   $("#publication-list").innerHTML=state.publications.map(item=>`<article class="publication-operation-card"><div class="panel-heading"><div><h3>${escapeHtml(item.platform)}</h3><p>${escapeHtml(HeyuI18n.formatDate(item.published_at))}</p></div><span class="badge approved">${escapeHtml(t("publication.published"))}</span></div>${item.external_url?`<p><a href="${escapeHtml(item.external_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("publication.viewExternal"))}</a></p>`:""}${canOperate?`<form class="snapshot-form" data-publication-id="${item.id}"><div class="source-meta"><label>${escapeHtml(t("snapshot.capturedAt"))}<input name="captured_at" type="datetime-local" required></label><label>${escapeHtml(t("metric.views"))}<input name="views" type="number" min="0"></label><label>${escapeHtml(t("metric.likes"))}<input name="likes" type="number" min="0"></label><label>${escapeHtml(t("metric.comments"))}<input name="comments" type="number" min="0"></label><label>${escapeHtml(t("metric.shares"))}<input name="shares" type="number" min="0"></label><label>${escapeHtml(t("metric.saves"))}<input name="saves" type="number" min="0"></label><label>${escapeHtml(t("metric.followersGained"))}<input name="followers_gained" type="number" min="0"></label><label>${escapeHtml(t("metric.orders"))}<input name="orders" type="number" min="0"></label><label>${escapeHtml(t("metric.revenueMinor"))}<input name="revenue_minor" type="number" min="0"></label></div><button>${escapeHtml(t("snapshot.add"))}</button></form>`:""}<div class="snapshot-list" data-snapshot-list="${item.id}"></div>${canOperate?`<div class="row-actions operation-review-action"><button type="button" class="primary" data-generate-performance-review="${item.id}">${escapeHtml(operationText("review.generate"))}</button></div>`:""}<div data-performance-review="${item.id}">${performanceReviewHtml(item.id,state.performanceReviews[item.id])}</div>${canOperate?`<details><summary>${escapeHtml(t("diagnosis.add"))}</summary><form class="diagnosis-form" data-publication-id="${item.id}"><label>${escapeHtml(t("diagnosis.observedAt"))}<input name="observed_at" type="datetime-local" required></label><label>${escapeHtml(t("diagnosis.reportTitle"))}<input name="title" required></label><label>${escapeHtml(t("diagnosis.summary"))}<textarea name="summary" rows="2"></textarea></label><label>${escapeHtml(t("diagnosis.transcriptExcerpt"))}<textarea name="transcript_excerpt" rows="2"></textarea></label><label>${escapeHtml(t("diagnosis.category"))}<input name="category" required></label><label>${escapeHtml(t("diagnosis.severity"))}<select name="severity"><option value="observation">${escapeHtml(severityLabel("observation"))}</option><option value="opportunity">${escapeHtml(severityLabel("opportunity"))}</option><option value="risk">${escapeHtml(severityLabel("risk"))}</option></select></label><label>${escapeHtml(t("diagnosis.evidence"))}<textarea name="evidence" rows="2" required></textarea></label><label>${escapeHtml(t("diagnosis.recommendation"))}<textarea name="recommendation" rows="2"></textarea></label><button>${escapeHtml(t("diagnosis.save"))}</button></form></details>`:""}<div class="diagnosis-list" data-diagnosis-list="${item.id}"></div><div class="brief-list" data-brief-list="${item.id}"></div></article>`).join("")||escapeHtml(t("publication.empty"));
-  state.publications.forEach(item=>{loadSnapshots(item.id);loadDiagnoses(item.id);loadImprovementBriefs(item.id)});
+  state.publications.forEach(item=>{
+    void Promise.all([
+      loadSnapshots(item.id),
+      loadDiagnoses(item.id),
+      loadImprovementBriefs(item.id),
+    ]).catch(error=>{if(!sessionInvalidated)toast(error.message,true)});
+  });
 }
 async function loadDiagnoses(publicationId){
   const diagnoses=await api(`/v1/publications/${publicationId}/video-diagnoses`);
   const target=$(`[data-diagnosis-list="${publicationId}"]`);
-  const canOperate=canWriteScope("content");
+  const publication=state.publications.find(item=>item.id===publicationId);
+  const canOperate=canWriteScope("content")&&Boolean(publication?.content_version_id);
   if(target)target.innerHTML=diagnoses.map(item=>`<article><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.summary||t("diagnosis.summaryEmpty"))}</p><div class="source-meta"><span>${escapeHtml(HeyuI18n.formatDate(item.observed_at))}</span><span>${escapeHtml(t("diagnosis.findingCount",{count:HeyuI18n.formatNumber(item.findings.length)}))}</span></div>${item.findings.map(finding=>`<p><span class="badge ${finding.severity==="risk"?"rejected":finding.severity==="opportunity"?"pending_review":"approved"}">${escapeHtml(severityLabel(finding.severity))}</span> <strong>${escapeHtml(finding.category)}</strong>${escapeHtml(fieldSeparator())}${escapeHtml(finding.evidence)}${finding.recommendation?`<br>${escapeHtml(t("diagnosis.recommendation"))}${escapeHtml(fieldSeparator())}${escapeHtml(finding.recommendation)}`:""}</p>`).join("")}${canOperate?`<details><summary>${escapeHtml(t("brief.createFromDiagnosis"))}</summary><form class="brief-form" data-publication-id="${publicationId}" data-diagnosis-id="${item.id}"><label>${escapeHtml(t("brief.title"))}<input name="title" required></label><label>${escapeHtml(t("brief.objective"))}<textarea name="objective" rows="2"></textarea></label><label>${escapeHtml(t("brief.actionCategory"))}<input name="category" required></label><label>${escapeHtml(t("brief.instruction"))}<textarea name="instruction" rows="2" required></textarea></label><label>${escapeHtml(t("brief.evidence"))}<textarea name="evidence" rows="2" required></textarea></label><label>${escapeHtml(t("brief.guardrails"))} (${escapeHtml(t("brief.guardrailsHint"))})<textarea name="guardrails" rows="2"></textarea></label><button>${escapeHtml(t("brief.create"))}</button></form></details>`:""}</article>`).join("")||`<p>${escapeHtml(t("diagnosis.empty"))}</p>`;
 }
 async function loadImprovementBriefs(publicationId){
@@ -595,6 +696,47 @@ function renderMembers(){
     const status=invitation.accepted_at?"accepted":invitation.revoked_at?"revoked":expired?"expired":"pending";
     return `<article class="invitation-row"><div><h3>${escapeHtml(invitation.email)}</h3><p>${escapeHtml(roleLabel(invitation.role))} · ${escapeHtml(t("invitation.expires",{date:HeyuI18n.formatDate(invitation.expires_at)}))}</p></div><div class="invitation-actions"><span class="badge ${status==="accepted"?"approved":status==="pending"?"pending_review":"rejected"}">${escapeHtml(t(`invitation.status.${status}`))}</span>${status==="pending"?`<button class="reject" data-revoke-invitation="${invitation.id}">${escapeHtml(t("invitation.revoke"))}</button>`:""}</div></article>`;
   }).join("")||t("invitation.empty");
+}
+function applyProviderCopy(){
+  $$("[data-provider-copy]").forEach(element=>{element.textContent=providerText(element.dataset.providerCopy)});
+  $$("[data-provider-placeholder]").forEach(element=>{element.placeholder=providerText(element.dataset.providerPlaceholder)});
+}
+function renderProviders(){
+  applyProviderCopy();
+  if(!state.actor||!["owner","admin"].includes(state.actor.role))return;
+  $("#provider-count").textContent=HeyuI18n.formatNumber(state.providers.length);
+  $("#provider-list").innerHTML=state.providers.map(provider=>{
+    const statusKey=provider.last_test_status==="succeeded"?"statusSucceeded":provider.last_test_status==="failed"?"statusFailed":"statusNever";
+    const badges=[
+      provider.is_primary?providerText("primaryBadge"):"",
+      provider.is_fallback?providerText("fallbackBadge"):"",
+      !provider.enabled?providerText("disabledBadge"):"",
+    ].filter(Boolean).map(label=>`<span class="badge">${escapeHtml(label)}</span>`).join("");
+    const testClass=provider.last_test_status==="succeeded"?"approved":provider.last_test_status==="failed"?"rejected":"";
+    const testedAt=provider.last_tested_at?` · ${escapeHtml(HeyuI18n.formatDate(provider.last_tested_at))}`:"";
+    const lastError=provider.last_test_error?`<p class="provider-last-error">${escapeHtml(provider.last_test_error)}</p>`:"";
+    return `<article class="provider-card">
+      <div class="panel-heading">
+        <div><h3>${escapeHtml(provider.name)}</h3><p>${escapeHtml(provider.base_url)}</p></div>
+        <div class="provider-badges">${badges}</div>
+      </div>
+      <dl class="provider-models">
+        <div><dt>${escapeHtml(providerText("chatModel"))}</dt><dd>${escapeHtml(provider.chat_model)}</dd></div>
+        <div><dt>${escapeHtml(providerText("embeddingModel"))}</dt><dd>${escapeHtml(provider.embedding_model||"—")}</dd></div>
+        <div><dt>${escapeHtml(providerText("secretReference"))}</dt><dd>${escapeHtml(provider.secret_reference)} · ${escapeHtml(providerText(provider.secret_configured?"configured":"notConfigured"))}</dd></div>
+      </dl>
+      <div class="provider-test-status"><span class="badge ${testClass}">${escapeHtml(providerText(statusKey))}</span><small>${testedAt.replace(/^ · /,"")}</small></div>
+      ${lastError}
+      <form class="provider-probe" data-provider-probe="${provider.id}">
+        <input type="password" name="temporary_api_key" autocomplete="off" placeholder="${escapeHtml(providerText("temporaryKey"))}">
+        <button type="submit">${escapeHtml(providerText("test"))}</button>
+      </form>
+      <div class="row-actions">
+        <button type="button" data-edit-provider="${provider.id}">${escapeHtml(providerText("editAction"))}</button>
+        <button type="button" class="reject" data-delete-provider="${provider.id}">${escapeHtml(providerText("deleteAction"))}</button>
+      </div>
+    </article>`;
+  }).join("")||escapeHtml(providerText("empty"));
 }
 function renderFocus(approvedKnowledge,pendingKnowledge){
   let prefix="focus.initial",target="assets",variables={};
@@ -679,8 +821,8 @@ $("#farmer-evidence-form").addEventListener("submit",event=>{event.preventDefaul
 },t("farmerEvidence.created"))});
 $("#brand-edit-cancel").addEventListener("click",resetBrandForm);
 $("#product-edit-cancel").addEventListener("click",resetProductForm);
-const resetKnowledgeForm=()=>{const form=$("#knowledge-form");form.reset();form.elements.media_type.value="text/plain";$("#knowledge-file-status").textContent=t("sourceImport.idle");$("#knowledge-change-field").hidden=true;$("#knowledge-revision-cancel").hidden=true;$("#knowledge-save-button").textContent=t("source.saveDraft")};
-$("#knowledge-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{const data=formData(event.target);const parentId=data.parent_source_id;delete data.parent_source_id;data.brand_id=data.brand_id||null;data.product_id=data.product_id||null;if(parentId){if(!data.change_summary.trim())throw new Error(t("source.changeSummaryRequired"));await api(`/v1/knowledge/${parentId}/revisions`,{method:"POST",body:JSON.stringify(data)})}else{delete data.change_summary;await api("/v1/knowledge",{method:"POST",body:JSON.stringify(data)})}resetKnowledgeForm();await refresh()},t("toast.source.saved"))});
+const resetKnowledgeForm=()=>{const form=$("#knowledge-form");form.reset();state.knowledgeDocumentSections=[];form.elements.media_type.value="text/plain";$("#knowledge-file-status").textContent=t("sourceImport.idle");$("#knowledge-change-field").hidden=true;$("#knowledge-revision-cancel").hidden=true;$("#knowledge-save-button").textContent=t("source.saveDraft")};
+$("#knowledge-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{const data=formData(event.target);const parentId=data.parent_source_id;delete data.parent_source_id;data.brand_id=data.brand_id||null;data.product_id=data.product_id||null;data.document_sections=state.knowledgeDocumentSections;if(parentId){if(!data.change_summary.trim())throw new Error(t("source.changeSummaryRequired"));await api(`/v1/knowledge/${parentId}/revisions`,{method:"POST",body:JSON.stringify(data)})}else{delete data.change_summary;await api("/v1/knowledge",{method:"POST",body:JSON.stringify(data)})}resetKnowledgeForm();await refresh()},t("toast.source.saved"))});
 $("#knowledge-revision-cancel").addEventListener("click",resetKnowledgeForm);
 $("#knowledge-file").addEventListener("change",async event=>{
   const file=event.target.files[0];
@@ -689,7 +831,7 @@ $("#knowledge-file").addEventListener("change",async event=>{
   if(!file){status.textContent=t("sourceImport.idle");return}
   const extension=file.name.split(".").pop().toLowerCase();
   const localTextTypes=["txt","md","markdown","csv"];
-  const documentTypes=["pdf","pptx"];
+  const documentTypes=["pdf","pptx","docx"];
   if(![...localTextTypes,...documentTypes].includes(extension)){event.target.value="";toast(t("sourceImport.unsupportedType"),true);return}
   const sizeLimit=documentTypes.includes(extension)?15*1024*1024:1024*1024;
   if(file.size>sizeLimit){event.target.value="";toast(t(documentTypes.includes(extension)?"sourceImport.documentTooLarge":"sourceImport.fileTooLarge"),true);return}
@@ -701,6 +843,7 @@ $("#knowledge-file").addEventListener("change",async event=>{
     let warnings=[];
     if(localTextTypes.includes(extension)){
       content=await file.text();
+      state.knowledgeDocumentSections=[];
     }else{
       const body=new FormData();
       body.append("file",file);
@@ -708,6 +851,7 @@ $("#knowledge-file").addEventListener("change",async event=>{
       content=preview.text;
       mediaType=preview.media_type;
       sectionCount=preview.sections.length;
+      state.knowledgeDocumentSections=preview.sections;
       warnings=preview.warnings||[];
     }
     if(!content.trim())throw new Error(t("sourceImport.emptyFile"));
@@ -732,6 +876,84 @@ $("#project-edit-cancel").addEventListener("click",resetProjectForm);
 $("#member-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{const data=formData(event.target);data.expires_in_hours=Number(data.expires_in_hours);const invite=await api("/v1/invitations",{method:"POST",body:JSON.stringify(data)});const link=`${location.origin}/workspace/#invite=${encodeURIComponent(invite.token)}`;$("#invite-link").value=link;$("#invite-result").hidden=false;event.target.reset();state.invitations=await api("/v1/invitations");renderMembers()},t("toast.member.invited"))});
 $("#copy-invite-link").addEventListener("click",()=>request(async()=>{await navigator.clipboard.writeText($("#invite-link").value)},t("invite.copied")));
 document.addEventListener("click",event=>{const button=event.target.closest("[data-revoke-invitation]");if(!button)return;request(async()=>{if(!confirm(t("invitation.revokeConfirm")))return;await api(`/v1/invitations/${button.dataset.revokeInvitation}/revoke`,{method:"POST"});state.invitations=await api("/v1/invitations");renderMembers()},t("toast.invitation.revoked"))});
+const resetProviderForm=()=>{
+  const form=$("#provider-form");
+  form.reset();
+  form.elements.id.value="";
+  form.elements.secret_reference.value="HEYU_PROVIDER_API_KEY";
+  form.elements.enabled.checked=true;
+  $("#provider-form-title").textContent=providerText("create");
+  $("#provider-save-button").textContent=providerText("save");
+  $("#provider-edit-cancel").hidden=true;
+};
+$("#provider-form").addEventListener("submit",event=>{event.preventDefault();request(async()=>{
+  const form=event.target;
+  const data=formData(form);
+  const id=data.id;
+  delete data.id;
+  data.enabled=form.elements.enabled.checked;
+  data.is_primary=form.elements.is_primary.checked;
+  data.is_fallback=form.elements.is_fallback.checked;
+  await api(id?`/v1/provider-connections/${id}`:"/v1/provider-connections",{method:id?"PATCH":"POST",body:JSON.stringify(data)});
+  resetProviderForm();
+  state.providers=await api("/v1/provider-connections");
+  renderProviders();
+},providerText("saved"))});
+$("#provider-edit-cancel").addEventListener("click",resetProviderForm);
+$("#provider-form").addEventListener("change",event=>{
+  if(event.target.name==="is_primary"&&event.target.checked)event.currentTarget.elements.is_fallback.checked=false;
+  if(event.target.name==="is_fallback"&&event.target.checked)event.currentTarget.elements.is_primary.checked=false;
+});
+document.addEventListener("submit",event=>{
+  const form=event.target.closest("[data-provider-probe]");
+  if(!form)return;
+  event.preventDefault();
+  const button=form.querySelector("button");
+  const original=button.textContent;
+  button.disabled=true;
+  button.textContent=providerText("testing");
+  (async()=>{
+    try{
+      const temporaryKey=form.elements.temporary_api_key.value.trim();
+      const result=await api(`/v1/provider-connections/${form.dataset.providerProbe}/test`,{method:"POST",body:JSON.stringify({temporary_api_key:temporaryKey||null})});
+      form.reset();
+      state.providers=await api("/v1/provider-connections");
+      renderProviders();
+      if(result.status==="failed")throw new Error(providerText("testFailed",{error:result.error}));
+      toast(providerText("testSucceeded",{model:result.model,latency:HeyuI18n.formatNumber(result.latency_ms)}));
+    }catch(error){
+      toast(error.message,true);
+    }finally{
+      if(button.isConnected){
+        button.disabled=false;
+        button.textContent=original;
+      }
+    }
+  })();
+});
+document.addEventListener("click",event=>{
+  const edit=event.target.closest("[data-edit-provider]");
+  if(edit){
+    const provider=state.providers.find(item=>item.id===edit.dataset.editProvider);
+    if(!provider)return;
+    const form=$("#provider-form");
+    ["id","name","base_url","chat_model","embedding_model","secret_reference"].forEach(name=>{form.elements[name].value=provider[name]||""});
+    form.elements.enabled.checked=provider.enabled;
+    form.elements.is_primary.checked=provider.is_primary;
+    form.elements.is_fallback.checked=provider.is_fallback;
+    $("#provider-form-title").textContent=providerText("edit");
+    $("#provider-save-button").textContent=providerText("saveChanges");
+    $("#provider-edit-cancel").hidden=false;
+    form.scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  const remove=event.target.closest("[data-delete-provider]");
+  if(remove)request(async()=>{
+    if(!confirm(providerText("deleteConfirm")))return;
+    await api(`/v1/provider-connections/${remove.dataset.deleteProvider}`,{method:"DELETE"});
+    state.providers=await api("/v1/provider-connections");
+    renderProviders();
+  },providerText("deleted"));
+});
 $("#generate-button").addEventListener("click",()=>request(async()=>{
   const id=$("#project-select").value;
   if(!id)throw new Error(t("generation.selectProjectFirst"));
@@ -889,7 +1111,7 @@ document.addEventListener("click",event=>{
   const farmerReview=event.target.closest("[data-review-farmer-evidence]");
   if(farmerReview){const rejected=farmerReview.dataset.status==="rejected";const note=prompt(t(rejected?"farmerEvidence.rejectPrompt":"farmerEvidence.reviewPrompt"),"");if(note!==null){if(rejected&&!note.trim()){toast(t("farmerEvidence.rejectionNoteRequired"),true);return}request(async()=>{await api(`/v1/campaign-packages/${farmerReview.dataset.campaign}/farmer-evidence-snapshots/${farmerReview.dataset.reviewFarmerEvidence}/review`,{method:"POST",body:JSON.stringify({status:farmerReview.dataset.status,note})});await refresh();$("#farmer-evidence-campaign-select").value=farmerReview.dataset.campaign;await loadFarmerEvidenceSnapshots(farmerReview.dataset.campaign)},t("farmerEvidence.reviewed"))}}
 });
-document.addEventListener("click",event=>{const nav=event.target.closest("[data-page]");if(nav)navigate(nav.dataset.page);const jump=event.target.closest("[data-target]");if(jump)navigate(jump.dataset.target);const campaignGenerate=event.target.closest("[data-generate-campaign-item]");if(campaignGenerate)request(async()=>{await api(`/v1/content-projects/${campaignGenerate.dataset.generateCampaignItem}/generate`,{method:"POST"});await refresh()},t("campaign.generated"));const editProject=event.target.closest("[data-edit-project]");if(editProject){const project=state.projects.find(item=>item.id===editProject.dataset.editProject);const form=$("#project-form");["id","title","brand_id","product_id","content_type","platform","tone","target_audience","objective","extra_requirements"].forEach(name=>form.elements[name].value=project[name]||"");$("#project-form-title").textContent=t("form.project.edit");$("#project-save-button").textContent=t("form.project.saveChanges");$("#project-edit-cancel").hidden=false;form.scrollIntoView({behavior:"smooth",block:"start"})}const editBrand=event.target.closest("[data-edit-brand]");if(editBrand){const brand=state.brands.find(item=>item.id===editBrand.dataset.editBrand);const form=$("#brand-form");["id","name","story","voice"].forEach(name=>form.elements[name].value=brand[name]||"");$("#brand-form-title").textContent=t("form.brand.edit");$("#brand-save-button").textContent=t("form.brand.saveChanges");$("#brand-edit-cancel").hidden=false;form.scrollIntoView({behavior:"smooth",block:"start"})}const editProduct=event.target.closest("[data-edit-product]");if(editProduct){const product=state.products.find(item=>item.id===editProduct.dataset.editProduct);const form=$("#product-form");["id","brand_id","name","origin","specification","price_display","shelf_life","storage_method"].forEach(name=>form.elements[name].value=product[name]||"");form.elements.selling_points.value=(product.selling_points||[]).join("\n");form.elements.prohibited_claims.value=(product.prohibited_claims||[]).join("\n");$("#product-form-title").textContent=t("form.product.edit");$("#product-save-button").textContent=t("form.product.saveChanges");$("#product-edit-cancel").hidden=false;form.scrollIntoView({behavior:"smooth",block:"start"})}const assetSubmit=event.target.closest("[data-submit-asset]");if(assetSubmit)request(async()=>{await api(`/v1/${assetSubmit.dataset.assetType}/${assetSubmit.dataset.submitAsset}/submit`,{method:"POST"});await refresh()},t("toast.asset.submitted"));const assetReview=event.target.closest("[data-review-asset]");if(assetReview){const note=prompt(t(assetReview.dataset.status==="rejected"?"asset.rejectPrompt":"asset.reviewPrompt"),"");if(note!==null)request(async()=>{await api(`/v1/${assetReview.dataset.assetType}/${assetReview.dataset.reviewAsset}/review`,{method:"POST",body:JSON.stringify({status:assetReview.dataset.status,note})});await refresh()},t("toast.asset.reviewUpdated"))}const revise=event.target.closest("[data-revise-source]");if(revise){const source=state.knowledge.find(item=>item.id===revise.dataset.reviseSource);const form=$("#knowledge-form");["title","kind","content","citation_label","source_filename","media_type","brand_id","product_id"].forEach(name=>{if(form.elements[name])form.elements[name].value=source[name]||""});form.elements.parent_source_id.value=source.id;$("#knowledge-change-field").hidden=false;$("#knowledge-revision-cancel").hidden=false;$("#knowledge-save-button").textContent=t("source.saveRevisionDraft",{number:(source.revision_number||1)+1});form.elements.change_summary.focus();form.scrollIntoView({behavior:"smooth",block:"start"})}const sourceSubmit=event.target.closest("[data-submit-source]");if(sourceSubmit)request(async()=>{await api(`/v1/knowledge/${sourceSubmit.dataset.submitSource}/submit`,{method:"POST"});await refresh()},t("toast.source.submitted"));const review=event.target.closest("[data-review-source]");if(review){const note=prompt(t(review.dataset.status==="rejected"?"source.rejectPrompt":"source.reviewPrompt"),"");if(note!==null)request(async()=>{await api(`/v1/knowledge/${review.dataset.reviewSource}/review`,{method:"POST",body:JSON.stringify({status:review.dataset.status,note})});await refresh()},t("toast.source.reviewUpdated"))};const submit=event.target.closest("[data-submit-version]");if(submit)request(async()=>{await api(`/v1/content-projects/${submit.dataset.project}/versions/${submit.dataset.submitVersion}/submit`,{method:"POST"});state.versions=await api(`/v1/content-projects/${submit.dataset.project}/versions`);renderReviews(submit.dataset.project)},t("toast.contentReview.submitted"));const versionReview=event.target.closest("[data-review-version]");if(versionReview){const noteField=document.querySelector(`[data-review-note="${versionReview.dataset.reviewVersion}"]`);const note=(noteField?.value||"").trim();if(versionReview.dataset.status==="rejected"&&!note){toast(t("contentReview.rejectionNoteRequired"),true);noteField?.focus();return}request(async()=>{await api(`/v1/content-projects/${versionReview.dataset.project}/versions/${versionReview.dataset.reviewVersion}/review`,{method:"POST",body:JSON.stringify({status:versionReview.dataset.status,note})});state.versions=await api(`/v1/content-projects/${versionReview.dataset.project}/versions`);renderReviews(versionReview.dataset.project)},t("toast.contentReview.updated"))}});
+document.addEventListener("click",event=>{const nav=event.target.closest("[data-page]");if(nav)navigate(nav.dataset.page);const jump=event.target.closest("[data-target]");if(jump)navigate(jump.dataset.target);const campaignGenerate=event.target.closest("[data-generate-campaign-item]");if(campaignGenerate)request(async()=>{await api(`/v1/content-projects/${campaignGenerate.dataset.generateCampaignItem}/generate`,{method:"POST"});await refresh()},t("campaign.generated"));const editProject=event.target.closest("[data-edit-project]");if(editProject){const project=state.projects.find(item=>item.id===editProject.dataset.editProject);const form=$("#project-form");["id","title","brand_id","product_id","content_type","platform","tone","target_audience","objective","extra_requirements"].forEach(name=>form.elements[name].value=project[name]||"");$("#project-form-title").textContent=t("form.project.edit");$("#project-save-button").textContent=t("form.project.saveChanges");$("#project-edit-cancel").hidden=false;form.scrollIntoView({behavior:"smooth",block:"start"})}const editBrand=event.target.closest("[data-edit-brand]");if(editBrand){const brand=state.brands.find(item=>item.id===editBrand.dataset.editBrand);const form=$("#brand-form");["id","name","story","voice"].forEach(name=>form.elements[name].value=brand[name]||"");$("#brand-form-title").textContent=t("form.brand.edit");$("#brand-save-button").textContent=t("form.brand.saveChanges");$("#brand-edit-cancel").hidden=false;form.scrollIntoView({behavior:"smooth",block:"start"})}const editProduct=event.target.closest("[data-edit-product]");if(editProduct){const product=state.products.find(item=>item.id===editProduct.dataset.editProduct);const form=$("#product-form");["id","brand_id","name","origin","specification","price_display","shelf_life","storage_method"].forEach(name=>form.elements[name].value=product[name]||"");form.elements.selling_points.value=(product.selling_points||[]).join("\n");form.elements.prohibited_claims.value=(product.prohibited_claims||[]).join("\n");$("#product-form-title").textContent=t("form.product.edit");$("#product-save-button").textContent=t("form.product.saveChanges");$("#product-edit-cancel").hidden=false;form.scrollIntoView({behavior:"smooth",block:"start"})}const assetSubmit=event.target.closest("[data-submit-asset]");if(assetSubmit)request(async()=>{await api(`/v1/${assetSubmit.dataset.assetType}/${assetSubmit.dataset.submitAsset}/submit`,{method:"POST"});await refresh()},t("toast.asset.submitted"));const assetReview=event.target.closest("[data-review-asset]");if(assetReview){const note=prompt(t(assetReview.dataset.status==="rejected"?"asset.rejectPrompt":"asset.reviewPrompt"),"");if(note!==null)request(async()=>{await api(`/v1/${assetReview.dataset.assetType}/${assetReview.dataset.reviewAsset}/review`,{method:"POST",body:JSON.stringify({status:assetReview.dataset.status,note})});await refresh()},t("toast.asset.reviewUpdated"))}const revise=event.target.closest("[data-revise-source]");if(revise){const source=state.knowledge.find(item=>item.id===revise.dataset.reviseSource);const form=$("#knowledge-form");["title","kind","content","citation_label","source_filename","media_type","brand_id","product_id"].forEach(name=>{if(form.elements[name])form.elements[name].value=source[name]||""});state.knowledgeDocumentSections=source.document_sections||[];form.elements.parent_source_id.value=source.id;$("#knowledge-change-field").hidden=false;$("#knowledge-revision-cancel").hidden=false;$("#knowledge-save-button").textContent=t("source.saveRevisionDraft",{number:(source.revision_number||1)+1});form.elements.change_summary.focus();form.scrollIntoView({behavior:"smooth",block:"start"})}const sourceSubmit=event.target.closest("[data-submit-source]");if(sourceSubmit)request(async()=>{await api(`/v1/knowledge/${sourceSubmit.dataset.submitSource}/submit`,{method:"POST"});await refresh()},t("toast.source.submitted"));const review=event.target.closest("[data-review-source]");if(review){const note=prompt(t(review.dataset.status==="rejected"?"source.rejectPrompt":"source.reviewPrompt"),"");if(note!==null)request(async()=>{await api(`/v1/knowledge/${review.dataset.reviewSource}/review`,{method:"POST",body:JSON.stringify({status:review.dataset.status,note})});await refresh()},t("toast.source.reviewUpdated"))};const submit=event.target.closest("[data-submit-version]");if(submit)request(async()=>{await api(`/v1/content-projects/${submit.dataset.project}/versions/${submit.dataset.submitVersion}/submit`,{method:"POST"});state.versions=await api(`/v1/content-projects/${submit.dataset.project}/versions`);renderReviews(submit.dataset.project)},t("toast.contentReview.submitted"));const versionReview=event.target.closest("[data-review-version]");if(versionReview){const noteField=document.querySelector(`[data-review-note="${versionReview.dataset.reviewVersion}"]`);const note=(noteField?.value||"").trim();if(versionReview.dataset.status==="rejected"&&!note){toast(t("contentReview.rejectionNoteRequired"),true);noteField?.focus();return}request(async()=>{await api(`/v1/content-projects/${versionReview.dataset.project}/versions/${versionReview.dataset.reviewVersion}/review`,{method:"POST",body:JSON.stringify({status:versionReview.dataset.status,note})});state.versions=await api(`/v1/content-projects/${versionReview.dataset.project}/versions`);renderReviews(versionReview.dataset.project)},t("toast.contentReview.updated"))}});
 document.addEventListener("input",event=>{const field=event.target.closest("[data-review-note]");if(field){const counter=document.querySelector(`[data-review-count="${field.dataset.reviewNote}"]`);if(counter)counter.textContent=field.value.length}});
 document.addEventListener("change",event=>{const select=event.target.closest("[data-member-role]");if(select)request(async()=>{await api(`/v1/members/${select.dataset.memberRole}`,{method:"PATCH",body:JSON.stringify({role:select.value})});await refresh()},t("toast.member.roleUpdated"))});
 document.addEventListener("click",event=>{
@@ -1017,7 +1239,70 @@ document.addEventListener("click",event=>{
     renderMarketingPlans();
   }
 });
+document.addEventListener("submit",event=>{
+  const form=event.target.closest(".marketing-publication-task-form");
+  if(!form)return;
+  event.preventDefault();
+  request(async()=>{
+    if(!state.currentMarketingPlan)throw new Error(t("marketingPlans.selectFirst"));
+    const version=marketingPlanVersion();
+    const data=formData(form);
+    const payload={
+      marketing_plan_version_id:version?.id||null,
+      route_id:data.route_id,
+      calendar_day:Number(form.dataset.calendarDay),
+      scheduled_for:data.scheduled_for?new Date(data.scheduled_for).toISOString():null,
+      execution_mode:data.execution_mode,
+      note:data.note,
+    };
+    await api(`/v1/marketing-plans/${state.currentMarketingPlan.id}/publication-tasks`,{method:"POST",body:JSON.stringify(payload)});
+    state.publicationTasks=await api("/v1/publication-tasks");
+    renderPublicationTasks();
+    form.reset();
+    navigate("operations");
+  },t("publicationTask.created"));
+});
+document.addEventListener("click",event=>{
+  const download=event.target.closest("[data-download-publication-package]");
+  if(download){
+    const task=state.publicationTasks.find(item=>item.id===download.dataset.downloadPublicationPackage);
+    if(task)request(()=>downloadPublicationPackage(task),t("publicationTask.downloaded"));
+  }
+  const ready=event.target.closest("[data-ready-publication-task]");
+  if(ready)request(async()=>{
+    await api(`/v1/publication-tasks/${ready.dataset.readyPublicationTask}/transition`,{method:"POST",body:JSON.stringify({to_status:"awaiting_manual_confirmation",details:{source:"workspace"}})});
+    state.publicationTasks=await api("/v1/publication-tasks");
+    renderPublicationTasks();
+  },t("publicationTask.ready"));
+});
+document.addEventListener("submit",event=>{
+  const form=event.target.closest(".publication-confirmation-form");
+  if(!form)return;
+  event.preventDefault();
+  request(async()=>{
+    const data=formData(form);
+    if(!data.external_url&&!data.external_content_id)throw new Error(t("publicationTask.confirmHint"));
+    const payload={
+      external_url:data.external_url,
+      external_content_id:data.external_content_id,
+      published_at:data.published_at?new Date(data.published_at).toISOString():null,
+      note:data.note,
+    };
+    await api(`/v1/publication-tasks/${form.dataset.publicationTaskId}/confirm`,{method:"POST",body:JSON.stringify(payload)});
+    [state.publicationTasks,state.publications]=await Promise.all([api("/v1/publication-tasks"),api("/v1/publications")]);
+    renderPublicationTasks();
+    renderPublications();
+  },t("publicationTask.confirmed"));
+});
 $("#import-marketing-plan").addEventListener("click",()=>request(importPendingMarketingPlan));
+$("#download-marketing-plan-docx").addEventListener("click",()=>request(
+  ()=>downloadMarketingPlanDocument("docx"),
+  t("marketingPlans.exportedWord"),
+));
+$("#download-marketing-plan-pdf").addEventListener("click",()=>request(
+  ()=>downloadMarketingPlanDocument("pdf"),
+  t("marketingPlans.exportedPdf"),
+));
 $("#save-marketing-plan-version").addEventListener("click",()=>request(async()=>{
   if(!state.currentMarketingPlan)throw new Error(t("marketingPlans.selectFirst"));
   let content;

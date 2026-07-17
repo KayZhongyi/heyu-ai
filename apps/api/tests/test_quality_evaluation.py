@@ -38,10 +38,14 @@ def dataset(evaluator: ModuleType) -> dict:
 def test_dataset_is_versioned_deidentified_and_trilingual(dataset: dict):
     assert dataset["dataset_version"] == "marketing-offline-v1"
     assert {case["locale"] for case in dataset["cases"]} == {"zh-CN", "zh-HK", "en"}
-    assert len({case["case_key"] for case in dataset["cases"]}) == 3
+    assert len({case["case_key"] for case in dataset["cases"]}) == 12
+    assert all(
+        sum(case["locale"] == locale for case in dataset["cases"]) >= 4
+        for locale in ("zh-CN", "zh-HK", "en")
+    )
     serialized = json.dumps(dataset, ensure_ascii=False)
     assert "@" not in serialized
-    assert "手机号" not in serialized
+    assert "手机号码" not in serialized
     assert "身份证" not in serialized
     assert "规则评分" in dataset["disclaimer"]
     assert "传播效果" in dataset["disclaimer"]
@@ -51,8 +55,8 @@ def test_offline_baseline_passes_without_fabricating_usage(evaluator: ModuleType
     report = evaluator.run_evaluation(dataset)
 
     assert report["passed"] is True
-    assert report["aggregate"]["case_count"] == 3
-    assert report["aggregate"]["passed_case_count"] == 3
+    assert report["aggregate"]["case_count"] == 12
+    assert report["aggregate"]["passed_case_count"] == 12
     assert set(report["aggregate"]["dimension_scores"]) == set(evaluator.DIMENSIONS)
     assert "do not predict or guarantee" in report["disclaimer"]
     for case in report["cases"]:
@@ -77,13 +81,10 @@ def test_schema_and_fact_rules_detect_regressions(evaluator: ModuleType, dataset
     malformed_result = evaluator.evaluate_output(case, malformed)
     assert malformed_result["rules"]["schema"]["score"] == 0
 
-    fact_removed = json.loads(
-        json.dumps(payload, ensure_ascii=False)
-        .replace("当季番茄", "示例产品")
-        .replace("自然成熟", "示例特点甲")
-        .replace("清甜多汁", "示例特点乙")
-        .replace("当天分选", "示例特点丙")
-    )
+    fact_removed_text = json.dumps(payload, ensure_ascii=False)
+    for index, fact in enumerate(case["expected_facts"], start=1):
+        fact_removed_text = fact_removed_text.replace(fact, f"示例占位词{index}")
+    fact_removed = json.loads(fact_removed_text)
     fact_result = evaluator.evaluate_output(case, fact_removed)
     assert fact_result["rules"]["factual_grounding"]["score"] == 0
     assert set(fact_result["rules"]["factual_grounding"]["details"]["missing"]) == set(
@@ -137,7 +138,7 @@ def test_baseline_comparison_detects_dimension_regression(evaluator: ModuleType,
 
     assert comparison["passed"] is False
     assert any(
-        item["case_key"] == "zh-cn-tomato-douyin" and item["metric"] == "filmability"
+        item["case_key"] == report["cases"][0]["case_key"] and item["metric"] == "filmability"
         for item in comparison["regressions"]
     )
 

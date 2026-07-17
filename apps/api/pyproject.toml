@@ -20,7 +20,9 @@ dependencies = [
   "httpx>=0.28,<1",
   "pypdf>=5.9,<6",
   "python-multipart>=0.0.20,<1",
+  "python-docx>=1.1,<2",
   "python-pptx>=1.0.2,<2",
+  "reportlab>=4.2,<5",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +31,7 @@ dev = [
   "pytest>=8.3,<9",
   "pytest-cov>=6,<7",
   "ruff>=0.9,<1",
+  "types-reportlab>=4.4,<5",
 ]
 
 [tool.hatch.build.targets.wheel]

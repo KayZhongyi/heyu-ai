@@ -75,6 +75,38 @@ def test_request_preserves_selected_trend_provenance():
     assert request.model_dump(mode="json")["trend_snapshot"]["source_url"].startswith("https://")
 
 
+@pytest.mark.parametrize("locale", ["zh-CN", "zh-HK", "en"])
+def test_selected_traceable_trend_enters_script_and_response(locale):
+    trend_title = "盛夏清晨采收挑战"
+    request = sample_request(
+        locale=locale,
+        trend_snapshot={
+            "title": trend_title,
+            "source_url": "https://example.test/trends/harvest",
+            "source_label": "农业资讯 RSS",
+            "source_type": "rss",
+            "published_at": datetime(2026, 7, 16, 8, tzinfo=UTC),
+            "captured_at": datetime(2026, 7, 16, 9, tzinfo=UTC),
+            "fit_score": 88,
+            "recommendation": "recommended",
+            "recommendation_reason": "与产品、平台和拍摄场景直接相关。",
+        },
+    )
+
+    result = DeterministicMarketingProvider().generate(request)
+    generated_scripts = "\n".join(video.script for video in result.videos)
+
+    assert trend_title in generated_scripts
+    assert request.product_name in generated_scripts
+    assert any(point in generated_scripts for point in request.selling_points)
+    assert result.trend.trend_used == trend_title
+    assert result.trend.source_label == "农业资讯 RSS"
+    assert result.trend.source_url == "https://example.test/trends/harvest"
+    assert result.trend.source_type == "rss"
+    assert result.trend.fit_score == 88
+    assert result.trend.recommendation == "recommended"
+
+
 def test_request_rejects_mismatched_trend_snapshot():
     with pytest.raises(ValidationError, match="trend must match"):
         sample_request(
@@ -342,8 +374,52 @@ def test_request_deduplicates_goals_and_rejects_high_risk_claims():
     request = sample_request(goals=["sell", "sell", "build-brand"])
     assert request.goals == ["sell", "build-brand"]
 
+    request = sample_request(content_modules=["videos", "videos", "calendar"])
+    assert request.content_modules == ["videos", "calendar"]
+
     with pytest.raises(ValidationError, match="high-risk"):
         sample_request(selling_points=["当天采摘", "降血糖"])
+
+
+@pytest.mark.parametrize(
+    ("content_modules", "video_count", "live_count", "calendar_count"),
+    [
+        (["videos"], 3, 0, 0),
+        (["livestream"], 0, 5, 0),
+        (["calendar"], 0, 0, 7),
+        (["videos", "calendar"], 3, 0, 7),
+    ],
+)
+def test_public_preview_returns_only_selected_content_modules(
+    client: TestClient,
+    content_modules: list[str],
+    video_count: int,
+    live_count: int,
+    calendar_count: int,
+):
+    payload = sample_request(content_modules=content_modules).model_dump(mode="json")
+
+    response = client.post("/v1/marketing/preview", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["included_modules"] == content_modules
+    assert len(body["videos"]) == video_count
+    assert len(body["livestream"]) == live_count
+    assert len(body["seven_day_plan"]) == calendar_count
+
+
+def test_request_rejects_empty_content_module_selection():
+    with pytest.raises(ValidationError):
+        sample_request(content_modules=[])
+
+
+def test_response_rejects_module_presence_mismatch():
+    valid = DeterministicMarketingProvider().generate(sample_request()).model_dump()
+    valid["included_modules"] = ["videos", "calendar"]
+
+    with pytest.raises(ValidationError, match="livestream presence"):
+        MarketingPlanResponse.model_validate(valid)
 
 
 def test_response_requires_ordered_days_and_distinct_videos():
@@ -366,6 +442,77 @@ def test_public_preview_endpoint_needs_no_account(client: TestClient):
     assert body["provider"] == "mock"
     assert len(body["videos"]) == 3
     assert len(body["seven_day_plan"]) == 7
+
+
+def test_public_regeneration_replaces_only_selected_video(client: TestClient):
+    request = sample_request()
+    current = DeterministicMarketingProvider().generate(request)
+    payload = {
+        "request": request.model_dump(mode="json"),
+        "current_plan": current.model_dump(mode="json"),
+        "target": "video",
+        "route_id": "people-story",
+        "variation_index": 2,
+    }
+
+    response = client.post("/v1/marketing/regenerate/preview", json=payload)
+
+    assert response.status_code == 200
+    regenerated = response.json()
+    before_by_route = {item["route_id"]: item for item in current.model_dump(mode="json")["videos"]}
+    after_by_route = {item["route_id"]: item for item in regenerated["videos"]}
+    assert after_by_route["people-story"] != before_by_route["people-story"]
+    assert after_by_route["practical-hook"] == before_by_route["practical-hook"]
+    assert after_by_route["playful-contrast"] == before_by_route["playful-contrast"]
+    assert regenerated["livestream"] == current.model_dump(mode="json")["livestream"]
+    assert regenerated["seven_day_plan"] == current.model_dump(mode="json")["seven_day_plan"]
+
+
+@pytest.mark.parametrize(
+    ("target", "changed_field"),
+    [("livestream", "livestream"), ("calendar", "seven_day_plan")],
+)
+def test_public_regeneration_replaces_only_requested_module(
+    client: TestClient,
+    target: str,
+    changed_field: str,
+):
+    request = sample_request()
+    current = DeterministicMarketingProvider().generate(request)
+    current_json = current.model_dump(mode="json")
+
+    response = client.post(
+        "/v1/marketing/regenerate/preview",
+        json={
+            "request": request.model_dump(mode="json"),
+            "current_plan": current_json,
+            "target": target,
+            "variation_index": 3,
+        },
+    )
+
+    assert response.status_code == 200
+    regenerated = response.json()
+    assert regenerated[changed_field] != current_json[changed_field]
+    for stable_field in {"videos", "livestream", "seven_day_plan"} - {changed_field}:
+        assert regenerated[stable_field] == current_json[stable_field]
+
+
+def test_public_regeneration_rejects_unavailable_module(client: TestClient):
+    request = sample_request(content_modules=["videos"])
+    current = marketing.generate_marketing_preview(request)
+
+    response = client.post(
+        "/v1/marketing/regenerate/preview",
+        json={
+            "request": request.model_dump(mode="json"),
+            "current_plan": current.model_dump(mode="json"),
+            "target": "livestream",
+            "variation_index": 1,
+        },
+    )
+
+    assert response.status_code == 422
 
 
 def test_public_trend_discovery_returns_ranked_fallback_without_account(

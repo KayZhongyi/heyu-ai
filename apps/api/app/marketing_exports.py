@@ -9,6 +9,7 @@ from typing import cast
 from app.marketing import MarketingPlanRequest, MarketingPlanResponse, VideoScript
 from app.platform_exports import (
     PLATFORM_PROFILES,
+    ExecutionMode,
     Platform,
     PlatformExportInput,
     PlatformExportPackage,
@@ -37,11 +38,23 @@ class MarketingPlanExport:
 def export_saved_marketing_plan(
     plan: MarketingPlanDetailRead,
     route_id: str,
+    *,
+    version_id: str | None = None,
+    execution_mode: ExecutionMode = "export_only",
 ) -> MarketingPlanExport:
     """Build a deterministic manual-upload package for one creative route."""
 
-    request = MarketingPlanRequest.model_validate(plan.current_version.request_payload)
-    content = MarketingPlanResponse.model_validate(plan.current_version.content)
+    version = plan.current_version
+    if version_id is not None:
+        selected = next((item for item in plan.versions if item.id == version_id), None)
+        if selected is None:
+            raise PlatformValidationError(
+                f"marketing plan version does not belong to this plan: {version_id}"
+            )
+        version = selected
+
+    request = MarketingPlanRequest.model_validate(version.request_payload)
+    content = MarketingPlanResponse.model_validate(version.content)
     video = _find_video(content, route_id)
     platform = _platform_for_export(request.platform)
     profile = PLATFORM_PROFILES[platform]
@@ -78,7 +91,7 @@ def export_saved_marketing_plan(
         _localized(
             request.locale,
             zh_cn="发布前预览标题、字幕、封面和背景音乐音量",
-            zh_hk="發佈前預覽標題、字幕、封面和背景音樂音量",
+            zh_hk="發布前預覽標題、字幕、封面和背景音樂音量",
             en="Preview the title, subtitles, cover and music level before publishing",
         ),
     )
@@ -94,7 +107,7 @@ def export_saved_marketing_plan(
             shots=shots,
             checklist=checklist,
             locale=request.locale,
-            mode="export_only",
+            mode=execution_mode,
         )
     )
     filename = f"heyu-{platform}-{video.route_id}.zip"
@@ -126,7 +139,11 @@ def _subtitle_cues(video: VideoScript) -> tuple[SubtitleCue, ...]:
     cues: list[SubtitleCue] = []
     previous_end = 0
     for index, shot in enumerate(video.shots):
-        start_ms, end_ms = _parse_timing(shot.seconds, index=index, previous_end=previous_end)
+        start_ms, end_ms = _parse_timing(
+            shot.seconds,
+            index=index,
+            previous_end=previous_end,
+        )
         text = shot.voiceover.strip()
         if not text:
             previous_end = end_ms
@@ -158,7 +175,7 @@ def _truncate(value: str, limit: int) -> str:
         return text
     if limit <= 1:
         return text[:limit]
-    return text[: limit - 1].rstrip("，,。.!！？?、；;：: ") + "…"
+    return text[: limit - 1].rstrip("，。？！、；;：: ") + "…"
 
 
 def _hashtags(*values: str) -> tuple[str, ...]:
@@ -174,7 +191,7 @@ def _hashtags(*values: str) -> tuple[str, ...]:
 
 def _route_label(route_id: str, locale: str) -> str:
     labels = {
-        "practical-hook": ("实用吸睛", "實用吸睛", "PracticalHook"),
+        "practical-hook": ("实用钩子", "實用鈎子", "PracticalHook"),
         "people-story": ("人物故事", "人物故事", "FarmerStory"),
         "playful-contrast": ("轻松反差", "輕鬆反差", "PlayfulContrast"),
     }

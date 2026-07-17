@@ -6,6 +6,7 @@ import secrets
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Literal
 from urllib.parse import quote
 
 from fastapi import (
@@ -31,6 +32,7 @@ from app.abuse import enforce_limit, network_subject, normalize_identifier
 from app.config import Settings, get_settings
 from app.database import Base, engine, get_db
 from app.document_import import (
+    DOCX_MEDIA_TYPE,
     PDF_MEDIA_TYPE,
     PPTX_MEDIA_TYPE,
     DocumentImportError,
@@ -38,12 +40,16 @@ from app.document_import import (
 )
 from app.knowledge_indexing import index_knowledge_source, retrieve_knowledge_context
 from app.marketing import (
+    MarketingModuleRegenerationRequest,
     MarketingPlanRequest,
     MarketingPlanResponse,
     MarketingProviderError,
     generate_marketing_plan,
     generate_marketing_preview,
+    regenerate_marketing_plan,
+    regenerate_marketing_preview,
 )
+from app.marketing_documents import export_marketing_plan_document
 from app.marketing_exports import export_saved_marketing_plan
 from app.media_analysis import (
     MAX_VIDEO_BYTES,
@@ -86,6 +92,7 @@ from app.provider_connections import (
 )
 from app.publication_workflow import (
     confirm_manual_publication,
+    create_marketing_plan_publication_task,
     create_publication_task,
     get_latest_export_package,
     get_publication_task,
@@ -155,6 +162,7 @@ from app.schemas import (
     MarketingPlanDetailRead,
     MarketingPlanRead,
     MarketingPlanVersionCreate,
+    MarketingPublicationTaskCreate,
     MediaAssetRead,
     MemberRead,
     MemberRoleUpdate,
@@ -385,6 +393,7 @@ workspace_pages = {
     "review",
     "audit",
     "members",
+    "providers",
 }
 if web_assets.is_dir():
     app.mount("/assets", StaticFiles(directory=web_assets), name="assets")
@@ -453,6 +462,29 @@ def create_marketing_plan(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="The configured marketing model could not produce a valid plan.",
+        ) from exc
+
+
+@app.post("/v1/marketing/regenerate/preview", response_model=MarketingPlanResponse)
+def preview_regenerated_marketing_module(
+    payload: MarketingModuleRegenerationRequest,
+) -> MarketingPlanResponse:
+    """Regenerate one selected deliverable in the zero-cost public demo."""
+    return regenerate_marketing_preview(payload)
+
+
+@app.post("/v1/marketing/regenerate", response_model=MarketingPlanResponse)
+def create_regenerated_marketing_module(
+    payload: MarketingModuleRegenerationRequest,
+    _: Actor = Depends(current_actor),
+) -> MarketingPlanResponse:
+    """Regenerate one deliverable with the configured provider."""
+    try:
+        return regenerate_marketing_plan(payload)
+    except MarketingProviderError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The configured marketing model could not regenerate the selected module.",
         ) from exc
 
 
@@ -556,6 +588,69 @@ def get_marketing_plan_export(
             "Cache-Control": "private, no-store",
             "X-Heyu-Content-SHA256": exported.package.content_hash,
         },
+    )
+
+
+@app.get("/v1/marketing-plans/{plan_id}/document")
+def get_marketing_plan_document(
+    plan_id: str,
+    format: Literal["docx", "pdf"],
+    version_id: str | None = None,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> Response:
+    """Download a saved plan version as an editable Word file or portable PDF."""
+
+    plan = get_marketing_plan(db, actor, plan_id)
+    try:
+        exported = export_marketing_plan_document(
+            plan,
+            format,
+            version_id=version_id,
+        )
+    except PlatformValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+    return Response(
+        content=exported.content,
+        media_type=exported.media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{exported.filename}"',
+            "Cache-Control": "private, no-store",
+            "X-Heyu-Content-SHA256": hashlib.sha256(exported.content).hexdigest(),
+        },
+    )
+
+
+@app.post(
+    "/v1/marketing-plans/{plan_id}/publication-tasks",
+    response_model=PublicationTaskCreated,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_marketing_plan_publication_task(
+    plan_id: str,
+    data: MarketingPublicationTaskCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> PublicationTaskCreated:
+    bundle = create_marketing_plan_publication_task(
+        db,
+        actor,
+        marketing_plan_id=plan_id,
+        marketing_plan_version_id=data.marketing_plan_version_id,
+        route_id=data.route_id,
+        calendar_day=data.calendar_day,
+        execution_mode=data.execution_mode,
+        scheduled_for=data.scheduled_for,
+        note=data.note,
+    )
+    return PublicationTaskCreated(
+        task=PublicationTaskRead.model_validate(bundle.task),
+        package=PlatformExportPackageRead.model_validate(bundle.package),
     )
 
 
@@ -1306,7 +1401,7 @@ async def preview_document_import(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail={
                 "code": "document_too_large",
-                "message": "PDF and PPTX files must be 15 MB or smaller.",
+                "message": "PDF, PPTX, and DOCX files must be 15 MB or smaller.",
             },
         )
     try:
@@ -1322,21 +1417,28 @@ async def preview_document_import(
             detail={"code": exc.code, "message": exc.detail},
         ) from exc
 
-    media_type = PDF_MEDIA_TYPE if extraction.document_kind == "pdf" else PPTX_MEDIA_TYPE
+    media_types = {
+        "pdf": PDF_MEDIA_TYPE,
+        "pptx": PPTX_MEDIA_TYPE,
+        "docx": DOCX_MEDIA_TYPE,
+    }
+    labels = {
+        "page": "Page",
+        "slide": "Slide",
+        "paragraph": "Paragraph",
+    }
     sections = [
         DocumentFragmentRead(
             kind=fragment.kind,
             number=fragment.number,
-            label=(
-                f"Page {fragment.number}" if fragment.kind == "page" else f"Slide {fragment.number}"
-            ),
+            label=f"{labels[fragment.kind]} {fragment.number}",
             text=fragment.text,
         )
         for fragment in extraction.fragments
     ]
     return DocumentImportPreviewRead(
         filename=filename,
-        media_type=media_type,
+        media_type=media_types[extraction.document_kind],
         content_sha256=hashlib.sha256(content).hexdigest(),
         text=extraction.full_text,
         sections=sections,

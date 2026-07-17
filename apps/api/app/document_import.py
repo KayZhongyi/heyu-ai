@@ -7,6 +7,7 @@ from pathlib import PurePath
 from typing import Any, Literal
 from zipfile import BadZipFile, ZipFile
 
+from docx import Document
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pypdf import PdfReader
@@ -14,15 +15,17 @@ from pypdf.errors import PdfReadError
 
 PDF_MEDIA_TYPE = "application/pdf"
 PPTX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 DEFAULT_MAX_PAGES = 100
 DEFAULT_MAX_SLIDES = 100
+DEFAULT_MAX_PARAGRAPHS = 1_000
 DEFAULT_MAX_CHARACTERS = 100_000
-MAX_PPTX_MEMBERS = 2_000
-MAX_PPTX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
-MAX_PPTX_COMPRESSION_RATIO = 200
+MAX_OFFICE_MEMBERS = 2_000
+MAX_OFFICE_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
+MAX_OFFICE_COMPRESSION_RATIO = 200
 
-FragmentKind = Literal["page", "slide"]
-DocumentKind = Literal["pdf", "pptx"]
+FragmentKind = Literal["page", "slide", "paragraph"]
+DocumentKind = Literal["pdf", "pptx", "docx"]
 
 
 @dataclass(frozen=True)
@@ -83,22 +86,27 @@ def extract_document_text(
     filename: str | None = None,
     max_pages: int = DEFAULT_MAX_PAGES,
     max_slides: int = DEFAULT_MAX_SLIDES,
+    max_paragraphs: int = DEFAULT_MAX_PARAGRAPHS,
     max_characters: int = DEFAULT_MAX_CHARACTERS,
 ) -> DocumentExtractionResult:
-    """Extract text from PDF or PPTX bytes without filesystem or network access."""
+    """Extract text from PDF, PPTX, or DOCX bytes without filesystem or network access."""
     if not data:
         raise EmptyDocumentError("The uploaded document is empty.")
     _validate_limit("max_pages", max_pages)
     _validate_limit("max_slides", max_slides)
+    _validate_limit("max_paragraphs", max_paragraphs)
     _validate_limit("max_characters", max_characters)
 
     document_kind = _detect_document_kind(data, media_type=media_type, filename=filename)
     if document_kind == "pdf":
         raw_fragments, warnings = _extract_pdf(data, max_pages=max_pages)
         fragment_kind: FragmentKind = "page"
-    else:
+    elif document_kind == "pptx":
         raw_fragments, warnings = _extract_pptx(data, max_slides=max_slides)
         fragment_kind = "slide"
+    else:
+        raw_fragments, warnings = _extract_docx(data, max_paragraphs=max_paragraphs)
+        fragment_kind = "paragraph"
 
     fragments, full_text, was_truncated = _truncate_fragments(
         raw_fragments,
@@ -109,6 +117,11 @@ def extract_document_text(
         warnings.append(f"Extracted text was truncated at the {max_characters}-character limit.")
     if not full_text:
         warnings.append("The document contains no extractable text.")
+        if document_kind == "pdf":
+            warnings.append(
+                "This may be a scanned PDF. OCR is optional and is not configured in "
+                "the zero-cost local demo; export a searchable PDF or paste reviewed text."
+            )
 
     return DocumentExtractionResult(
         document_kind=document_kind,
@@ -134,19 +147,23 @@ def _detect_document_kind(
         return "pdf"
     if normalized_media_type == PPTX_MEDIA_TYPE:
         return "pptx"
+    if normalized_media_type == DOCX_MEDIA_TYPE:
+        return "docx"
 
     suffix = PurePath(filename or "").suffix.lower()
     if suffix == ".pdf":
         return "pdf"
     if suffix == ".pptx":
         return "pptx"
+    if suffix == ".docx":
+        return "docx"
 
     if data.startswith(b"%PDF-"):
         return "pdf"
     if data.startswith(b"PK\x03\x04"):
-        return "pptx"
+        return _detect_office_archive_kind(data)
 
-    raise UnsupportedDocumentTypeError("Only PDF and PPTX documents are supported.")
+    raise UnsupportedDocumentTypeError("Only PDF, PPTX, and DOCX documents are supported.")
 
 
 def _extract_pdf(data: bytes, *, max_pages: int) -> tuple[list[str], list[str]]:
@@ -178,7 +195,7 @@ def _extract_pdf(data: bytes, *, max_pages: int) -> tuple[list[str], list[str]]:
 
 
 def _extract_pptx(data: bytes, *, max_slides: int) -> tuple[list[str], list[str]]:
-    _validate_pptx_archive(data)
+    _validate_office_archive(data, kind="pptx")
     try:
         presentation = Presentation(BytesIO(data))
         slide_count = len(presentation.slides)
@@ -196,31 +213,78 @@ def _extract_pptx(data: bytes, *, max_slides: int) -> tuple[list[str], list[str]
     return slide_texts, warnings
 
 
-def _validate_pptx_archive(data: bytes) -> None:
+def _extract_docx(data: bytes, *, max_paragraphs: int) -> tuple[list[str], list[str]]:
+    _validate_office_archive(data, kind="docx")
+    try:
+        document = Document(BytesIO(data))
+        all_fragments = [
+            text
+            for text in (
+                [paragraph.text.strip() for paragraph in document.paragraphs]
+                + [
+                    " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                    for table in document.tables
+                    for row in table.rows
+                ]
+            )
+            if text
+        ]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise InvalidDocumentError("The DOCX document is corrupt or invalid.") from exc
+    except Exception as exc:
+        raise InvalidDocumentError("The DOCX document could not be read.") from exc
+
+    warnings: list[str] = []
+    if len(all_fragments) > max_paragraphs:
+        warnings.append(
+            f"Only the first {max_paragraphs} of {len(all_fragments)} DOCX text "
+            "blocks were processed."
+        )
+    return all_fragments[:max_paragraphs], warnings
+
+
+def _detect_office_archive_kind(data: bytes) -> Literal["pptx", "docx"]:
+    try:
+        with ZipFile(BytesIO(data)) as archive:
+            names = {member.filename for member in archive.infolist()}
+    except (BadZipFile, OSError, ValueError) as exc:
+        raise InvalidDocumentError("The Office document is corrupt or invalid.") from exc
+    if "ppt/presentation.xml" in names:
+        return "pptx"
+    if "word/document.xml" in names:
+        return "docx"
+    raise UnsupportedDocumentTypeError("The uploaded archive is not a valid PPTX or DOCX file.")
+
+
+def _validate_office_archive(data: bytes, *, kind: Literal["pptx", "docx"]) -> None:
     try:
         with ZipFile(BytesIO(data)) as archive:
             members = archive.infolist()
     except (BadZipFile, OSError, ValueError) as exc:
         raise InvalidDocumentError("The PPTX document is corrupt or invalid.") from exc
 
-    if len(members) > MAX_PPTX_MEMBERS:
-        raise InvalidDocumentError("The PPTX document contains too many archive entries.")
+    label = kind.upper()
+    if len(members) > MAX_OFFICE_MEMBERS:
+        raise InvalidDocumentError(f"The {label} document contains too many archive entries.")
 
     names = {member.filename for member in members}
-    if "[Content_Types].xml" not in names or "ppt/presentation.xml" not in names:
-        raise InvalidDocumentError("The uploaded archive is not a valid PPTX presentation.")
+    required_part = "ppt/presentation.xml" if kind == "pptx" else "word/document.xml"
+    if "[Content_Types].xml" not in names or required_part not in names:
+        raise InvalidDocumentError(f"The uploaded archive is not a valid {label} document.")
 
     total_uncompressed = sum(member.file_size for member in members)
-    if total_uncompressed > MAX_PPTX_UNCOMPRESSED_BYTES:
-        raise InvalidDocumentError("The PPTX document expands beyond the safe processing limit.")
+    if total_uncompressed > MAX_OFFICE_UNCOMPRESSED_BYTES:
+        raise InvalidDocumentError(
+            f"The {label} document expands beyond the safe processing limit."
+        )
 
     for member in members:
         if (
             member.file_size > 1_000_000
             and member.compress_size > 0
-            and member.file_size / member.compress_size > MAX_PPTX_COMPRESSION_RATIO
+            and member.file_size / member.compress_size > MAX_OFFICE_COMPRESSION_RATIO
         ):
-            raise InvalidDocumentError("The PPTX document has an unsafe compression ratio.")
+            raise InvalidDocumentError(f"The {label} document has an unsafe compression ratio.")
 
 
 def _extract_slide_text(slide: Any) -> str:

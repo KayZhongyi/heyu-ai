@@ -30,6 +30,7 @@ def _create_source(
     *,
     title: str,
     content: str,
+    document_sections: list[dict] | None = None,
 ) -> dict:
     response = client.post(
         "/v1/knowledge",
@@ -40,6 +41,7 @@ def _create_source(
             "content": content,
             "citation_label": f"{title} citation",
             "source_filename": "farm-record.txt",
+            "document_sections": document_sections or [],
         },
     )
     assert response.status_code == 201, response.text
@@ -136,6 +138,47 @@ def test_approval_builds_lexical_index_and_preview_manifest(
     assert hit["lexical_rank"] == 1
     assert hit["vector_rank"] is None
     assert hit["rrf_score"] > 0
+
+
+def test_structured_document_sections_preserve_page_locators(
+    client: TestClient,
+    auth: dict[str, str],
+    db: Session,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "app.knowledge_indexing.configured_embedding_provider",
+        lambda settings=None: None,
+    )
+    source = _create_source(
+        client,
+        auth,
+        title="Seasonal tomato handbook",
+        content="Page one growing notes\n\nPage two shipping notes",
+        document_sections=[
+            {"kind": "page", "number": 1, "label": "Page 1", "text": "Growing notes"},
+            {
+                "kind": "page",
+                "number": 2,
+                "label": "Page 2",
+                "text": "Cold-chain shipping notes",
+            },
+        ],
+    )
+
+    approved = _submit_and_review(client, auth, source["id"])
+    chunks = list(
+        db.scalars(
+            select(KnowledgeChunk)
+            .where(KnowledgeChunk.source_id == approved["id"])
+            .order_by(KnowledgeChunk.ordinal)
+        )
+    )
+
+    assert [chunk.ordinal for chunk in chunks] == [0, 1]
+    assert [chunk.locator["page"] for chunk in chunks] == [1, 2]
+    assert chunks[1].locator["section_label"] == "Page 2"
+    assert chunks[1].locator["char_start"] == 0
 
 
 def test_fake_embeddings_enable_hybrid_retrieval(

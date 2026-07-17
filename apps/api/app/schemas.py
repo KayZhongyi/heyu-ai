@@ -208,6 +208,13 @@ class AssetReview(BaseModel):
     note: str = Field(default="", max_length=2000)
 
 
+class KnowledgeDocumentSection(BaseModel):
+    kind: Literal["page", "slide", "paragraph"]
+    number: int = Field(ge=1)
+    label: str = Field(default="", max_length=120)
+    text: str = Field(max_length=100_000)
+
+
 class KnowledgeSourceCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     kind: KnowledgeKind
@@ -215,6 +222,10 @@ class KnowledgeSourceCreate(BaseModel):
     citation_label: str = Field(default="", max_length=255)
     source_filename: str = Field(default="", max_length=255)
     media_type: str = Field(default="text/plain", max_length=120)
+    document_sections: list[KnowledgeDocumentSection] = Field(
+        default_factory=list,
+        max_length=1_000,
+    )
     brand_id: str | None = None
     product_id: str | None = None
 
@@ -234,6 +245,7 @@ class KnowledgeSourceRead(ORMModel):
     citation_label: str
     source_filename: str
     media_type: str
+    document_sections: list[KnowledgeDocumentSection]
     content_sha256: str
     source_group_id: str
     parent_source_id: str | None
@@ -750,8 +762,12 @@ class PublicationCreate(BaseModel):
 class PublicationRead(ORMModel):
     id: str
     organization_id: str
-    project_id: str
-    content_version_id: str
+    project_id: str | None
+    content_version_id: str | None
+    marketing_plan_id: str | None
+    marketing_plan_version_id: str | None
+    route_id: str
+    calendar_day: int | None
     platform: str
     external_url: str
     external_content_id: str
@@ -782,11 +798,26 @@ class PublicationTaskCreate(BaseModel):
     note: str = Field(default="", max_length=2000)
 
 
+class MarketingPublicationTaskCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    marketing_plan_version_id: str | None = None
+    route_id: Literal["practical-hook", "people-story", "playful-contrast"]
+    calendar_day: int = Field(ge=1, le=7)
+    scheduled_for: datetime | None = None
+    execution_mode: Literal["export_only", "mock"] = "export_only"
+    note: str = Field(default="", max_length=2000)
+
+
 class PublicationTaskRead(ORMModel):
     id: str
     organization_id: str
-    project_id: str
-    content_version_id: str
+    project_id: str | None
+    content_version_id: str | None
+    marketing_plan_id: str | None
+    marketing_plan_version_id: str | None
+    route_id: str
+    calendar_day: int | None
     platform: str
     execution_mode: str
     status: str
