@@ -153,6 +153,24 @@ async function generateDemoCase(
   assert.equal(await page.locator("#result-content .day-list > li").count(), 7);
 }
 
+async function expectDemoSelectionClearsAfterManualEdit(page, caseId) {
+  await page
+    .locator('[name="audience"]')
+    .fill(`manual audience override for ${caseId} ${Date.now()}`);
+  assert.equal(
+    await page.locator(`[data-demo-case="${caseId}"]`).evaluate((node) =>
+      node.classList.contains("active"),
+    ),
+    false,
+    `${caseId} demo button stayed active after a manual form edit`,
+  );
+  assert.equal(
+    await page.locator("[data-demo-case].active").count(),
+    0,
+    `${caseId} left another demo button active after a manual form edit`,
+  );
+}
+
 async function expectLocalizedClaimError(page, locale, riskyDescription, expectedMessage) {
   await page.goto(`${baseUrl}/create/?lang=${locale}`, { waitUntil: "networkidle" });
   await page.locator('[name="product_name"]').fill(
@@ -268,6 +286,7 @@ async function main() {
             ? `simple-mode-${caseId}.png`
             : `simple-mode-${locale}-${caseId}.png`,
         );
+        await expectDemoSelectionClearsAfterManualEdit(page, caseId);
       }
     }
 
