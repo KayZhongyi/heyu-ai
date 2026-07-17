@@ -148,6 +148,23 @@ MARKETING_CACHE_MAX_ENTRIES=256
 MARKETING_FALLBACK_TO_MOCK=true
 ```
 
+先做零成本本地探针，确认脚本和解析器可用且不会访问网络：
+
+```powershell
+.\.venv\Scripts\python.exe scripts/probe-openai-compatible-provider.py --mock
+```
+
+再用真实 OpenAI-compatible 服务做最小协议探针（只验证 Bearer Token、`/chat/completions`、`response_format=json_object` 和 JSON 对象解析；不代表已完成某个厂商模型的业务质量认证）：
+
+```powershell
+$env:AI_BASE_URL='https://your-provider.example/v1'
+$env:AI_MODEL='your-model-name'
+$env:AI_API_KEY='replace-with-your-own-key'
+.\.venv\Scripts\python.exe scripts/probe-openai-compatible-provider.py
+```
+
+探针输出只包含安全摘要，不会打印 API Key。通过探针后，再用登录后的营销方案接口验证具体农产品题集、三语质量、延迟和成本。
+
 说明：
 
 - ChatGPT/Codex 订阅不是模型 API Key；
