@@ -291,6 +291,7 @@ class KnowledgeSource(Base):
     citation_label: Mapped[str] = mapped_column(String(255), default="")
     source_filename: Mapped[str] = mapped_column(String(255), default="")
     media_type: Mapped[str] = mapped_column(String(120), default="text/plain")
+    document_sections: Mapped[list] = mapped_column(JSON, default=list)
     content_sha256: Mapped[str] = mapped_column(String(64), default="")
     source_group_id: Mapped[str] = mapped_column(String(36), index=True)
     parent_source_id: Mapped[str | None] = mapped_column(

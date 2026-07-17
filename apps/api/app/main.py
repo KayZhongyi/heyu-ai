@@ -31,6 +31,7 @@ from app.abuse import enforce_limit, network_subject, normalize_identifier
 from app.config import Settings, get_settings
 from app.database import Base, engine, get_db
 from app.document_import import (
+    DOCX_MEDIA_TYPE,
     PDF_MEDIA_TYPE,
     PPTX_MEDIA_TYPE,
     DocumentImportError,
@@ -1365,7 +1366,7 @@ async def preview_document_import(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail={
                 "code": "document_too_large",
-                "message": "PDF and PPTX files must be 15 MB or smaller.",
+                "message": "PDF, PPTX, and DOCX files must be 15 MB or smaller.",
             },
         )
     try:
@@ -1381,21 +1382,28 @@ async def preview_document_import(
             detail={"code": exc.code, "message": exc.detail},
         ) from exc
 
-    media_type = PDF_MEDIA_TYPE if extraction.document_kind == "pdf" else PPTX_MEDIA_TYPE
+    media_types = {
+        "pdf": PDF_MEDIA_TYPE,
+        "pptx": PPTX_MEDIA_TYPE,
+        "docx": DOCX_MEDIA_TYPE,
+    }
+    labels = {
+        "page": "Page",
+        "slide": "Slide",
+        "paragraph": "Paragraph",
+    }
     sections = [
         DocumentFragmentRead(
             kind=fragment.kind,
             number=fragment.number,
-            label=(
-                f"Page {fragment.number}" if fragment.kind == "page" else f"Slide {fragment.number}"
-            ),
+            label=f"{labels[fragment.kind]} {fragment.number}",
             text=fragment.text,
         )
         for fragment in extraction.fragments
     ]
     return DocumentImportPreviewRead(
         filename=filename,
-        media_type=media_type,
+        media_type=media_types[extraction.document_kind],
         content_sha256=hashlib.sha256(content).hexdigest(),
         text=extraction.full_text,
         sections=sections,

@@ -208,6 +208,13 @@ class AssetReview(BaseModel):
     note: str = Field(default="", max_length=2000)
 
 
+class KnowledgeDocumentSection(BaseModel):
+    kind: Literal["page", "slide", "paragraph"]
+    number: int = Field(ge=1)
+    label: str = Field(default="", max_length=120)
+    text: str = Field(max_length=100_000)
+
+
 class KnowledgeSourceCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     kind: KnowledgeKind
@@ -215,6 +222,10 @@ class KnowledgeSourceCreate(BaseModel):
     citation_label: str = Field(default="", max_length=255)
     source_filename: str = Field(default="", max_length=255)
     media_type: str = Field(default="text/plain", max_length=120)
+    document_sections: list[KnowledgeDocumentSection] = Field(
+        default_factory=list,
+        max_length=1_000,
+    )
     brand_id: str | None = None
     product_id: str | None = None
 
@@ -234,6 +245,7 @@ class KnowledgeSourceRead(ORMModel):
     citation_label: str
     source_filename: str
     media_type: str
+    document_sections: list[KnowledgeDocumentSection]
     content_sha256: str
     source_group_id: str
     parent_source_id: str | None

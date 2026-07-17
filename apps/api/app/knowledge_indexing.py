@@ -203,19 +203,7 @@ def index_knowledge_source(
     target_version = source.index_version + 1
     source.index_status = KnowledgeIndexStatus.indexing
     source.index_error = ""
-    chunks = chunk_text(
-        ChunkInput(
-            organization_id=source.organization_id,
-            source_id=source.id,
-            source_group_id=source.source_group_id,
-            revision=source.revision_number,
-            text=source.content,
-            review_status=source.status.value,
-            is_latest_revision=True,
-            title=source.title,
-            locator={"filename": source.source_filename} if source.source_filename else {},
-        )
-    )
+    chunks = _source_chunks(source)
     vectors: list[list[float] | None] = [None] * len(chunks)
     provider = embedding_provider or resolve_organization_embedding_provider(
         db,
@@ -255,6 +243,92 @@ def index_knowledge_source(
     db.commit()
     db.refresh(source)
     return source
+
+
+def _source_chunks(source: KnowledgeSource) -> tuple[KnowledgeChunk, ...]:
+    base_locator = {"filename": source.source_filename} if source.source_filename else {}
+    sections = source.document_sections if isinstance(source.document_sections, list) else []
+    if not sections:
+        return chunk_text(
+            ChunkInput(
+                organization_id=source.organization_id,
+                source_id=source.id,
+                source_group_id=source.source_group_id,
+                revision=source.revision_number,
+                text=source.content,
+                review_status=source.status.value,
+                is_latest_revision=True,
+                title=source.title,
+                locator=base_locator,
+            )
+        )
+
+    combined: list[KnowledgeChunk] = []
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        kind = section.get("kind")
+        number = section.get("number")
+        text = section.get("text")
+        if kind not in {"page", "slide", "paragraph"}:
+            continue
+        if not isinstance(number, int) or isinstance(number, bool) or number < 1:
+            continue
+        if not isinstance(text, str) or not text.strip():
+            continue
+        locator = {
+            **base_locator,
+            kind: number,
+            "section_label": str(section.get("label") or ""),
+        }
+        section_chunks = chunk_text(
+            ChunkInput(
+                organization_id=source.organization_id,
+                source_id=source.id,
+                source_group_id=source.source_group_id,
+                revision=source.revision_number,
+                text=text,
+                review_status=source.status.value,
+                is_latest_revision=True,
+                title=source.title,
+                locator=locator,
+            )
+        )
+        for chunk in section_chunks:
+            ordinal = len(combined)
+            stable_key = (
+                f"{source.organization_id}:{source.id}:{source.revision_number}:"
+                f"{ordinal}:{chunk.text_sha256}"
+            )
+            combined.append(
+                KnowledgeChunk(
+                    id=hashlib.sha256(stable_key.encode("utf-8")).hexdigest(),
+                    organization_id=chunk.organization_id,
+                    source_id=chunk.source_id,
+                    source_group_id=chunk.source_group_id,
+                    revision=chunk.revision,
+                    ordinal=ordinal,
+                    text=chunk.text,
+                    text_sha256=chunk.text_sha256,
+                    locator=dict(chunk.locator),
+                    title=chunk.title,
+                )
+            )
+    if combined:
+        return tuple(combined)
+    return chunk_text(
+        ChunkInput(
+            organization_id=source.organization_id,
+            source_id=source.id,
+            source_group_id=source.source_group_id,
+            revision=source.revision_number,
+            text=source.content,
+            review_status=source.status.value,
+            is_latest_revision=True,
+            title=source.title,
+            locator=base_locator,
+        )
+    )
 
 
 def retrieve_knowledge_context(
