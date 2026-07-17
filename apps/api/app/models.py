@@ -2,7 +2,18 @@ import uuid
 from datetime import UTC, date, datetime
 from enum import StrEnum
 
-from sqlalchemy import JSON, Date, DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -631,6 +642,26 @@ class ContentVersion(Base):
 
 class Publication(Base):
     __tablename__ = "publications"
+    __table_args__ = (
+        Index(
+            "uq_publications_org_platform_external_content_id",
+            "organization_id",
+            "platform",
+            "external_content_id",
+            unique=True,
+            sqlite_where=text("external_content_id <> ''"),
+            postgresql_where=text("external_content_id <> ''"),
+        ),
+        Index(
+            "uq_publications_org_platform_external_url",
+            "organization_id",
+            "platform",
+            "external_url",
+            unique=True,
+            sqlite_where=text("external_url <> ''"),
+            postgresql_where=text("external_url <> ''"),
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
     project_id: Mapped[str | None] = mapped_column(ForeignKey("content_projects.id"), index=True)

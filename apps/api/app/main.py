@@ -6,6 +6,7 @@ import secrets
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Literal
 from urllib.parse import quote
 
 from fastapi import (
@@ -48,6 +49,7 @@ from app.marketing import (
     regenerate_marketing_plan,
     regenerate_marketing_preview,
 )
+from app.marketing_documents import export_marketing_plan_document
 from app.marketing_exports import export_saved_marketing_plan
 from app.media_analysis import (
     MAX_VIDEO_BYTES,
@@ -585,6 +587,39 @@ def get_marketing_plan_export(
             "Content-Disposition": f'attachment; filename="{exported.filename}"',
             "Cache-Control": "private, no-store",
             "X-Heyu-Content-SHA256": exported.package.content_hash,
+        },
+    )
+
+
+@app.get("/v1/marketing-plans/{plan_id}/document")
+def get_marketing_plan_document(
+    plan_id: str,
+    format: Literal["docx", "pdf"],
+    version_id: str | None = None,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> Response:
+    """Download a saved plan version as an editable Word file or portable PDF."""
+
+    plan = get_marketing_plan(db, actor, plan_id)
+    try:
+        exported = export_marketing_plan_document(
+            plan,
+            format,
+            version_id=version_id,
+        )
+    except PlatformValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+    return Response(
+        content=exported.content,
+        media_type=exported.media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{exported.filename}"',
+            "Cache-Control": "private, no-store",
+            "X-Heyu-Content-SHA256": hashlib.sha256(exported.content).hexdigest(),
         },
     )
 

@@ -118,6 +118,26 @@ def test_marketing_plan_calendar_task_to_operation_review(
     assert review.json()["publication_id"] == publication["id"]
     assert review.json()["recommendations"]
 
+    legacy_brief = client.post(
+        f"/v1/publications/{publication['id']}/improvement-briefs",
+        headers=auth,
+        json={
+            "video_diagnosis_id": "not-used-for-marketing-plan",
+            "title": "Legacy brief must not be created",
+            "objective": "Use the marketing-plan review path",
+            "actions": [
+                {
+                    "category": "hook",
+                    "instruction": "Refine the marketing plan",
+                    "evidence": "Imported operation metrics",
+                }
+            ],
+            "guardrails": [],
+        },
+    )
+    assert legacy_brief.status_code == 422, legacy_brief.text
+    assert "marketing plan" in legacy_brief.json()["detail"]
+
 
 def test_marketing_publication_task_rejects_foreign_version_and_mock_confirmation(
     client,
@@ -151,14 +171,13 @@ def test_marketing_publication_task_rejects_foreign_version_and_mock_confirmatio
     )
     assert mock_task.status_code == 201, mock_task.text
     task_id = mock_task.json()["task"]["id"]
-    assert (
-        client.post(
-            f"/v1/publication-tasks/{task_id}/transition",
-            headers=auth,
-            json={"to_status": "awaiting_manual_confirmation"},
-        ).status_code
-        == 200
+    transition = client.post(
+        f"/v1/publication-tasks/{task_id}/transition",
+        headers=auth,
+        json={"to_status": "awaiting_manual_confirmation"},
     )
+    assert transition.status_code == 409, transition.text
+    assert "export package is ready" in transition.json()["detail"]
     refused = client.post(
         f"/v1/publication-tasks/{task_id}/confirm",
         headers=auth,

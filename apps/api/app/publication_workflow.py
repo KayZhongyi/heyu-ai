@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -41,6 +42,10 @@ from app.platform_exports import (
     PlatformExportPackage,
     PlatformValidationError,
     generate_platform_export,
+)
+from app.publication_locators import (
+    assert_publication_locator_available,
+    locator_conflict,
 )
 from app.schemas import Actor, PublicationCreate
 
@@ -364,6 +369,14 @@ def transition_publication_task(
             status_code=status.HTTP_409_CONFLICT,
             detail="Use manual publication confirmation to mark a task as published",
         )
+    if task.execution_mode == "mock" and to_status == "awaiting_manual_confirmation":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Mock tasks are complete when the export package is ready and cannot "
+                "enter manual publication confirmation"
+            ),
+        )
     _validate_transition(task.status, to_status)
     previous = task.status
     task.status = to_status
@@ -427,6 +440,13 @@ def confirm_manual_publication(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="External URL must be an absolute HTTP or HTTPS URL",
             )
+    assert_publication_locator_available(
+        db,
+        organization_id=actor.organization_id,
+        platform=task.platform,
+        external_url=normalized_url,
+        external_content_id=normalized_content_id,
+    )
 
     published_timestamp = published_at or utc_now()
     if task.project_id is not None and task.content_version_id is not None:
@@ -469,7 +489,11 @@ def confirm_manual_publication(
             created_by=actor.user_id,
         )
         db.add(publication)
-        db.flush()
+        try:
+            db.flush()
+        except IntegrityError as exc:
+            db.rollback()
+            raise locator_conflict() from exc
         from app.services import audit
 
         audit(

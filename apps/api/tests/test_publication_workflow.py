@@ -32,7 +32,8 @@ from app.publication_workflow import (
     locate_export_package_download,
     transition_publication_task,
 )
-from app.schemas import Actor
+from app.schemas import Actor, PublicationCreate
+from app.services import create_publication
 
 
 def _export_payload() -> dict[str, Any]:
@@ -130,15 +131,19 @@ def _create_task(
     storage_root: Path,
     *,
     execution_mode: str = "export_only",
+    platform: str = "douyin",
 ):
+    payload = _export_payload()
+    if platform == "xiaohongshu":
+        payload["title"] = "Fresh tomatoes"
     return create_publication_task(
         db,
         actor,
         project_id=project.id,
         content_version_id=version.id,
-        platform="douyin",
+        platform=platform,
         execution_mode=execution_mode,
-        export_payload=_export_payload(),
+        export_payload=payload,
         storage_root=storage_root,
     )
 
@@ -148,6 +153,85 @@ def _assert_http_error(expected_status: int, call) -> HTTPException:
         call()
     assert raised.value.status_code == expected_status
     return raised.value
+
+
+def _publication_input(
+    project: ContentProject,
+    version: ContentVersion,
+    *,
+    platform: str = "douyin",
+    external_url: str = "",
+    external_content_id: str = "",
+) -> PublicationCreate:
+    return PublicationCreate(
+        project_id=project.id,
+        content_version_id=version.id,
+        platform=platform,
+        external_url=external_url,
+        external_content_id=external_content_id,
+        published_at=datetime(2026, 7, 17, 8, tzinfo=UTC),
+    )
+
+
+def test_legacy_publication_entrypoint_enforces_tenant_platform_locator_uniqueness(db: Session):
+    actor, project, version = _create_workspace(db, slug="legacy-locator")
+    second_actor, second_project, second_version = _create_workspace(db, slug="other-locator")
+    first = create_publication(
+        db,
+        actor,
+        _publication_input(
+            project,
+            version,
+            external_url=" https://example.test/video/one ",
+            external_content_id=" item-one ",
+        ),
+    )
+
+    assert first.external_url == "https://example.test/video/one"
+    assert first.external_content_id == "item-one"
+    _assert_http_error(
+        409,
+        lambda: create_publication(
+            db,
+            actor,
+            _publication_input(project, version, external_content_id="item-one"),
+        ),
+    )
+    _assert_http_error(
+        409,
+        lambda: create_publication(
+            db,
+            actor,
+            _publication_input(
+                project,
+                version,
+                external_url="https://example.test/video/one",
+            ),
+        ),
+    )
+
+    # A locator is scoped to one tenant and one platform, while blanks remain reusable.
+    create_publication(
+        db,
+        actor,
+        _publication_input(
+            project,
+            version,
+            platform="xiaohongshu",
+            external_content_id="item-one",
+        ),
+    )
+    create_publication(
+        db,
+        second_actor,
+        _publication_input(
+            second_project,
+            second_version,
+            external_content_id="item-one",
+        ),
+    )
+    create_publication(db, actor, _publication_input(project, version))
+    create_publication(db, actor, _publication_input(project, version))
 
 
 def test_create_task_persists_deterministic_private_export_and_events(
@@ -335,12 +419,16 @@ def test_mock_task_can_never_create_real_publication(
         tmp_path,
         execution_mode="mock",
     )
-    transition_publication_task(
-        db,
-        actor,
-        bundle.task.id,
-        to_status="awaiting_manual_confirmation",
+    error = _assert_http_error(
+        409,
+        lambda: transition_publication_task(
+            db,
+            actor,
+            bundle.task.id,
+            to_status="awaiting_manual_confirmation",
+        ),
     )
+    assert "complete when the export package is ready" in str(error.detail)
 
     _assert_http_error(
         409,
@@ -352,6 +440,72 @@ def test_mock_task_can_never_create_real_publication(
         ),
     )
     assert db.scalar(select(func.count()).select_from(Publication)) == 0
+    assert get_publication_task(db, actor, bundle.task.id).status == "package_ready"
+
+
+def test_manual_confirmation_rejects_duplicate_platform_locators(
+    db: Session,
+    tmp_path: Path,
+):
+    actor, project, version = _create_workspace(db, slug="unique-locators")
+    first = _create_task(db, actor, project, version, tmp_path)
+    duplicate_id = _create_task(db, actor, project, version, tmp_path)
+    duplicate_url = _create_task(db, actor, project, version, tmp_path)
+    other_platform = _create_task(
+        db,
+        actor,
+        project,
+        version,
+        tmp_path,
+        platform="xiaohongshu",
+    )
+    for bundle in (first, duplicate_id, duplicate_url, other_platform):
+        transition_publication_task(
+            db,
+            actor,
+            bundle.task.id,
+            to_status="awaiting_manual_confirmation",
+        )
+
+    confirm_manual_publication(
+        db,
+        actor,
+        first.task.id,
+        external_url="https://www.douyin.com/video/shared",
+        external_content_id="shared-content-id",
+    )
+
+    id_error = _assert_http_error(
+        409,
+        lambda: confirm_manual_publication(
+            db,
+            actor,
+            duplicate_id.task.id,
+            external_content_id="shared-content-id",
+        ),
+    )
+    assert "content ID is already linked" in str(id_error.detail)
+
+    url_error = _assert_http_error(
+        409,
+        lambda: confirm_manual_publication(
+            db,
+            actor,
+            duplicate_url.task.id,
+            external_url="https://www.douyin.com/video/shared",
+        ),
+    )
+    assert "URL is already linked" in str(url_error.detail)
+
+    publication = confirm_manual_publication(
+        db,
+        actor,
+        other_platform.task.id,
+        external_url="https://www.douyin.com/video/shared",
+        external_content_id="shared-content-id",
+    )
+    assert publication.platform == "xiaohongshu"
+    assert db.scalar(select(func.count()).select_from(Publication)) == 2
 
 
 def test_tenant_isolation_hides_tasks_packages_and_downloads(

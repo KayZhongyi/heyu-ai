@@ -1,0 +1,254 @@
+{
+  "dataset_version": "heyu-rag-citations-v1",
+  "description": "Offline multilingual citation retrieval checks for agricultural marketing knowledge.",
+  "top_ks": [
+    1,
+    3,
+    5
+  ],
+  "thresholds": {
+    "minimum_recall_at_k": {
+      "1": 1.0,
+      "3": 1.0,
+      "5": 1.0
+    },
+    "minimum_mrr": 1.0,
+    "minimum_locator_accuracy": 1.0
+  },
+  "cases": [
+    {
+      "case_id": "zh-cn-pdf-harvest-window",
+      "locale": "zh-CN",
+      "document_type": "pdf",
+      "query": "当季番茄适合在什么时间采摘，怎样判断成熟度？",
+      "relevant_chunk_ids": [
+        "cn-pdf-page-3"
+      ],
+      "expected_locator": {
+        "page": 3
+      },
+      "expected_strategy": "lexical-v1-fallback",
+      "candidates": [
+        {
+          "chunk_id": "cn-pdf-page-1",
+          "text": "番茄种植地采用滴灌方式，每周根据土壤湿度调整灌溉频次。",
+          "locator": {
+            "filename": "当季番茄种植手册.pdf",
+            "page": 1
+          }
+        },
+        {
+          "chunk_id": "cn-pdf-page-3",
+          "text": "当季番茄在清晨采摘，果面转红八成、果肩均匀着色时成熟度较合适。采摘后及时放入周转筐，减少挤压。",
+          "locator": {
+            "filename": "当季番茄种植手册.pdf",
+            "page": 3
+          }
+        },
+        {
+          "chunk_id": "cn-pdf-page-6",
+          "text": "纸箱包装应保持通风，箱内使用隔层，运输车辆避免长时间暴晒。",
+          "locator": {
+            "filename": "当季番茄种植手册.pdf",
+            "page": 6
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "zh-cn-pdf-delivery-packaging",
+      "locale": "zh-CN",
+      "document_type": "pdf",
+      "query": "番茄发货包装怎样减少运输挤压？",
+      "relevant_chunk_ids": [
+        "cn-pack-page-6"
+      ],
+      "expected_locator": {
+        "page": 6
+      },
+      "expected_strategy": "lexical-v1-fallback",
+      "candidates": [
+        {
+          "chunk_id": "cn-pack-page-2",
+          "text": "田间管理需要记录温度、湿度和灌溉时间。",
+          "locator": {
+            "filename": "番茄采后处理.pdf",
+            "page": 2
+          }
+        },
+        {
+          "chunk_id": "cn-pack-page-4",
+          "text": "采摘人员应佩戴手套，并按果实大小进行初步分级。",
+          "locator": {
+            "filename": "番茄采后处理.pdf",
+            "page": 4
+          }
+        },
+        {
+          "chunk_id": "cn-pack-page-6",
+          "text": "番茄发货时使用带通风孔的加厚纸箱，箱内增加蜂窝隔层并控制单箱重量，可以减少运输挤压。",
+          "locator": {
+            "filename": "番茄采后处理.pdf",
+            "page": 6
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "zh-hk-pptx-live-opening",
+      "locale": "zh-HK",
+      "document_type": "pptx",
+      "query": "荔枝直播開場應先展示甚麼畫面？",
+      "relevant_chunk_ids": [
+        "hk-pptx-slide-2"
+      ],
+      "expected_locator": {
+        "slide": 2
+      },
+      "expected_strategy": "lexical-v1-fallback",
+      "candidates": [
+        {
+          "chunk_id": "hk-pptx-slide-1",
+          "text": "荔枝內容企劃的目標觀眾包括家庭消費者及節慶送禮人士。",
+          "locator": {
+            "filename": "荔枝直播企劃.pptx",
+            "slide": 1
+          }
+        },
+        {
+          "chunk_id": "hk-pptx-slide-2",
+          "text": "直播開場先用近鏡展示剛剪下的荔枝果串，再剝開果殼呈現果肉和汁水，讓觀眾立即看見新鮮度。",
+          "locator": {
+            "filename": "荔枝直播企劃.pptx",
+            "slide": 2
+          }
+        },
+        {
+          "chunk_id": "hk-pptx-slide-5",
+          "text": "直播結尾可提醒觀眾查看規格、配送範圍及預計到貨時間。",
+          "locator": {
+            "filename": "荔枝直播企劃.pptx",
+            "slide": 5
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "zh-hk-pptx-cold-chain",
+      "locale": "zh-HK",
+      "document_type": "pptx",
+      "query": "荔枝配送如何使用冰袋和保溫箱？",
+      "relevant_chunk_ids": [
+        "hk-cold-slide-4"
+      ],
+      "expected_locator": {
+        "slide": 4
+      },
+      "expected_strategy": "lexical-v1-fallback",
+      "candidates": [
+        {
+          "chunk_id": "hk-cold-slide-2",
+          "text": "採收時應保留短果枝，並剔除裂果及受損果實。",
+          "locator": {
+            "filename": "荔枝配送簡報.pptx",
+            "slide": 2
+          }
+        },
+        {
+          "chunk_id": "hk-cold-slide-4",
+          "text": "荔枝配送採用食品級冰袋配合保溫箱，冰袋與果實之間加入隔層，避免直接接觸造成凍傷。",
+          "locator": {
+            "filename": "荔枝配送簡報.pptx",
+            "slide": 4
+          }
+        },
+        {
+          "chunk_id": "hk-cold-slide-7",
+          "text": "短片封面宜使用完整果串，標題保持簡短清晰。",
+          "locator": {
+            "filename": "荔枝配送簡報.pptx",
+            "slide": 7
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "en-docx-blueberry-storage",
+      "locale": "en",
+      "document_type": "docx",
+      "query": "What storage temperature is recommended for freshly packed blueberries?",
+      "relevant_chunk_ids": [
+        "en-docx-paragraph-2"
+      ],
+      "expected_locator": {
+        "paragraph": 2
+      },
+      "expected_strategy": "lexical-v1-fallback",
+      "candidates": [
+        {
+          "chunk_id": "en-docx-paragraph-1",
+          "text": "Blueberries are sorted by size and checked for damaged fruit before packing.",
+          "locator": {
+            "filename": "blueberry-handling.docx",
+            "paragraph": 1
+          }
+        },
+        {
+          "chunk_id": "en-docx-paragraph-2",
+          "text": "Freshly packed blueberries should be moved into cold storage at 1 to 4 degrees Celsius as soon as possible.",
+          "locator": {
+            "filename": "blueberry-handling.docx",
+            "paragraph": 2
+          }
+        },
+        {
+          "chunk_id": "en-docx-paragraph-5",
+          "text": "The farm story can focus on the harvest team and the morning picking routine.",
+          "locator": {
+            "filename": "blueberry-handling.docx",
+            "paragraph": 5
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "en-docx-video-hook",
+      "locale": "en",
+      "document_type": "docx",
+      "query": "Which opening shot can prove that the sweet corn was picked this morning?",
+      "relevant_chunk_ids": [
+        "en-hook-paragraph-4"
+      ],
+      "expected_locator": {
+        "paragraph": 4
+      },
+      "expected_strategy": "lexical-v1-fallback",
+      "candidates": [
+        {
+          "chunk_id": "en-hook-paragraph-2",
+          "text": "The caption should state the available pack sizes and the delivery area.",
+          "locator": {
+            "filename": "sweet-corn-video-guide.docx",
+            "paragraph": 2
+          }
+        },
+        {
+          "chunk_id": "en-hook-paragraph-4",
+          "text": "Open with a close shot of dew on the sweet corn leaves, then show the harvest basket and the morning time card to prove it was picked this morning.",
+          "locator": {
+            "filename": "sweet-corn-video-guide.docx",
+            "paragraph": 4
+          }
+        },
+        {
+          "chunk_id": "en-hook-paragraph-7",
+          "text": "End the video with a simple question inviting viewers to choose boiling or grilling.",
+          "locator": {
+            "filename": "sweet-corn-video-guide.docx",
+            "paragraph": 7
+          }
+        }
+      ]
+    }
+  ]
+}

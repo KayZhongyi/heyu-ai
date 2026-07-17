@@ -46,6 +46,10 @@ from app.models import (
     utc_now,
 )
 from app.provider_connections import resolve_organization_ai_provider
+from app.publication_locators import (
+    assert_publication_locator_available,
+    locator_conflict,
+)
 from app.schemas import (
     Actor,
     AssetReview,
@@ -3339,13 +3343,29 @@ def create_publication(db: Session, actor: Actor, data: PublicationCreate) -> Pu
                 "Content is not eligible for publication",
             ),
         )
+    normalized_url = data.external_url.strip()
+    normalized_content_id = data.external_content_id.strip()
+    assert_publication_locator_available(
+        db,
+        organization_id=actor.organization_id,
+        platform=data.platform,
+        external_url=normalized_url,
+        external_content_id=normalized_content_id,
+    )
+    publication_data = data.model_dump()
+    publication_data["external_url"] = normalized_url
+    publication_data["external_content_id"] = normalized_content_id
     publication = Publication(
         organization_id=actor.organization_id,
         created_by=actor.user_id,
-        **data.model_dump(),
+        **publication_data,
     )
     db.add(publication)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise locator_conflict() from exc
     audit(
         db,
         actor,
@@ -3556,6 +3576,14 @@ def create_improvement_brief(
     )
     if publication is None:
         raise HTTPException(status_code=404, detail="Publication not found")
+    if publication.content_version_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "This publication belongs to a marketing plan. Use the marketing "
+                "performance review to refine the plan instead of a legacy content brief."
+            ),
+        )
     diagnosis = db.scalar(
         select(VideoDiagnosis).where(
             VideoDiagnosis.id == data.video_diagnosis_id,
@@ -3640,6 +3668,14 @@ def create_draft_from_improvement_brief(
     )
     if publication is None:
         raise HTTPException(status_code=404, detail="Publication not found")
+    if publication.project_id is None or publication.content_version_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "This publication cannot create a legacy content draft; refine its "
+                "marketing plan from the performance review instead."
+            ),
+        )
     max_version = db.scalar(
         select(func.max(ContentVersion.version_number)).where(
             ContentVersion.project_id == publication.project_id,
