@@ -99,3 +99,15 @@ PR 描述应说明：
 5. 如涉及 UI，附桌面端与窄屏截图。
 
 未经 CI 与人工审阅，不要把重大改动直接合入 `main`。
+
+## 提交身份
+
+为避免 GitHub Contributor 归属再次显示为旧别名，请在本仓库使用统一的 noreply 身份提交。不要使用 `Kaylee <kaylee@users.noreply.github.com>` 作为作者或提交者。
+
+```powershell
+git config user.name KayZhongyi
+git config user.email 297893870+KayZhongyi@users.noreply.github.com
+git log -1 --format='%an <%ae> / %cn <%ce>'
+```
+
+仓库审计会检查当前分支 HEAD 的 author / committer 邮箱；如果误用旧身份，请先在功能分支上修正后再推送，避免改写 `main` 或自动合并 PR。
