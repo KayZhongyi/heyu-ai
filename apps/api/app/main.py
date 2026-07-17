@@ -89,6 +89,7 @@ from app.provider_connections import (
 )
 from app.publication_workflow import (
     confirm_manual_publication,
+    create_marketing_plan_publication_task,
     create_publication_task,
     get_latest_export_package,
     get_publication_task,
@@ -158,6 +159,7 @@ from app.schemas import (
     MarketingPlanDetailRead,
     MarketingPlanRead,
     MarketingPlanVersionCreate,
+    MarketingPublicationTaskCreate,
     MediaAssetRead,
     MemberRead,
     MemberRoleUpdate,
@@ -583,6 +585,36 @@ def get_marketing_plan_export(
             "Cache-Control": "private, no-store",
             "X-Heyu-Content-SHA256": exported.package.content_hash,
         },
+    )
+
+
+@app.post(
+    "/v1/marketing-plans/{plan_id}/publication-tasks",
+    response_model=PublicationTaskCreated,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_marketing_plan_publication_task(
+    plan_id: str,
+    data: MarketingPublicationTaskCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> PublicationTaskCreated:
+    bundle = create_marketing_plan_publication_task(
+        db,
+        actor,
+        marketing_plan_id=plan_id,
+        marketing_plan_version_id=data.marketing_plan_version_id,
+        route_id=data.route_id,
+        calendar_day=data.calendar_day,
+        execution_mode=data.execution_mode,
+        scheduled_for=data.scheduled_for,
+        note=data.note,
+    )
+    return PublicationTaskCreated(
+        task=PublicationTaskRead.model_validate(bundle.task),
+        package=PlatformExportPackageRead.model_validate(bundle.package),
     )
 
 

@@ -1,6 +1,6 @@
 const inviteFragment=new URLSearchParams(location.hash.replace(/^#/,"")).get("invite")||"";
 if(inviteFragment)history.replaceState(null,"","/workspace/");
-const state={token:localStorage.getItem("heyu_token")||"",actor:null,members:[],invitations:[],providers:[],brands:[],products:[],knowledge:[],campaigns:[],campaignBriefRevisions:[],campaignBriefMaps:{},campaignSupplySnapshots:[],campaignFarmerEvidenceSnapshots:[],marketingPlans:[],currentMarketingPlan:null,selectedMarketingVersion:null,projects:[],versions:[],generationRuns:[],publications:[],performanceReviews:{},operationImportFile:null,operationImportPreview:null,audit:[],currentVersion:null,inviteToken:inviteFragment};
+const state={token:localStorage.getItem("heyu_token")||"",actor:null,members:[],invitations:[],providers:[],brands:[],products:[],knowledge:[],campaigns:[],campaignBriefRevisions:[],campaignBriefMaps:{},campaignSupplySnapshots:[],campaignFarmerEvidenceSnapshots:[],marketingPlans:[],currentMarketingPlan:null,selectedMarketingVersion:null,projects:[],versions:[],generationRuns:[],publicationTasks:[],publications:[],performanceReviews:{},operationImportFile:null,operationImportPreview:null,audit:[],currentVersion:null,inviteToken:inviteFragment};
 const t=(key,variables={})=>HeyuI18n.t(key,variables);
 const providerMessages={
   "zh-CN":{
@@ -127,6 +127,17 @@ const downloadCampaignPresentation=async campaign=>{
   link.click();
   setTimeout(()=>URL.revokeObjectURL(link.href),0);
 };
+const downloadPublicationPackage=async task=>{
+  const response=await apiFile(`/v1/publication-tasks/${task.id}/packages/latest/download`);
+  const blob=await response.blob();
+  const plan=state.marketingPlans.find(item=>item.id===task.marketing_plan_id);
+  const basename=HeyuContent.safeFilename(plan?.title||`heyu-publication-${task.calendar_day||""}`);
+  const link=document.createElement("a");
+  link.href=URL.createObjectURL(blob);
+  link.download=`${basename}-${task.platform}.zip`;
+  link.click();
+  setTimeout(()=>URL.revokeObjectURL(link.href),0);
+};
 const workspacePages=["overview","plans","assets","knowledge","campaigns","studio","operations","review","audit","members","providers"];
 const pageFromLocation=()=>{const page=location.pathname.split("/").filter(Boolean)[1]||"overview";return workspacePages.includes(page)?page:"overview"};
 
@@ -160,7 +171,7 @@ function navigate(page,push=true){
 async function refresh(){
   state.actor=await api("/v1/me");
   const canManageMembers=["owner","admin"].includes(state.actor.role);
-  [state.brands,state.products,state.knowledge,state.campaigns,state.marketingPlans,state.projects,state.publications,state.audit]=await Promise.all([api("/v1/brands"),api("/v1/products"),api("/v1/knowledge"),api("/v1/campaign-packages"),api("/v1/marketing-plans"),api("/v1/content-projects"),api("/v1/publications"),api("/v1/audit-events")]);
+  [state.brands,state.products,state.knowledge,state.campaigns,state.marketingPlans,state.projects,state.publicationTasks,state.publications,state.audit]=await Promise.all([api("/v1/brands"),api("/v1/products"),api("/v1/knowledge"),api("/v1/campaign-packages"),api("/v1/marketing-plans"),api("/v1/content-projects"),api("/v1/publication-tasks"),api("/v1/publications"),api("/v1/audit-events")]);
   [state.members,state.invitations,state.providers]=canManageMembers?await Promise.all([api("/v1/members"),api("/v1/invitations"),api("/v1/provider-connections")]):[[],[],[]];
   $$(".member-nav").forEach(x=>x.hidden=!canManageMembers);
   $$(".provider-nav").forEach(x=>x.hidden=!canManageMembers);
@@ -225,6 +236,24 @@ const marketingPlanDate=value=>new Intl.DateTimeFormat(HeyuI18n.getLocale(),{dat
 const marketingPlanVersion=()=>state.selectedMarketingVersion||state.currentMarketingPlan?.current_version||null;
 const marketingPlanSection=(title,body,wide=false)=>`<section class="plan-preview-section${wide?" wide":""}"><p class="eyebrow">${escapeHtml(title)}</p>${body}</section>`;
 const marketingPlanListItems=items=>`<ul>${(items||[]).map(item=>`<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+const marketingRouteIds=["practical-hook","people-story","playful-contrast"];
+const marketingRouteLabel=routeId=>t(`publicationTask.route.${routeId}`);
+const marketingTaskStatusLabel=status=>t(`publicationTask.status.${status}`);
+const publicationTaskPlan=task=>state.marketingPlans.find(item=>item.id===task.marketing_plan_id);
+const calendarTaskForm=day=>{
+  if(!canWriteScope("content"))return "";
+  const routeOptions=marketingRouteIds.map(routeId=>`<option value="${routeId}">${escapeHtml(marketingRouteLabel(routeId))}</option>`).join("");
+  return `<details class="calendar-publication">
+    <summary>${escapeHtml(t("publicationTask.scheduleAction"))}</summary>
+    <form class="marketing-publication-task-form" data-calendar-day="${escapeHtml(day.day)}">
+      <label>${escapeHtml(t("publicationTask.route"))}<select name="route_id">${routeOptions}</select></label>
+      <label>${escapeHtml(t("publicationTask.scheduledFor"))}<input name="scheduled_for" type="datetime-local"></label>
+      <label>${escapeHtml(t("publicationTask.mode"))}<select name="execution_mode"><option value="export_only">${escapeHtml(t("publicationTask.mode.export"))}</option><option value="mock">${escapeHtml(t("publicationTask.mode.mock"))}</option></select></label>
+      <label>${escapeHtml(t("publicationTask.note"))}<input name="note" maxlength="2000" placeholder="${escapeHtml(t("publicationTask.notePlaceholder"))}"></label>
+      <button class="primary" type="submit">${escapeHtml(t("publicationTask.create"))}</button>
+    </form>
+  </details>`;
+};
 function marketingPlanPreviewHtml(content){
   if(!content?.product_profile||!content?.strategy||!Array.isArray(content?.videos))return `<pre>${escapeHtml(JSON.stringify(content,null,2))}</pre>`;
   const profile=content.product_profile;
@@ -232,7 +261,7 @@ function marketingPlanPreviewHtml(content){
   const trend=content.trend||{};
   const videos=content.videos.map((video,index)=>`<article class="plan-video-card"><span>${escapeHtml(t("marketingPlans.videoNumber",{number:index+1}))}</span><h4>${escapeHtml(video.title)}</h4><p>${escapeHtml(video.hook)}</p><small>${escapeHtml(video.angle)}${fieldSeparator()}${escapeHtml(video.background_music)}</small><details><summary>${escapeHtml(t("marketingPlans.openScript"))}</summary><p>${escapeHtml(video.script)}</p><ol>${(video.shots||[]).map(shot=>`<li><b>${escapeHtml(shot.seconds)}</b><span>${escapeHtml(shot.visual)}</span><small>${escapeHtml(shot.voiceover)}</small></li>`).join("")}</ol><strong>${escapeHtml(video.call_to_action)}</strong></details></article>`).join("");
   const livestream=(content.livestream||[]).map(section=>`<article><h4>${escapeHtml(section.section)}</h4>${marketingPlanListItems(section.talking_points)}</article>`).join("");
-  const calendar=(content.seven_day_plan||[]).map(day=>`<article><b>${escapeHtml(t("marketingPlans.day",{day:day.day}))}</b><h4>${escapeHtml(day.objective)}</h4><p>${escapeHtml(day.content)}</p><small>${escapeHtml(day.action)}</small></article>`).join("");
+  const calendar=(content.seven_day_plan||[]).map(day=>`<article><b>${escapeHtml(t("marketingPlans.day",{day:day.day}))}</b><h4>${escapeHtml(day.objective)}</h4><p>${escapeHtml(day.content)}</p><small>${escapeHtml(day.action)}</small>${calendarTaskForm(day)}</article>`).join("");
   return `<div class="plan-preview-grid">${marketingPlanSection(t("marketingPlans.positioning"),`<h3>${escapeHtml(profile.one_line_value)}</h3><p>${escapeHtml(profile.story_angle)}</p>${marketingPlanListItems(profile.core_selling_points)}`)}${marketingPlanSection(t("marketingPlans.strategy"),`<h3>${escapeHtml(strategy.platform_name)}</h3><p>${escapeHtml(strategy.content_focus)}</p><dl><div><dt>${escapeHtml(t("marketingPlans.duration"))}</dt><dd>${escapeHtml(strategy.recommended_duration)}</dd></div><div><dt>${escapeHtml(t("marketingPlans.conversion"))}</dt><dd>${escapeHtml(strategy.conversion_action)}</dd></div></dl>`)}${marketingPlanSection(t("marketingPlans.trend"),`<h3>${escapeHtml(trend.trend_used||t("marketingPlans.noTrend"))}</h3><p>${escapeHtml(trend.integration_method||"")}</p><small>${escapeHtml(trend.caution||"")}</small>`,true)}${marketingPlanSection(t("marketingPlans.videos"),`<div class="plan-video-grid">${videos}</div>`,true)}${marketingPlanSection(t("marketingPlans.livestream"),`<div class="plan-live-grid">${livestream}</div>`,true)}${marketingPlanSection(t("marketingPlans.sevenDays"),`<div class="plan-calendar">${calendar}</div>`,true)}${marketingPlanSection(t("marketingPlans.nextActions"),marketingPlanListItems(content.next_actions),true)}</div>`;
 }
 function renderMarketingPlans(){
@@ -297,6 +326,7 @@ function render(){
   renderCampaigns();
   renderOperationCopy();
   renderOperationImportPreview();
+  renderPublicationTasks();
   renderPublications();
   renderMembers();
   renderProviders();
@@ -578,10 +608,45 @@ function performanceReviewHtml(publicationId,review){
   const canOperate=canWriteScope("content");
   return `<section class="performance-review"><div class="panel-heading"><div><p class="eyebrow">${escapeHtml(operationText("review.heading"))}</p><h3>${escapeHtml(review.summary)}</h3></div><span class="pill">${escapeHtml(operationText("review.method",{method:review.methodology}))}</span></div><div class="performance-review-grid"><div><h4>${escapeHtml(operationText("review.signals"))}</h4><ul class="review-signals">${signals}</ul></div><div><h4>${escapeHtml(operationText("review.recommendations"))}</h4><ul>${recommendations}</ul></div></div>${limitations?`<details><summary>${escapeHtml(operationText("review.limitations"))}</summary><ul>${limitations}</ul></details>`:""}${canOperate?`<button type="button" data-save-performance-brief="${publicationId}">${escapeHtml(operationText("review.saveBrief"))}</button>`:""}</section>`;
 }
+function renderPublicationTasks(){
+  const target=$("#publication-task-list");
+  if(!target)return;
+  const canOperate=canWriteScope("content");
+  target.classList.toggle("empty",state.publicationTasks.length===0);
+  target.innerHTML=state.publicationTasks.map(task=>{
+    const plan=publicationTaskPlan(task);
+    const planTitle=plan?.title||t("publicationTask.unknownPlan");
+    const scheduled=task.scheduled_for?HeyuI18n.formatDate(task.scheduled_for):t("publicationTask.unscheduled");
+    const metadata=[
+      t("marketingPlans.day",{day:task.calendar_day||"-"}),
+      marketingRouteLabel(task.route_id),
+      scheduled,
+    ].map(value=>`<span>${escapeHtml(value)}</span>`).join("");
+    const download=canOperate&&["package_ready","awaiting_manual_confirmation"].includes(task.status)
+      ? `<button type="button" data-download-publication-package="${task.id}">${escapeHtml(t("publicationTask.download"))}</button>`
+      : "";
+    const ready=canOperate&&task.status==="package_ready"
+      ? `<button type="button" class="primary" data-ready-publication-task="${task.id}">${escapeHtml(t("publicationTask.markReady"))}</button>`
+      : "";
+    const confirm=canOperate&&task.status==="awaiting_manual_confirmation"&&task.execution_mode==="export_only"
+      ? `<details class="publication-confirmation"><summary>${escapeHtml(t("publicationTask.confirmHeading"))}</summary><form class="publication-confirmation-form" data-publication-task-id="${task.id}"><label>${escapeHtml(t("publicationTask.externalUrl"))}<input name="external_url" type="url" placeholder="https://"></label><label>${escapeHtml(t("publicationTask.externalId"))}<input name="external_content_id" maxlength="255"></label><label>${escapeHtml(t("publicationTask.publishedAt"))}<input name="published_at" type="datetime-local"></label><label>${escapeHtml(t("publicationTask.confirmNote"))}<textarea name="note" rows="2" maxlength="2000"></textarea></label><p class="form-note">${escapeHtml(t("publicationTask.confirmHint"))}</p><button class="primary" type="submit">${escapeHtml(t("publicationTask.confirm"))}</button></form></details>`
+      : "";
+    const mockNote=task.execution_mode==="mock"&&task.status==="awaiting_manual_confirmation"
+      ? `<p class="form-note">${escapeHtml(t("publicationTask.mockNoConfirm"))}</p>`
+      : "";
+    return `<article class="publication-task-card"><div class="panel-heading"><div><p class="eyebrow">${escapeHtml(task.platform)}</p><h3>${escapeHtml(planTitle)}</h3></div><span class="badge ${task.status==="published"?"approved":task.status==="cancelled"?"rejected":"pending_review"}">${escapeHtml(marketingTaskStatusLabel(task.status))}</span></div><div class="source-meta">${metadata}</div>${task.note?`<p>${escapeHtml(task.note)}</p>`:""}<div class="row-actions">${download}${ready}</div>${confirm}${mockNote}</article>`;
+  }).join("")||`<p>${escapeHtml(t("publicationTask.empty"))}</p>`;
+}
 function renderPublications(){
   const canOperate=canWriteScope("content");
   $("#publication-list").innerHTML=state.publications.map(item=>`<article class="publication-operation-card"><div class="panel-heading"><div><h3>${escapeHtml(item.platform)}</h3><p>${escapeHtml(HeyuI18n.formatDate(item.published_at))}</p></div><span class="badge approved">${escapeHtml(t("publication.published"))}</span></div>${item.external_url?`<p><a href="${escapeHtml(item.external_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("publication.viewExternal"))}</a></p>`:""}${canOperate?`<form class="snapshot-form" data-publication-id="${item.id}"><div class="source-meta"><label>${escapeHtml(t("snapshot.capturedAt"))}<input name="captured_at" type="datetime-local" required></label><label>${escapeHtml(t("metric.views"))}<input name="views" type="number" min="0"></label><label>${escapeHtml(t("metric.likes"))}<input name="likes" type="number" min="0"></label><label>${escapeHtml(t("metric.comments"))}<input name="comments" type="number" min="0"></label><label>${escapeHtml(t("metric.shares"))}<input name="shares" type="number" min="0"></label><label>${escapeHtml(t("metric.saves"))}<input name="saves" type="number" min="0"></label><label>${escapeHtml(t("metric.followersGained"))}<input name="followers_gained" type="number" min="0"></label><label>${escapeHtml(t("metric.orders"))}<input name="orders" type="number" min="0"></label><label>${escapeHtml(t("metric.revenueMinor"))}<input name="revenue_minor" type="number" min="0"></label></div><button>${escapeHtml(t("snapshot.add"))}</button></form>`:""}<div class="snapshot-list" data-snapshot-list="${item.id}"></div>${canOperate?`<div class="row-actions operation-review-action"><button type="button" class="primary" data-generate-performance-review="${item.id}">${escapeHtml(operationText("review.generate"))}</button></div>`:""}<div data-performance-review="${item.id}">${performanceReviewHtml(item.id,state.performanceReviews[item.id])}</div>${canOperate?`<details><summary>${escapeHtml(t("diagnosis.add"))}</summary><form class="diagnosis-form" data-publication-id="${item.id}"><label>${escapeHtml(t("diagnosis.observedAt"))}<input name="observed_at" type="datetime-local" required></label><label>${escapeHtml(t("diagnosis.reportTitle"))}<input name="title" required></label><label>${escapeHtml(t("diagnosis.summary"))}<textarea name="summary" rows="2"></textarea></label><label>${escapeHtml(t("diagnosis.transcriptExcerpt"))}<textarea name="transcript_excerpt" rows="2"></textarea></label><label>${escapeHtml(t("diagnosis.category"))}<input name="category" required></label><label>${escapeHtml(t("diagnosis.severity"))}<select name="severity"><option value="observation">${escapeHtml(severityLabel("observation"))}</option><option value="opportunity">${escapeHtml(severityLabel("opportunity"))}</option><option value="risk">${escapeHtml(severityLabel("risk"))}</option></select></label><label>${escapeHtml(t("diagnosis.evidence"))}<textarea name="evidence" rows="2" required></textarea></label><label>${escapeHtml(t("diagnosis.recommendation"))}<textarea name="recommendation" rows="2"></textarea></label><button>${escapeHtml(t("diagnosis.save"))}</button></form></details>`:""}<div class="diagnosis-list" data-diagnosis-list="${item.id}"></div><div class="brief-list" data-brief-list="${item.id}"></div></article>`).join("")||escapeHtml(t("publication.empty"));
-  state.publications.forEach(item=>{loadSnapshots(item.id);loadDiagnoses(item.id);loadImprovementBriefs(item.id)});
+  state.publications.forEach(item=>{
+    void Promise.all([
+      loadSnapshots(item.id),
+      loadDiagnoses(item.id),
+      loadImprovementBriefs(item.id),
+    ]).catch(error=>{if(!sessionInvalidated)toast(error.message,true)});
+  });
 }
 async function loadDiagnoses(publicationId){
   const diagnoses=await api(`/v1/publications/${publicationId}/video-diagnoses`);
@@ -1153,6 +1218,61 @@ document.addEventListener("click",event=>{
     state.selectedMarketingVersion=state.currentMarketingPlan.versions.find(item=>item.id===versionButton.dataset.openMarketingVersion)||state.currentMarketingPlan.current_version;
     renderMarketingPlans();
   }
+});
+document.addEventListener("submit",event=>{
+  const form=event.target.closest(".marketing-publication-task-form");
+  if(!form)return;
+  event.preventDefault();
+  request(async()=>{
+    if(!state.currentMarketingPlan)throw new Error(t("marketingPlans.selectFirst"));
+    const version=marketingPlanVersion();
+    const data=formData(form);
+    const payload={
+      marketing_plan_version_id:version?.id||null,
+      route_id:data.route_id,
+      calendar_day:Number(form.dataset.calendarDay),
+      scheduled_for:data.scheduled_for?new Date(data.scheduled_for).toISOString():null,
+      execution_mode:data.execution_mode,
+      note:data.note,
+    };
+    await api(`/v1/marketing-plans/${state.currentMarketingPlan.id}/publication-tasks`,{method:"POST",body:JSON.stringify(payload)});
+    state.publicationTasks=await api("/v1/publication-tasks");
+    renderPublicationTasks();
+    form.reset();
+    navigate("operations");
+  },t("publicationTask.created"));
+});
+document.addEventListener("click",event=>{
+  const download=event.target.closest("[data-download-publication-package]");
+  if(download){
+    const task=state.publicationTasks.find(item=>item.id===download.dataset.downloadPublicationPackage);
+    if(task)request(()=>downloadPublicationPackage(task),t("publicationTask.downloaded"));
+  }
+  const ready=event.target.closest("[data-ready-publication-task]");
+  if(ready)request(async()=>{
+    await api(`/v1/publication-tasks/${ready.dataset.readyPublicationTask}/transition`,{method:"POST",body:JSON.stringify({to_status:"awaiting_manual_confirmation",details:{source:"workspace"}})});
+    state.publicationTasks=await api("/v1/publication-tasks");
+    renderPublicationTasks();
+  },t("publicationTask.ready"));
+});
+document.addEventListener("submit",event=>{
+  const form=event.target.closest(".publication-confirmation-form");
+  if(!form)return;
+  event.preventDefault();
+  request(async()=>{
+    const data=formData(form);
+    if(!data.external_url&&!data.external_content_id)throw new Error(t("publicationTask.confirmHint"));
+    const payload={
+      external_url:data.external_url,
+      external_content_id:data.external_content_id,
+      published_at:data.published_at?new Date(data.published_at).toISOString():null,
+      note:data.note,
+    };
+    await api(`/v1/publication-tasks/${form.dataset.publicationTaskId}/confirm`,{method:"POST",body:JSON.stringify(payload)});
+    [state.publicationTasks,state.publications]=await Promise.all([api("/v1/publication-tasks"),api("/v1/publications")]);
+    renderPublicationTasks();
+    renderPublications();
+  },t("publicationTask.confirmed"));
 });
 $("#import-marketing-plan").addEventListener("click",()=>request(importPendingMarketingPlan));
 $("#save-marketing-plan-version").addEventListener("click",()=>request(async()=>{

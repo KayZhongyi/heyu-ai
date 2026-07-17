@@ -566,6 +566,108 @@ async function main() {
       "saved plan did not render the seven-day operating plan",
     );
 
+    const firstCalendarDay = page
+      .locator("#marketing-plan-preview .plan-calendar article")
+      .first();
+    const publicationTaskForm = firstCalendarDay.locator(
+      ".marketing-publication-task-form",
+    );
+    await firstCalendarDay.locator(".calendar-publication summary").click();
+    await publicationTaskForm.locator('[name="route_id"]').selectOption("people-story");
+    await publicationTaskForm
+      .locator('[name="scheduled_for"]')
+      .fill("2026-07-18T09:30");
+    await publicationTaskForm
+      .locator('[name="note"]')
+      .fill("Browser E2E morning publishing slot");
+    const publicationTaskResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() ===
+          `${baseUrl}/v1/marketing-plans/${savedMarketingPlan.id}/publication-tasks` &&
+        response.request().method() === "POST",
+    );
+    await publicationTaskForm.locator('button[type="submit"]').click();
+    const publicationTaskResponse = await publicationTaskResponsePromise;
+    assert.equal(
+      publicationTaskResponse.status(),
+      201,
+      "calendar day could not create a publication task",
+    );
+    const publicationTaskBundle = await publicationTaskResponse.json();
+    const publicationTask = publicationTaskBundle.task;
+    assert.equal(publicationTask.marketing_plan_id, savedMarketingPlan.id);
+    assert.equal(
+      publicationTask.marketing_plan_version_id,
+      savedMarketingPlan.current_version.id,
+    );
+    assert.equal(publicationTask.route_id, "people-story");
+    assert.equal(publicationTask.calendar_day, 1);
+    assert.equal(publicationTask.status, "package_ready");
+    await page.waitForURL(`${baseUrl}/workspace/operations`);
+    await page.locator('[data-page-panel="operations"]').waitFor({ state: "visible" });
+
+    const publicationTaskCard = page.locator(".publication-task-card", {
+      hasText: savedMarketingPlan.title,
+    });
+    await publicationTaskCard.waitFor();
+    const packageResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() ===
+          `${baseUrl}/v1/publication-tasks/${publicationTask.id}/packages/latest/download` &&
+        response.request().method() === "GET",
+    );
+    const packageDownloadPromise = page.waitForEvent("download");
+    await publicationTaskCard.locator("[data-download-publication-package]").click();
+    const packageResponse = await packageResponsePromise;
+    const packageDownload = await packageDownloadPromise;
+    assert.equal(packageResponse.status(), 200, "publication package download failed");
+    assert.match(packageDownload.suggestedFilename(), /\.zip$/);
+
+    const readyResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() ===
+          `${baseUrl}/v1/publication-tasks/${publicationTask.id}/transition` &&
+        response.request().method() === "POST",
+    );
+    await publicationTaskCard.locator("[data-ready-publication-task]").click();
+    const readyResponse = await readyResponsePromise;
+    assert.equal(readyResponse.status(), 200, "publication task could not advance");
+    await publicationTaskCard.locator(".publication-confirmation summary").click();
+
+    const confirmationForm = publicationTaskCard.locator(
+      ".publication-confirmation-form",
+    );
+    const externalContentId = `browser-marketing-${unique}`;
+    await confirmationForm
+      .locator('[name="external_content_id"]')
+      .fill(externalContentId);
+    await confirmationForm.locator('[name="published_at"]').fill("2026-07-18T10:00");
+    const confirmationResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() ===
+          `${baseUrl}/v1/publication-tasks/${publicationTask.id}/confirm` &&
+        response.request().method() === "POST",
+    );
+    await confirmationForm.locator('button[type="submit"]').click();
+    const confirmationResponse = await confirmationResponsePromise;
+    assert.equal(
+      confirmationResponse.status(),
+      201,
+      "manual publication confirmation failed",
+    );
+    const confirmedPublication = await confirmationResponse.json();
+    assert.equal(confirmedPublication.marketing_plan_id, savedMarketingPlan.id);
+    assert.equal(confirmedPublication.external_content_id, externalContentId);
+    await publicationTaskCard.locator(".badge.approved").waitFor();
+    await page
+      .locator("#publication-list .publication-operation-card", {
+        hasText: confirmedPublication.platform,
+      })
+      .waitFor();
+
+    await openWorkspacePage(page, "plans");
+    await page.locator("#marketing-plan-detail").waitFor({ state: "visible" });
+
     const updatedPositioning = `E2E tomato positioning ${unique}`;
     await page.locator(".plan-editor-wrap").evaluate((element) => {
       element.open = true;

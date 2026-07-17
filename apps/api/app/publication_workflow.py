@@ -24,6 +24,8 @@ from sqlalchemy.orm import Session
 from app.models import (
     ContentProject,
     ContentVersion,
+    MarketingPlan,
+    MarketingPlanVersion,
     Publication,
     PublicationTask,
     PublicationTaskEvent,
@@ -36,6 +38,7 @@ from app.models import (
 from app.platform_exports import (
     ExportCapabilityUnavailable,
     PlatformExportError,
+    PlatformExportPackage,
     PlatformValidationError,
     generate_platform_export,
 )
@@ -89,19 +92,7 @@ def create_publication_task(
 ) -> PublicationTaskBundle:
     """Create a task and persist its deterministic ZIP export package."""
 
-    if execution_mode == "authorized_api":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "authorized_api is unavailable; use export_only or mock and complete "
-                "publication manually"
-            ),
-        )
-    if execution_mode not in ("export_only", "mock"):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Unsupported execution mode: {execution_mode}",
-        )
+    _validate_execution_mode(execution_mode)
 
     project, version = _get_project_and_version(
         db,
@@ -123,6 +114,98 @@ def create_publication_task(
             detail=str(exc),
         ) from exc
 
+    return _persist_publication_task(
+        db,
+        actor,
+        generated=generated,
+        archive=archive,
+        project_id=project.id,
+        content_version_id=version.id,
+        storage_root=storage_root,
+        scheduled_for=scheduled_for,
+        note=note,
+    )
+
+
+def create_marketing_plan_publication_task(
+    db: Session,
+    actor: Actor,
+    *,
+    marketing_plan_id: str,
+    marketing_plan_version_id: str | None,
+    route_id: str,
+    calendar_day: int,
+    execution_mode: str,
+    storage_root: str | Path | None = None,
+    scheduled_for: datetime | None = None,
+    note: str = "",
+) -> PublicationTaskBundle:
+    """Create a manual publication task from one saved marketing-plan route."""
+
+    _validate_execution_mode(execution_mode)
+    if not 1 <= calendar_day <= 7:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="calendar_day must be between 1 and 7",
+        )
+
+    from app.marketing_exports import export_saved_marketing_plan
+    from app.services import get_marketing_plan
+
+    plan = get_marketing_plan(db, actor, marketing_plan_id)
+    selected_version_id = marketing_plan_version_id or plan.current_version.id
+    try:
+        exported = export_saved_marketing_plan(
+            plan,
+            route_id,
+            version_id=selected_version_id,
+            execution_mode=execution_mode,  # type: ignore[arg-type]
+        )
+    except ExportCapabilityUnavailable as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except (PlatformValidationError, PlatformExportError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
+    return _persist_publication_task(
+        db,
+        actor,
+        generated=exported.package,
+        archive=exported.package.zip_bytes(),
+        marketing_plan_id=plan.id,
+        marketing_plan_version_id=selected_version_id,
+        route_id=route_id,
+        calendar_day=calendar_day,
+        storage_root=storage_root,
+        scheduled_for=scheduled_for,
+        note=note,
+    )
+
+
+def _persist_publication_task(
+    db: Session,
+    actor: Actor,
+    *,
+    generated: PlatformExportPackage,
+    archive: bytes,
+    project_id: str | None = None,
+    content_version_id: str | None = None,
+    marketing_plan_id: str | None = None,
+    marketing_plan_version_id: str | None = None,
+    route_id: str = "",
+    calendar_day: int | None = None,
+    storage_root: str | Path | None = None,
+    scheduled_for: datetime | None = None,
+    note: str = "",
+) -> PublicationTaskBundle:
+    _validate_source_pair(
+        project_id=project_id,
+        content_version_id=content_version_id,
+        marketing_plan_id=marketing_plan_id,
+        marketing_plan_version_id=marketing_plan_version_id,
+    )
     task_id = new_id()
     package_id = new_id()
     storage_key = _storage_key(actor.organization_id, task_id, package_id)
@@ -134,8 +217,12 @@ def create_publication_task(
     task = PublicationTask(
         id=task_id,
         organization_id=actor.organization_id,
-        project_id=project.id,
-        content_version_id=version.id,
+        project_id=project_id,
+        content_version_id=content_version_id,
+        marketing_plan_id=marketing_plan_id,
+        marketing_plan_version_id=marketing_plan_version_id,
+        route_id=route_id.strip(),
+        calendar_day=calendar_day,
         platform=generated.platform,
         execution_mode=generated.mode,
         status="package_ready",
@@ -156,6 +243,14 @@ def create_publication_task(
         manifest=dict(generated.manifest),
         created_by=actor.user_id,
     )
+    source_details = {
+        "project_id": project_id,
+        "content_version_id": content_version_id,
+        "marketing_plan_id": marketing_plan_id,
+        "marketing_plan_version_id": marketing_plan_version_id,
+        "route_id": route_id,
+        "calendar_day": calendar_day,
+    }
     db.add_all(
         [
             task,
@@ -164,7 +259,10 @@ def create_publication_task(
                 task,
                 from_status="",
                 to_status="draft",
-                details={"execution_mode": execution_mode},
+                details={
+                    "execution_mode": generated.mode,
+                    **source_details,
+                },
                 created_at=draft_event_at,
             ),
             package,
@@ -177,6 +275,7 @@ def create_publication_task(
                     "package_id": package.id,
                     "archive_sha256": archive_sha256,
                     "archive_size_bytes": len(archive),
+                    **source_details,
                 },
                 created_at=draft_event_at + timedelta(microseconds=1),
             ),
@@ -329,23 +428,70 @@ def confirm_manual_publication(
                 detail="External URL must be an absolute HTTP or HTTPS URL",
             )
 
-    # Reuse the platform's canonical publication policy, including content
-    # approval and campaign evidence checks, instead of duplicating it here.
-    from app.services import create_publication
+    published_timestamp = published_at or utc_now()
+    if task.project_id is not None and task.content_version_id is not None:
+        # Reuse the legacy content system's canonical approval policy.
+        from app.services import create_publication
 
-    publication = create_publication(
-        db,
-        actor,
-        PublicationCreate(
-            project_id=task.project_id,
-            content_version_id=task.content_version_id,
+        publication = create_publication(
+            db,
+            actor,
+            PublicationCreate(
+                project_id=task.project_id,
+                content_version_id=task.content_version_id,
+                platform=task.platform,
+                external_url=normalized_url,
+                external_content_id=normalized_content_id,
+                published_at=published_timestamp,
+                note=note.strip(),
+            ),
+        )
+    elif task.marketing_plan_id is not None and task.marketing_plan_version_id is not None:
+        plan, version = _get_marketing_plan_and_version(
+            db,
+            organization_id=actor.organization_id,
+            marketing_plan_id=task.marketing_plan_id,
+            marketing_plan_version_id=task.marketing_plan_version_id,
+        )
+        publication = Publication(
+            organization_id=actor.organization_id,
+            project_id=None,
+            content_version_id=None,
+            marketing_plan_id=plan.id,
+            marketing_plan_version_id=version.id,
+            route_id=task.route_id,
+            calendar_day=task.calendar_day,
             platform=task.platform,
             external_url=normalized_url,
             external_content_id=normalized_content_id,
-            published_at=published_at or utc_now(),
+            published_at=published_timestamp,
             note=note.strip(),
-        ),
-    )
+            created_by=actor.user_id,
+        )
+        db.add(publication)
+        db.flush()
+        from app.services import audit
+
+        audit(
+            db,
+            actor,
+            "publication.created",
+            "publication",
+            publication.id,
+            {
+                "marketing_plan_id": plan.id,
+                "marketing_plan_version_id": version.id,
+                "route_id": task.route_id,
+                "calendar_day": task.calendar_day,
+                "platform": publication.platform,
+                "external_content_id": publication.external_content_id,
+            },
+        )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Publication task has no valid content source",
+        )
     previous = task.status
     task.status = "published"
     task.external_url = normalized_url
@@ -482,6 +628,81 @@ def _get_project_and_version(
     return project, version
 
 
+def _get_marketing_plan_and_version(
+    db: Session,
+    *,
+    organization_id: str,
+    marketing_plan_id: str,
+    marketing_plan_version_id: str,
+) -> tuple[MarketingPlan, MarketingPlanVersion]:
+    plan = db.scalar(
+        select(MarketingPlan).where(
+            MarketingPlan.id == marketing_plan_id,
+            MarketingPlan.organization_id == organization_id,
+        )
+    )
+    if plan is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Marketing plan not found",
+        )
+    version = db.scalar(
+        select(MarketingPlanVersion).where(
+            MarketingPlanVersion.id == marketing_plan_version_id,
+            MarketingPlanVersion.marketing_plan_id == plan.id,
+            MarketingPlanVersion.organization_id == organization_id,
+        )
+    )
+    if version is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Marketing plan version not found",
+        )
+    return plan, version
+
+
+def _validate_execution_mode(execution_mode: str) -> None:
+    if execution_mode == "authorized_api":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "authorized_api is unavailable; use export_only or mock and complete "
+                "publication manually"
+            ),
+        )
+    if execution_mode not in ("export_only", "mock"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Unsupported execution mode: {execution_mode}",
+        )
+
+
+def _validate_source_pair(
+    *,
+    project_id: str | None,
+    content_version_id: str | None,
+    marketing_plan_id: str | None,
+    marketing_plan_version_id: str | None,
+) -> None:
+    has_content = project_id is not None or content_version_id is not None
+    has_marketing = marketing_plan_id is not None or marketing_plan_version_id is not None
+    if has_content == has_marketing:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Choose exactly one publication source",
+        )
+    if has_content and (project_id is None or content_version_id is None):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Both project_id and content_version_id are required",
+        )
+    if has_marketing and (marketing_plan_id is None or marketing_plan_version_id is None):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Both marketing plan source identifiers are required",
+        )
+
+
 def _event(
     actor: Actor,
     task: PublicationTask,
@@ -570,6 +791,7 @@ __all__ = [
     "TaskStatus",
     "VerifiedExportDownload",
     "confirm_manual_publication",
+    "create_marketing_plan_publication_task",
     "create_publication_task",
     "get_export_package",
     "get_latest_export_package",

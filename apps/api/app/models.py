@@ -632,8 +632,18 @@ class Publication(Base):
     __tablename__ = "publications"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
-    project_id: Mapped[str] = mapped_column(ForeignKey("content_projects.id"), index=True)
-    content_version_id: Mapped[str] = mapped_column(ForeignKey("content_versions.id"), index=True)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("content_projects.id"), index=True)
+    content_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("content_versions.id"), index=True
+    )
+    marketing_plan_id: Mapped[str | None] = mapped_column(
+        ForeignKey("marketing_plans.id"), index=True
+    )
+    marketing_plan_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("marketing_plan_versions.id"), index=True
+    )
+    route_id: Mapped[str] = mapped_column(String(80), default="")
+    calendar_day: Mapped[int | None] = mapped_column()
     platform: Mapped[str] = mapped_column(String(80))
     external_url: Mapped[str] = mapped_column(String(2048), default="")
     external_content_id: Mapped[str] = mapped_column(String(255), default="")
@@ -648,11 +658,26 @@ class PublicationTask(Base):
     __table_args__ = (
         Index("ix_publication_tasks_org_status", "organization_id", "status"),
         Index("ix_publication_tasks_content_platform", "content_version_id", "platform"),
+        Index(
+            "ix_publication_tasks_marketing_platform",
+            "marketing_plan_version_id",
+            "platform",
+        ),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
-    project_id: Mapped[str] = mapped_column(ForeignKey("content_projects.id"), index=True)
-    content_version_id: Mapped[str] = mapped_column(ForeignKey("content_versions.id"), index=True)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("content_projects.id"), index=True)
+    content_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("content_versions.id"), index=True
+    )
+    marketing_plan_id: Mapped[str | None] = mapped_column(
+        ForeignKey("marketing_plans.id"), index=True
+    )
+    marketing_plan_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("marketing_plan_versions.id"), index=True
+    )
+    route_id: Mapped[str] = mapped_column(String(80), default="")
+    calendar_day: Mapped[int | None] = mapped_column()
     platform: Mapped[str] = mapped_column(String(80))
     execution_mode: Mapped[str] = mapped_column(String(32), default="export_only")
     status: Mapped[str] = mapped_column(String(32), default="draft")
