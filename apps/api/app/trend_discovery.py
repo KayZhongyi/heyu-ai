@@ -608,17 +608,60 @@ def _filmability_fit(text: str) -> tuple[int, str]:
 
 
 def _deduplicate(candidates: Iterable[TrendCandidate]) -> list[TrendCandidate]:
-    seen: set[str] = set()
-    result: list[TrendCandidate] = []
+    """Collapse duplicate URLs or titles while retaining the best provenance.
+
+    Feed aggregators frequently repeat the same story with a changed title, and
+    operators may also paste a topic that later appears in an RSS source.  A
+    first-item-wins strategy can accidentally keep an undated manual copy and
+    discard the newer, traceable source.  Grouping both URL and title aliases
+    lets us retain one canonical candidate using explicit quality rules.
+    """
+
+    groups: list[list[TrendCandidate]] = []
     for candidate in candidates:
-        key = f"{_normalize(candidate.title)}|{_normalize(candidate.source_url or '')}"
-        title_only = _normalize(candidate.title)
-        if key in seen or title_only in seen:
+        candidate_keys = _candidate_deduplication_keys(candidate)
+        matching_groups = [
+            index
+            for index, group in enumerate(groups)
+            if candidate_keys
+            & set().union(*(_candidate_deduplication_keys(item) for item in group))
+        ]
+        if not matching_groups:
+            groups.append([candidate])
             continue
-        seen.add(key)
-        seen.add(title_only)
-        result.append(candidate)
-    return result
+        merged = [candidate]
+        for index in reversed(matching_groups):
+            merged.extend(groups.pop(index))
+        groups.append(merged)
+
+    return [max(group, key=_candidate_preference) for group in groups]
+
+
+def _candidate_deduplication_keys(candidate: TrendCandidate) -> set[str]:
+    keys = {f"title:{_normalize(candidate.title)}"}
+    if candidate.source_url:
+        keys.add(f"url:{_normalize(candidate.source_url)}")
+    return keys
+
+
+def _candidate_preference(candidate: TrendCandidate) -> tuple[int, datetime, int, int]:
+    """Prefer observed, dated and information-rich candidates within a duplicate group."""
+
+    source_priority: dict[SourceType, int] = {
+        "douyin-open-platform": 6,
+        "rss": 5,
+        "atom": 5,
+        "manual": 4,
+        "seasonal": 2,
+        "evergreen": 1,
+    }
+    published_at = candidate.published_at or datetime.min.replace(tzinfo=UTC)
+    return (
+        source_priority[candidate.source_type],
+        published_at,
+        int(bool(candidate.source_url)),
+        len(candidate.summary.strip()),
+    )
 
 
 def _deduplicate_strings(items: Iterable[str]) -> list[str]:

@@ -75,6 +75,38 @@ def test_request_preserves_selected_trend_provenance():
     assert request.model_dump(mode="json")["trend_snapshot"]["source_url"].startswith("https://")
 
 
+@pytest.mark.parametrize("locale", ["zh-CN", "zh-HK", "en"])
+def test_selected_traceable_trend_enters_script_and_response(locale):
+    trend_title = "盛夏清晨采收挑战"
+    request = sample_request(
+        locale=locale,
+        trend_snapshot={
+            "title": trend_title,
+            "source_url": "https://example.test/trends/harvest",
+            "source_label": "农业资讯 RSS",
+            "source_type": "rss",
+            "published_at": datetime(2026, 7, 16, 8, tzinfo=UTC),
+            "captured_at": datetime(2026, 7, 16, 9, tzinfo=UTC),
+            "fit_score": 88,
+            "recommendation": "recommended",
+            "recommendation_reason": "与产品、平台和拍摄场景直接相关。",
+        },
+    )
+
+    result = DeterministicMarketingProvider().generate(request)
+    generated_scripts = "\n".join(video.script for video in result.videos)
+
+    assert trend_title in generated_scripts
+    assert request.product_name in generated_scripts
+    assert any(point in generated_scripts for point in request.selling_points)
+    assert result.trend.trend_used == trend_title
+    assert result.trend.source_label == "农业资讯 RSS"
+    assert result.trend.source_url == "https://example.test/trends/harvest"
+    assert result.trend.source_type == "rss"
+    assert result.trend.fit_score == 88
+    assert result.trend.recommendation == "recommended"
+
+
 def test_request_rejects_mismatched_trend_snapshot():
     with pytest.raises(ValidationError, match="trend must match"):
         sample_request(

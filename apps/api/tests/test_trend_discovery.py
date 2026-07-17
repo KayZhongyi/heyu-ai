@@ -167,6 +167,96 @@ def test_manual_source_is_deduplicated_and_limit_is_enforced():
     assert manual.published_at == NOW
 
 
+def test_duplicate_title_keeps_newer_traceable_feed_candidate():
+    rss = """<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0"><channel>
+      <item>
+        <title>番茄采摘挑战</title>
+        <link>https://news.example/trends/tomato-harvest</link>
+        <pubDate>Thu, 16 Jul 2026 06:30:00 GMT</pubDate>
+        <description>清晨采摘、自然成熟和当天发货的现场短视频</description>
+      </item>
+    </channel></rss>""".encode()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=rss, request=request)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = TrendDiscoveryService(feed_client=client).discover(
+            _request(
+                manual_trends=[
+                    ManualTrend(
+                        title="番茄采摘挑战",
+                        source_label="手工备选",
+                        published_at=NOW - timedelta(days=7),
+                    )
+                ],
+                feed_sources=[
+                    FeedSource(url="https://feeds.example/rss.xml", label="农业资讯 RSS")
+                ],
+            ),
+            now=NOW,
+        )
+
+    duplicates = [item.candidate for item in result.items if item.candidate.title == "番茄采摘挑战"]
+    assert len(duplicates) == 1
+    assert duplicates[0].source_type == "rss"
+    assert duplicates[0].source_label == "农业资讯 RSS"
+    assert duplicates[0].source_url == "https://news.example/trends/tomato-harvest"
+    assert duplicates[0].published_at == datetime(2026, 7, 16, 6, 30, tzinfo=UTC)
+
+
+def test_duplicate_url_keeps_newer_candidate_even_when_title_changes():
+    shared_url = "https://news.example/trends/tomato"
+    result = TrendDiscoveryService().discover(
+        _request(
+            manual_trends=[
+                ManualTrend(
+                    title="番茄采摘现场",
+                    source_url=shared_url,
+                    source_label="较早来源",
+                    published_at=NOW - timedelta(days=5),
+                ),
+                ManualTrend(
+                    title="清晨番茄采摘挑战",
+                    source_url=shared_url,
+                    source_label="更新来源",
+                    published_at=NOW - timedelta(hours=2),
+                    summary="自然成熟番茄的采摘、对比和发货过程",
+                ),
+            ]
+        ),
+        now=NOW,
+    )
+
+    matches = [item.candidate for item in result.items if item.candidate.source_url == shared_url]
+    assert len(matches) == 1
+    assert matches[0].title == "清晨番茄采摘挑战"
+    assert matches[0].source_label == "更新来源"
+
+
+def test_timeliness_score_drops_after_ninety_days_and_unknown_is_explicit():
+    request = _request()
+    recent = TrendCandidate(
+        title="当季番茄采摘挑战",
+        source_label="测试来源",
+        captured_at=NOW,
+        published_at=NOW - timedelta(days=1),
+        source_type="rss",
+    )
+    old = recent.model_copy(update={"published_at": NOW - timedelta(days=120)})
+    unknown = recent.model_copy(update={"published_at": None})
+
+    ranked_recent = rank_candidate(recent, request=request, now=NOW)
+    ranked_old = rank_candidate(old, request=request, now=NOW)
+    ranked_unknown = rank_candidate(unknown, request=request, now=NOW)
+
+    assert ranked_recent.fit.timeliness.score > ranked_old.fit.timeliness.score
+    assert ranked_old.fit.timeliness.score == 30
+    assert ranked_unknown.fit.timeliness.score == 48
+    assert "未提供发布时间" in ranked_unknown.fit.timeliness.explanation
+
+
 def test_unconnected_douyin_adapter_never_calls_network_or_fabricates_platform_data():
     calls = 0
 

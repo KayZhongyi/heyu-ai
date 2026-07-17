@@ -146,6 +146,14 @@ class TrendBrief(StrictModel):
     trend_used: str
     integration_method: str
     caution: str
+    source_label: str | None = None
+    source_url: str | None = None
+    source_type: TrendSourceType | None = None
+    published_at: datetime | None = None
+    captured_at: datetime | None = None
+    fit_score: int | None = Field(default=None, ge=0, le=100)
+    recommendation: Recommendation | None = None
+    recommendation_reason: str | None = None
 
 
 class CreativeRoute(StrictModel):
@@ -1648,6 +1656,7 @@ class DeterministicMarketingProvider:
         result.provider = self.name
         result.model = self.model
         result.latency_ms = int((time.perf_counter() - started) * 1000)
+        _attach_trend_provenance(result, request)
         return result
 
     @staticmethod
@@ -2550,10 +2559,12 @@ class OpenAICompatibleMarketingProvider:
                 )
             if not candidates:
                 raise ValueError("Model did not produce a valid marketing plan")
-            return max(
+            selected = max(
                 candidates,
                 key=lambda item: min(video.quality_assessment.total_score for video in item.videos),
             )
+            _attach_trend_provenance(selected, request)
+            return selected
         except (
             httpx.HTTPError,
             KeyError,
@@ -2590,6 +2601,30 @@ def _fallback_notice(locale: Locale) -> str:
             "stable zero-cost plan; review the wording before publishing."
         ),
     }[locale]
+
+
+def _attach_trend_provenance(
+    result: MarketingPlanResponse,
+    request: MarketingPlanRequest,
+) -> None:
+    """Keep the exact selected discovery source attached to generated content."""
+
+    snapshot = request.trend_snapshot
+    if snapshot is None:
+        return
+    result.trend = result.trend.model_copy(
+        update={
+            "trend_used": snapshot.title,
+            "source_label": snapshot.source_label,
+            "source_url": snapshot.source_url,
+            "source_type": snapshot.source_type,
+            "published_at": snapshot.published_at,
+            "captured_at": snapshot.captured_at,
+            "fit_score": snapshot.fit_score,
+            "recommendation": snapshot.recommendation,
+            "recommendation_reason": snapshot.recommendation_reason,
+        }
+    )
 
 
 def select_marketing_modules(
