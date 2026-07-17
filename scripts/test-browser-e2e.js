@@ -896,7 +896,7 @@ async function main() {
     });
     await failedHistory.waitFor();
     await failedHistory.getByText("Failed", { exact: true }).waitFor();
-    assert.match(await failedHistory.textContent(), /browser-e2e/);
+    assert.match(await failedHistory.textContent(), /Browser E2E fact 1/);
 
     const failureRunsResponse = await context.request.get(
       `${baseUrl}/v1/content-projects/${failureProject.id}/generation-runs`,
@@ -906,6 +906,7 @@ async function main() {
     const failureRuns = await failureRunsResponse.json();
     assert.equal(failureRuns.length, 1, "failure project should have exactly one generation run");
     assert.equal(failureRuns[0].status, "failed");
+    assert.equal(failureRuns[0].provider, "browser-e2e");
     assert.equal(failureRuns[0].output?.error?.code, "provider_missing_citation");
     assert.equal(
       failureRuns.some((run) => run.status === "completed"),
@@ -936,7 +937,7 @@ async function main() {
         status: HeyuI18n.t("generationStatus.failed"),
       }));
       const localizedFailure = page.locator("#generation-history-list article", {
-        hasText: "browser-e2e",
+        hasText: "Browser E2E fact 1",
       });
       await localizedFailure.waitFor();
       await localizedFailure.getByText(expected.heading, { exact: true }).waitFor();
