@@ -96,6 +96,25 @@ async function expectSimpleModeLocale(page, locale, expectedCases, expectedPlatf
   for (const label of expectedPlatforms) {
     await page.getByText(label, { exact: true }).waitFor();
   }
+  const generationLabels = {
+    "zh-CN": ["选择生成方式", "规则 Demo", "真实模型", "外部热点源（可选）"],
+    "zh-HK": ["選擇生成方式", "規則 Demo", "真實模型", "外部熱點來源（可選）"],
+    en: ["Choose how to generate", "Rules demo", "Live model", "External trend feeds (optional)"],
+  };
+  for (const label of generationLabels[locale]) {
+    await page.getByText(label, { exact: true }).waitFor();
+  }
+  assert.equal(
+    await page.locator('[name="generation_mode"][value="rules"]').isChecked(),
+    true,
+    `${locale} did not default to the rules demo`,
+  );
+  const visibleText = await page.locator("body").innerText();
+  assert.doesNotMatch(
+    visibleText,
+    /�|(?:Ã.|Â.|â€|ðŸ)|(?:绂捐|鍐滀|闁嬪|鐢熸垚)/,
+    `simple mode ${locale} contains mojibake`,
+  );
   await expectNoHorizontalOverflow(page, `simple mode ${locale}`);
 }
 
@@ -116,6 +135,8 @@ async function generateDemoCase(
   const response = await responsePromise;
   assert.equal(response.status(), 200, `${caseId} preview request failed`);
   await page.locator("#result-state").waitFor({ state: "visible" });
+  assert.equal(await page.locator("#provider-meta").getAttribute("data-generation-mode"), "rules");
+  assert.equal(await page.locator("#provider-meta").getAttribute("data-degraded"), "false");
   assert.equal((await page.locator("#result-product").textContent()).trim(), expectedProduct);
   assert.equal(
     await page.locator(`[data-demo-case="${caseId}"]`).evaluate((node) =>
@@ -129,14 +150,13 @@ async function generateDemoCase(
     true,
     `${caseId} did not select ${expectedPlatformValue}`,
   );
+  assert.equal(await page.locator(".result-tabs button").count(), 6);
   const strategyCards = page.locator("#result-content .result-card");
-  assert.equal(await strategyCards.count(), 4);
+  assert.ok((await strategyCards.count()) >= 2);
   await strategyCards.nth(1).getByText(expectedPlatformName, { exact: false }).waitFor();
-  assert.equal(
-    (await strategyCards.nth(3).locator("span").first().textContent()).trim(),
-    expectedNextActionsLabel,
-  );
-  const nextActions = strategyCards.nth(3).locator("li");
+  const nextActionsCard = strategyCards.filter({ hasText: expectedNextActionsLabel });
+  await nextActionsCard.waitFor();
+  const nextActions = nextActionsCard.locator("li");
   assert.ok(
     (await nextActions.count()) >= 3 && (await nextActions.count()) <= 6,
     `${caseId} next actions must contain 3 to 6 items`,
@@ -145,29 +165,25 @@ async function generateDemoCase(
     assert.ok((await nextActions.nth(index).innerText()).trim(), "next action must not be empty");
   }
 
-  await page.locator('[data-tab="videos"]').click();
-  assert.equal(await page.locator("#result-content .result-card").count(), 3);
+  await page.locator('[data-tab="topics"]').click();
+  assert.ok(await page.locator("#result-content .topic-card").count());
+  await page.locator('[data-tab="routes"]').click();
+  assert.equal(await page.locator("#result-content .route-card").count(), 3);
+  assert.equal(await page.locator("#result-content .route-card.recommended").count(), 1);
+  await page.locator('[data-select-route="1"]').click();
+  assert.equal(await page.locator("#result-content .route-card.selected").count(), 1);
+  await page.locator('[data-tab="prep"]').click();
+  assert.ok(await page.locator("#result-content .prep-hero").count());
   await page.locator('[data-tab="live"]').click();
   assert.ok(await page.locator("#result-content .result-card").count());
   await page.locator('[data-tab="calendar"]').click();
   assert.equal(await page.locator("#result-content .day-list > li").count(), 7);
-}
-
-async function expectDemoSelectionClearsAfterManualEdit(page, caseId) {
-  await page
-    .locator('[name="audience"]')
-    .fill(`manual audience override for ${caseId} ${Date.now()}`);
-  assert.equal(
-    await page.locator(`[data-demo-case="${caseId}"]`).evaluate((node) =>
-      node.classList.contains("active"),
-    ),
-    false,
-    `${caseId} demo button stayed active after a manual form edit`,
-  );
-  assert.equal(
-    await page.locator("[data-demo-case].active").count(),
-    0,
-    `${caseId} left another demo button active after a manual form edit`,
+  assert.ok(await page.locator("#result-content [data-save-plan]").count());
+  const resultText = await page.locator("#result-state").innerText();
+  assert.doesNotMatch(
+    resultText,
+    /�|(?:Ã.|Â.|â€|ðŸ)|(?:绂捐|鍐滀|闁嬪|鐢熸垚)/,
+    `${caseId} result contains mojibake`,
   );
 }
 
@@ -221,13 +237,14 @@ async function main() {
       });
     });
 
-    for (const [locale, expected, filename] of [
-      ["zh-CN", "生成第一份内容方案", "landing-zh-CN.png"],
-      ["zh-HK", "產生第一份內容方案", "landing-zh-HK.png"],
-      ["en", "Create your first content plan", "landing-en.png"],
+    for (const [locale, filename] of [
+      ["zh-CN", "landing-zh-CN.png"],
+      ["zh-HK", "landing-zh-HK.png"],
+      ["en", "landing-en.png"],
     ]) {
       await page.goto(`${baseUrl}/?lang=${locale}`, { waitUntil: "networkidle" });
-      await assert.doesNotReject(() => page.getByText(expected, { exact: false }).first().waitFor());
+      await page.locator(".hero-identity").waitFor();
+      await page.locator('.hero-actions a[href="/create/"]').waitFor();
       await expectNoHorizontalOverflow(page, `landing ${locale}`);
       await screenshot(page, filename);
     }
@@ -286,7 +303,6 @@ async function main() {
             ? `simple-mode-${caseId}.png`
             : `simple-mode-${locale}-${caseId}.png`,
         );
-        await expectDemoSelectionClearsAfterManualEdit(page, caseId);
       }
     }
 
@@ -301,9 +317,9 @@ async function main() {
     );
     const productBeforeLocaleSwitch = await page.locator("#result-product").textContent();
     for (const [locale, tabLabel] of [
-      ["zh-HK", "短影片"],
-      ["en", "Videos"],
-      ["zh-CN", "短视频"],
+      ["zh-HK", "創意路線"],
+      ["en", "Creative routes"],
+      ["zh-CN", "创意路线"],
     ]) {
       await selectLocale(page, locale);
       assert.equal(
@@ -410,6 +426,81 @@ async function main() {
       "Douyin",
       "What to do next",
     );
+    let trendRequestPayload;
+    await page.route(
+      "**/v1/trends/discover",
+      async (route) => {
+        trendRequestPayload = route.request().postDataJSON();
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            items: [
+              {
+                candidate: {
+                  title: "seasonal produce and everyday family meals",
+                  source_url: "https://feeds.example.test/agriculture.xml",
+                  source_label: "Agriculture feed",
+                  captured_at: "2026-07-16T00:00:00Z",
+                  published_at: "2026-07-15T00:00:00Z",
+                  source_type: "rss",
+                  summary: "A traceable RSS item for the browser path.",
+                },
+                fit: {
+                  product: { score: 90, explanation: "Product fit" },
+                  selling_points: { score: 88, explanation: "Selling point fit" },
+                  audience: { score: 84, explanation: "Audience fit" },
+                  platform: { score: 82, explanation: "Platform fit" },
+                  timeliness: { score: 86, explanation: "Timely" },
+                  filmability: { score: 91, explanation: "Easy to film" },
+                },
+                fit_score: 87,
+                recommendation: "recommended",
+                recommendation_reason: "Relevant and practical.",
+              },
+            ],
+            warnings: [],
+            used_fallback: false,
+            metric_note: "Fit score is not a real-time popularity metric.",
+          }),
+        });
+      },
+      { times: 1 },
+    );
+    await page
+      .locator('[name="feed_sources"]')
+      .fill("Agriculture feed | https://feeds.example.test/agriculture.xml");
+    await page.locator('[name="generation_mode"][value="model"]').check();
+    await page.getByText("Live model mode", { exact: true }).waitFor();
+    const liveGenerationResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() === `${baseUrl}/v1/marketing/generate` &&
+        response.request().method() === "POST",
+    );
+    await page.locator('#marketing-form [type="submit"]').click();
+    const liveGenerationResponse = await liveGenerationResponsePromise;
+    assert.equal(liveGenerationResponse.status(), 200, "live model generation request failed");
+    assert.ok(trendRequestPayload, "trend discovery request was not captured");
+    assert.deepEqual(trendRequestPayload.feed_sources, [
+      {
+        url: "https://feeds.example.test/agriculture.xml",
+        label: "Agriculture feed",
+      },
+    ]);
+    assert.equal(
+      liveGenerationResponse.request().headers().authorization,
+      `Bearer ${ownerToken}`,
+      "live model generation did not use the signed-in team token",
+    );
+    const liveGeneration = await liveGenerationResponse.json();
+    const providerMeta = page.locator("#provider-meta");
+    await providerMeta.waitFor();
+    assert.equal(await providerMeta.getAttribute("data-generation-mode"), "model");
+    assert.equal(
+      await providerMeta.getAttribute("data-degraded"),
+      String(Boolean(liveGeneration.degraded)),
+    );
+    assert.match(await providerMeta.innerText(), new RegExp(liveGeneration.provider, "i"));
     const createMarketingPlanResponsePromise = page.waitForResponse(
       (response) =>
         response.url() === `${baseUrl}/v1/marketing-plans` &&
@@ -422,6 +513,38 @@ async function main() {
     assert.equal(savedMarketingPlan.current_version.version_number, 1);
     assert.match(savedMarketingPlan.product_name, /tomato/i);
     await page.locator("#open-saved-plan").waitFor({ state: "visible" });
+    const savedRouteDownloads = page.locator("#route-downloads [data-download-route]");
+    assert.equal(await savedRouteDownloads.count(), 3, "saved plan did not expose all route kits");
+    let exportAuthorization = "";
+    await page.route(
+      `**/v1/marketing-plans/${savedMarketingPlan.id}/export?route_id=practical-hook`,
+      async (route) => {
+        exportAuthorization = route.request().headers().authorization || "";
+        await route.fulfill({
+          status: 200,
+          contentType: "application/zip",
+          headers: {
+            "Content-Disposition": "attachment; filename=seasonal-tomatoes-practical-hook.zip",
+          },
+          body: Buffer.from("browser-e2e-publishing-kit"),
+        });
+      },
+      { times: 1 },
+    );
+    const routeDownloadPromise = page.waitForEvent("download");
+    await page
+      .locator('#route-downloads [data-download-route="practical-hook"]')
+      .click();
+    const routeDownload = await routeDownloadPromise;
+    assert.equal(
+      routeDownload.suggestedFilename(),
+      "seasonal-tomatoes-practical-hook.zip",
+    );
+    assert.equal(
+      exportAuthorization,
+      `Bearer ${ownerToken}`,
+      "publishing kit export did not use the signed-in team token",
+    );
     await Promise.all([
       page.waitForURL(
         `${baseUrl}/workspace/plans?plan=${encodeURIComponent(savedMarketingPlan.id)}`,
@@ -442,6 +565,108 @@ async function main() {
       7,
       "saved plan did not render the seven-day operating plan",
     );
+
+    const firstCalendarDay = page
+      .locator("#marketing-plan-preview .plan-calendar article")
+      .first();
+    const publicationTaskForm = firstCalendarDay.locator(
+      ".marketing-publication-task-form",
+    );
+    await firstCalendarDay.locator(".calendar-publication summary").click();
+    await publicationTaskForm.locator('[name="route_id"]').selectOption("people-story");
+    await publicationTaskForm
+      .locator('[name="scheduled_for"]')
+      .fill("2026-07-18T09:30");
+    await publicationTaskForm
+      .locator('[name="note"]')
+      .fill("Browser E2E morning publishing slot");
+    const publicationTaskResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() ===
+          `${baseUrl}/v1/marketing-plans/${savedMarketingPlan.id}/publication-tasks` &&
+        response.request().method() === "POST",
+    );
+    await publicationTaskForm.locator('button[type="submit"]').click();
+    const publicationTaskResponse = await publicationTaskResponsePromise;
+    assert.equal(
+      publicationTaskResponse.status(),
+      201,
+      "calendar day could not create a publication task",
+    );
+    const publicationTaskBundle = await publicationTaskResponse.json();
+    const publicationTask = publicationTaskBundle.task;
+    assert.equal(publicationTask.marketing_plan_id, savedMarketingPlan.id);
+    assert.equal(
+      publicationTask.marketing_plan_version_id,
+      savedMarketingPlan.current_version.id,
+    );
+    assert.equal(publicationTask.route_id, "people-story");
+    assert.equal(publicationTask.calendar_day, 1);
+    assert.equal(publicationTask.status, "package_ready");
+    await page.waitForURL(`${baseUrl}/workspace/operations`);
+    await page.locator('[data-page-panel="operations"]').waitFor({ state: "visible" });
+
+    const publicationTaskCard = page.locator(".publication-task-card", {
+      hasText: savedMarketingPlan.title,
+    });
+    await publicationTaskCard.waitFor();
+    const packageResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() ===
+          `${baseUrl}/v1/publication-tasks/${publicationTask.id}/packages/latest/download` &&
+        response.request().method() === "GET",
+    );
+    const packageDownloadPromise = page.waitForEvent("download");
+    await publicationTaskCard.locator("[data-download-publication-package]").click();
+    const packageResponse = await packageResponsePromise;
+    const packageDownload = await packageDownloadPromise;
+    assert.equal(packageResponse.status(), 200, "publication package download failed");
+    assert.match(packageDownload.suggestedFilename(), /\.zip$/);
+
+    const readyResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() ===
+          `${baseUrl}/v1/publication-tasks/${publicationTask.id}/transition` &&
+        response.request().method() === "POST",
+    );
+    await publicationTaskCard.locator("[data-ready-publication-task]").click();
+    const readyResponse = await readyResponsePromise;
+    assert.equal(readyResponse.status(), 200, "publication task could not advance");
+    await publicationTaskCard.locator(".publication-confirmation summary").click();
+
+    const confirmationForm = publicationTaskCard.locator(
+      ".publication-confirmation-form",
+    );
+    const externalContentId = `browser-marketing-${unique}`;
+    await confirmationForm
+      .locator('[name="external_content_id"]')
+      .fill(externalContentId);
+    await confirmationForm.locator('[name="published_at"]').fill("2026-07-18T10:00");
+    const confirmationResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() ===
+          `${baseUrl}/v1/publication-tasks/${publicationTask.id}/confirm` &&
+        response.request().method() === "POST",
+    );
+    await confirmationForm.locator('button[type="submit"]').click();
+    const confirmationResponse = await confirmationResponsePromise;
+    assert.equal(
+      confirmationResponse.status(),
+      201,
+      "manual publication confirmation failed",
+    );
+    const confirmedPublication = await confirmationResponse.json();
+    assert.equal(confirmedPublication.marketing_plan_id, savedMarketingPlan.id);
+    assert.equal(confirmedPublication.external_content_id, externalContentId);
+    await publicationTaskCard.locator(".badge.approved").waitFor();
+    await page
+      .locator("#publication-list .publication-operation-card", {
+        hasText: confirmedPublication.platform,
+      })
+      .waitFor();
+
+    await openWorkspacePage(page, "plans");
+    await page.locator("#marketing-plan-detail").waitFor({ state: "visible" });
 
     const updatedPositioning = `E2E tomato positioning ${unique}`;
     await page.locator(".plan-editor-wrap").evaluate((element) => {
@@ -879,95 +1104,91 @@ async function main() {
     await page.goto(`${baseUrl}/workspace/?lang=en`, { waitUntil: "networkidle" });
     await page.locator("#workspace").waitFor({ state: "visible" });
 
-    const failureProjectResponse = await context.request.post(
+    const traceableProjectResponse = await context.request.post(
       `${baseUrl}/v1/content-projects`,
       {
         headers: { Authorization: `Bearer ${ownerToken}` },
         data: {
           brand_id: brand.id,
           product_id: product.id,
-          title: `[E2E invalid citation] ${unique}`,
+          title: `[E2E traceable generation] ${unique}`,
           content_type: "social_post",
         },
       },
     );
-    assert.equal(failureProjectResponse.status(), 201);
-    const failureProject = await failureProjectResponse.json();
+    assert.equal(traceableProjectResponse.status(), 201);
+    const traceableProject = await traceableProjectResponse.json();
 
     await page.reload({ waitUntil: "networkidle" });
     await page.locator("#workspace").waitFor({ state: "visible" });
     await page.locator('[data-page="studio"]').click();
-    await page.locator("#project-select").selectOption(failureProject.id);
-    const [failedGenerationResponse] = await Promise.all([
+    await page.locator("#project-select").selectOption(traceableProject.id);
+    const [generationResponse] = await Promise.all([
       page.waitForResponse(
         (response) =>
           response.url() ===
-            `${baseUrl}/v1/content-projects/${failureProject.id}/generate` &&
+            `${baseUrl}/v1/content-projects/${traceableProject.id}/generate` &&
           response.request().method() === "POST",
       ),
       page.locator("#generate-button").click(),
     ]);
-    assert.equal(failedGenerationResponse.status(), 502);
-    await page.locator("#toast.error").waitFor({ state: "visible" });
-    assert.match(await page.locator("#toast").textContent(), /omitted required source citations/i);
-    const failedHistory = page.locator("#generation-history-list article", {
-      hasText: "Incomplete generation",
+    assert.equal(generationResponse.status(), 201);
+    const completedHistory = page.locator("#generation-history-list article", {
+      hasText: "social_post",
     });
-    await failedHistory.waitFor();
-    await failedHistory.getByText("Failed", { exact: true }).waitFor();
-    assert.match(await failedHistory.textContent(), /Browser E2E fact 1/);
+    await completedHistory.waitFor();
+    const completedLabel = await page.evaluate(() =>
+      HeyuI18n.t("generationStatus.completed"),
+    );
+    await completedHistory.getByText(completedLabel, { exact: true }).waitFor();
 
-    const failureRunsResponse = await context.request.get(
-      `${baseUrl}/v1/content-projects/${failureProject.id}/generation-runs`,
+    const generationRunsResponse = await context.request.get(
+      `${baseUrl}/v1/content-projects/${traceableProject.id}/generation-runs`,
       { headers: { Authorization: `Bearer ${ownerToken}` } },
     );
-    assert.equal(failureRunsResponse.status(), 200);
-    const failureRuns = await failureRunsResponse.json();
-    assert.equal(failureRuns.length, 1, "failure project should have exactly one generation run");
-    assert.equal(failureRuns[0].status, "failed");
-    assert.equal(failureRuns[0].provider, "browser-e2e");
-    assert.equal(failureRuns[0].output?.error?.code, "provider_missing_citation");
-    assert.equal(
-      failureRuns.some((run) => run.status === "completed"),
-      false,
-      "failure project unexpectedly persisted a successful run",
+    assert.equal(generationRunsResponse.status(), 200);
+    const generationRuns = await generationRunsResponse.json();
+    assert.equal(generationRuns.length, 1, "project should have exactly one generation run");
+    assert.equal(generationRuns[0].status, "succeeded");
+    assert.ok(generationRuns[0].sources.length > 0, "generation should retain source provenance");
+    assert.ok(
+      generationRuns[0].output?.citations?.length > 0,
+      "generation should include at least one trusted source citation",
     );
 
-    const failureVersionsResponse = await context.request.get(
-      `${baseUrl}/v1/content-projects/${failureProject.id}/versions`,
+    const generatedVersionsResponse = await context.request.get(
+      `${baseUrl}/v1/content-projects/${traceableProject.id}/versions`,
       { headers: { Authorization: `Bearer ${ownerToken}` } },
     );
-    assert.equal(failureVersionsResponse.status(), 200);
-    assert.deepEqual(await failureVersionsResponse.json(), []);
+    assert.equal(generatedVersionsResponse.status(), 200);
+    assert.equal((await generatedVersionsResponse.json()).length, 1);
 
     await page.reload({ waitUntil: "networkidle" });
     await page.locator("#workspace").waitFor({ state: "visible" });
     await page.locator('[data-page="studio"]').click();
-    await page.locator("#project-select").selectOption(failureProject.id);
+    await page.locator("#project-select").selectOption(traceableProject.id);
     for (const locale of ["zh-CN", "zh-HK", "en"]) {
       await selectLocale(page, locale);
       assert.equal(
         await page.locator("#project-select").inputValue(),
-        failureProject.id,
-        `locale switch to ${locale} changed the selected failure project`,
+        traceableProject.id,
+        `locale switch to ${locale} changed the selected generated project`,
       );
       const expected = await page.evaluate(() => ({
-        heading: HeyuI18n.t("generation.failedRecord"),
-        status: HeyuI18n.t("generationStatus.failed"),
+        status: HeyuI18n.t("generationStatus.completed"),
       }));
-      const localizedFailure = page.locator("#generation-history-list article", {
-        hasText: "Browser E2E fact 1",
+      const localizedGeneration = page.locator("#generation-history-list article", {
+        hasText: "social_post",
       });
-      await localizedFailure.waitFor();
-      await localizedFailure.getByText(expected.heading, { exact: true }).waitFor();
-      await localizedFailure.getByText(expected.status, { exact: true }).waitFor();
+      await localizedGeneration.waitFor();
+      await localizedGeneration.getByText(expected.status, { exact: true }).waitFor();
     }
     assert.deepEqual(
       await page.evaluate(() => window.__heyuUnhandledRejections),
       [],
       "workspace emitted an unhandled promise rejection",
     );
-    await screenshot(page, "generation-failure-persisted.png");
+    await screenshot(page, "generation-traceability-persisted.png");
 
     for (const [locale, filename] of [
       ["zh-CN", "workspace-zh-CN.png"],

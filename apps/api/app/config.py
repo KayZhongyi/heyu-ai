@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./agri_content.db"
     ai_provider: str = "mock"
     ai_model: str = "deterministic-v1"
+    ai_embedding_model: str = ""
     ai_base_url: str = ""
     ai_api_key: str = ""
     ai_timeout_seconds: float = 45.0

@@ -1,5 +1,6 @@
 from io import BytesIO
 
+from docx import Document
 from fastapi.testclient import TestClient
 from pptx import Presentation
 from pptx.util import Inches
@@ -31,6 +32,15 @@ def make_pptx(text: str = "Traceable harvest story") -> bytes:
     slide.shapes.add_textbox(Inches(1), Inches(1), Inches(8), Inches(1)).text = text
     output = BytesIO()
     presentation.save(output)
+    return output.getvalue()
+
+
+def make_docx(*paragraphs: str) -> bytes:
+    document = Document()
+    for paragraph in paragraphs:
+        document.add_paragraph(paragraph)
+    output = BytesIO()
+    document.save(output)
     return output.getvalue()
 
 
@@ -106,6 +116,48 @@ def test_document_preview_reports_detected_type_when_filename_has_no_extension(
     assert response.json()["media_type"] == "application/pdf"
 
 
+def test_docx_preview_sections_can_be_persisted_with_knowledge_source(
+    client: TestClient,
+    auth: dict[str, str],
+) -> None:
+    preview_response = client.post(
+        "/v1/document-imports/preview",
+        headers=auth,
+        files={
+            "file": (
+                "seasonal-notes.docx",
+                make_docx("Seasonal tomato", "Picked after natural ripening"),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["media_type"].endswith("wordprocessingml.document")
+    assert [section["kind"] for section in preview["sections"]] == [
+        "paragraph",
+        "paragraph",
+    ]
+
+    created_response = client.post(
+        "/v1/knowledge",
+        headers=auth,
+        json={
+            "title": "Seasonal notes",
+            "kind": "product_fact",
+            "content": preview["text"],
+            "citation_label": "Seasonal notes",
+            "source_filename": preview["filename"],
+            "media_type": preview["media_type"],
+            "document_sections": preview["sections"],
+        },
+    )
+
+    assert created_response.status_code == 201, created_response.text
+    created = created_response.json()
+    assert created["document_sections"] == preview["sections"]
+
+
 def test_document_preview_rejects_unsupported_corrupt_and_large_files(
     client: TestClient,
     auth: dict[str, str],
@@ -126,7 +178,7 @@ def test_document_preview_rejects_unsupported_corrupt_and_large_files(
         files={"file": ("source.pdf", b"x" * (MAX_DOCUMENT_UPLOAD_BYTES + 1))},
     )
 
-    assert unsupported.status_code == 415
+    assert unsupported.status_code == 422
     assert corrupt.status_code == 422
     assert too_large.status_code == 413
 

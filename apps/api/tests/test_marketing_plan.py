@@ -1,4 +1,7 @@
 import json
+import re
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -31,6 +34,14 @@ def sample_request(**overrides) -> MarketingPlanRequest:
     return MarketingPlanRequest.model_validate(data)
 
 
+def assert_no_corrupted_text(result: MarketingPlanResponse) -> None:
+    serialized = json.dumps(result.model_dump(), ensure_ascii=False)
+    assert "\ufffd" not in serialized
+    assert re.search(r"\?{2,}", serialized) is None
+    for fragment in ("锟斤拷", "鐨勌", "銆", "鈥", "鏂版", "瑙嗛", "浜у"):
+        assert fragment not in serialized
+
+
 def test_deterministic_plan_is_complete():
     result = DeterministicMarketingProvider().generate(sample_request())
 
@@ -40,6 +51,168 @@ def test_deterministic_plan_is_complete():
     assert len(result.seven_day_plan) == 7
     assert all(len(video.shots) >= 3 for video in result.videos)
     assert len({video.angle for video in result.videos}) == 3
+    assert_no_corrupted_text(result)
+
+
+def test_request_preserves_selected_trend_provenance():
+    request = sample_request(
+        trend_snapshot={
+            "title": "盛夏清晨采收",
+            "source_url": "https://example.test/trends/harvest",
+            "source_label": "农业资讯测试源",
+            "source_type": "rss",
+            "published_at": datetime(2026, 7, 15, 8, tzinfo=UTC),
+            "captured_at": datetime(2026, 7, 16, 9, tzinfo=UTC),
+            "fit_score": 88,
+            "recommendation": "recommended",
+            "recommendation_reason": "与番茄、清晨采摘和抖音镜头都直接相关。",
+        }
+    )
+
+    assert request.trend == "盛夏清晨采收"
+    assert request.trend_snapshot is not None
+    assert request.trend_snapshot.source_type == "rss"
+    assert request.model_dump(mode="json")["trend_snapshot"]["source_url"].startswith("https://")
+
+
+@pytest.mark.parametrize("locale", ["zh-CN", "zh-HK", "en"])
+def test_selected_traceable_trend_enters_script_and_response(locale):
+    trend_title = "盛夏清晨采收挑战"
+    request = sample_request(
+        locale=locale,
+        trend_snapshot={
+            "title": trend_title,
+            "source_url": "https://example.test/trends/harvest",
+            "source_label": "农业资讯 RSS",
+            "source_type": "rss",
+            "published_at": datetime(2026, 7, 16, 8, tzinfo=UTC),
+            "captured_at": datetime(2026, 7, 16, 9, tzinfo=UTC),
+            "fit_score": 88,
+            "recommendation": "recommended",
+            "recommendation_reason": "与产品、平台和拍摄场景直接相关。",
+        },
+    )
+
+    result = DeterministicMarketingProvider().generate(request)
+    generated_scripts = "\n".join(video.script for video in result.videos)
+
+    assert trend_title in generated_scripts
+    assert request.product_name in generated_scripts
+    assert any(point in generated_scripts for point in request.selling_points)
+    assert result.trend.trend_used == trend_title
+    assert result.trend.source_label == "农业资讯 RSS"
+    assert result.trend.source_url == "https://example.test/trends/harvest"
+    assert result.trend.source_type == "rss"
+    assert result.trend.fit_score == 88
+    assert result.trend.recommendation == "recommended"
+
+
+def test_request_rejects_mismatched_trend_snapshot():
+    with pytest.raises(ValidationError, match="trend must match"):
+        sample_request(
+            trend="另一个热点",
+            trend_snapshot={
+                "title": "盛夏清晨采收",
+                "source_label": "用户提供",
+                "source_type": "manual",
+                "captured_at": datetime(2026, 7, 16, 9, tzinfo=UTC),
+                "fit_score": 80,
+                "recommendation": "recommended",
+                "recommendation_reason": "适合当前产品。",
+            },
+        )
+
+
+@pytest.mark.parametrize(
+    ("locale", "product_name", "description", "selling_points", "platform"),
+    [
+        (
+            "zh-CN",
+            "当季番茄",
+            "自然成熟后采摘，适合家庭鲜食与做菜。",
+            ["自然成熟", "清甜多汁", "当天采摘"],
+            "douyin",
+        ),
+        (
+            "zh-HK",
+            "高山單叢茶",
+            "春季採摘並完成傳統工序，香氣清晰，適合日常沖泡。",
+            ["春季採摘", "傳統工序", "香氣清晰"],
+            "xiaohongshu",
+        ),
+        (
+            "zh-CN",
+            "水果礼盒",
+            "按成熟度分选后装箱，适合节日探访与家庭分享。",
+            ["多种水果搭配", "分级装箱", "适合分享"],
+            "wechat-channels",
+        ),
+    ],
+)
+def test_marketing_intelligence_covers_required_product_platform_pairs(
+    locale,
+    product_name,
+    description,
+    selling_points,
+    platform,
+):
+    result = DeterministicMarketingProvider().generate(
+        sample_request(
+            locale=locale,
+            product_name=product_name,
+            product_description=description,
+            selling_points=selling_points,
+            platform=platform,
+        )
+    )
+
+    assert [route.route_id for route in result.creative_routes] == [
+        "practical-hook",
+        "people-story",
+        "playful-contrast",
+    ]
+    assert [video.route_id for video in result.videos] == [
+        route.route_id for route in result.creative_routes
+    ]
+    assert len({route.name for route in result.creative_routes}) == 3
+    assert [signal.signal_type for signal in result.topic_signals] == [
+        "manual-hotspot",
+        "seasonal-farming",
+        "evergreen-pain-point",
+    ]
+    assert {signal.recommendation for signal in result.topic_signals}.issubset(
+        {"recommended", "consider", "skip"}
+    )
+    for signal in result.topic_signals:
+        dimension_scores = signal.fit_scores.model_dump()
+        assert set(dimension_scores) == {
+            "product",
+            "audience",
+            "platform",
+            "timeliness",
+            "filmability",
+            "source",
+        }
+        assert signal.total_score == round(
+            sum(item["score"] for item in dimension_scores.values()) / 6
+        )
+        assert signal.source_note
+        assert signal.explanation
+
+    for video in result.videos:
+        assessment = video.quality_assessment
+        assert assessment.total_score == round(sum(assessment.scores.model_dump().values()) / 6)
+        assert len(assessment.strengths) >= 2
+        assert assessment.improvements
+
+    assert result.next_step.current_stage == "select-route"
+    assert [stage.stage for stage in result.next_step.stages] == [
+        "select-route",
+        "prepare-shoot",
+        "record-publication",
+    ]
+    assert product_name in result.next_step.primary_action
+    assert_no_corrupted_text(result)
 
 
 def test_plan_supports_three_product_categories():
@@ -56,6 +229,50 @@ def test_plan_supports_three_product_categories():
         )
         assert product_name in result.product_profile.one_line_value
         assert len(result.videos) == 3
+
+
+def test_passionfruit_plan_uses_product_specific_actions_and_trend_angle():
+    result = DeterministicMarketingProvider().generate(
+        sample_request(
+            persona="cooperative",
+            goals=["sell", "build-brand", "gain-followers"],
+            product_name="盛夏高山黄金百香果",
+            product_description=(
+                "果园里的黄金百香果自然成熟后分批采摘，金黄色果皮醒目，"
+                "切开后果香明显、汁水充足，酸甜平衡。合作社当天采摘、统一分级，"
+                "既可以直接挖着吃，也适合加入冰水、气泡水或酸奶。"
+            ),
+            selling_points=["自然成熟", "金黄果皮", "果香浓郁", "酸甜多汁", "当天采摘"],
+            audience="喜欢夏日水果、低负担饮品和果园内容的年轻消费者",
+            tone="lively",
+            trend="盛夏第一口：切开黄金百香果，再冲一杯气泡饮",
+        )
+    )
+
+    combined = json.dumps([video.model_dump() for video in result.videos], ensure_ascii=False)
+    actions = ("切开", "挖出果肉", "汁水", "气泡水", "果园采摘", "果皮颜色")
+    assert sum(action in combined for action in actions) >= 5
+    assert "盛夏第一口" in combined
+    assert len({video.shots[0].visual for video in result.videos}) == 3
+    assert all(video.quality_assessment.total_score >= 90 for video in result.videos)
+    assert "无人机" not in combined
+    assert "摄影棚" not in combined
+
+
+def test_tea_plan_uses_brewing_actions_instead_of_fruit_actions():
+    result = DeterministicMarketingProvider().generate(
+        sample_request(
+            product_name="高山单丛茶",
+            origin="广东潮州",
+            product_description="春季采青，经过摊晾和传统工序，香气清晰，适合日常冲泡。",
+            selling_points=["春季采青", "传统工序", "香气清晰"],
+            platform="xiaohongshu",
+        )
+    )
+
+    combined = json.dumps([video.model_dump() for video in result.videos], ensure_ascii=False)
+    assert all(action in combined for action in ("投茶", "注水", "出汤", "叶底"))
+    assert all(action not in combined for action in ("挖出果肉", "果肉汁水", "气泡水"))
 
 
 def test_plan_supports_three_locales():
@@ -84,14 +301,125 @@ def test_plan_supports_three_locales():
     ]
     assert "广东清远" in zh_hk.product_profile.one_line_value
     assert "Seasonal tomatoes" in en.product_profile.one_line_value
+    assert [route.name for route in zh_cn.creative_routes] == [
+        "实用吸睛",
+        "人物故事",
+        "轻松反差",
+    ]
+    assert [route.name for route in zh_hk.creative_routes] == [
+        "實用吸睛",
+        "人物故事",
+        "輕鬆反差",
+    ]
+    zh_hk_text = json.dumps(zh_hk.model_dump(), ensure_ascii=False)
+    assert "不一样" not in zh_hk_text
+    assert "你可能會選錯" in zh_hk.videos[2].title
+    assert "会选错" not in zh_hk_text
+    assert [route.name for route in en.creative_routes] == [
+        "Practical hook",
+        "People story",
+        "Playful contrast",
+    ]
+    for result in (zh_cn, zh_hk, en):
+        assert_no_corrupted_text(result)
+
+
+def test_hong_kong_chinese_system_copy_has_no_common_simplified_residue():
+    provider = DeterministicMarketingProvider()
+    result = provider.generate(
+        sample_request(
+            locale="zh-HK",
+            product_name="Tomato",
+            origin="Hong Kong",
+            product_description="Fresh seasonal tomato for family meals.",
+            selling_points=["fresh", "farm direct", "seasonal"],
+            audience="Families",
+            platform="wechat-channels",
+            trend="summer meal",
+        )
+    )
+    generated_text = json.dumps(result.model_dump(), ensure_ascii=False)
+    simplified_residue = (
+        "形容词",
+        "分层",
+        "解释",
+        "必须",
+        "还是",
+        "两",
+        "刚才",
+        "揭晓",
+        "停顿",
+        "环境",
+        "关系",
+        "结论",
+        "检查",
+        "开头",
+        "宽泛",
+        "脚本",
+        "没有",
+        "实时",
+        "搜索",
+        "温暖",
+        "歌词",
+        "压低",
+        "恢复",
+        "记忆",
+        "测量",
+        "讨论",
+    )
+    assert not [token for token in simplified_residue if token in generated_text]
 
 
 def test_request_deduplicates_goals_and_rejects_high_risk_claims():
     request = sample_request(goals=["sell", "sell", "build-brand"])
     assert request.goals == ["sell", "build-brand"]
 
+    request = sample_request(content_modules=["videos", "videos", "calendar"])
+    assert request.content_modules == ["videos", "calendar"]
+
     with pytest.raises(ValidationError, match="high-risk"):
         sample_request(selling_points=["当天采摘", "降血糖"])
+
+
+@pytest.mark.parametrize(
+    ("content_modules", "video_count", "live_count", "calendar_count"),
+    [
+        (["videos"], 3, 0, 0),
+        (["livestream"], 0, 5, 0),
+        (["calendar"], 0, 0, 7),
+        (["videos", "calendar"], 3, 0, 7),
+    ],
+)
+def test_public_preview_returns_only_selected_content_modules(
+    client: TestClient,
+    content_modules: list[str],
+    video_count: int,
+    live_count: int,
+    calendar_count: int,
+):
+    payload = sample_request(content_modules=content_modules).model_dump(mode="json")
+
+    response = client.post("/v1/marketing/preview", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["included_modules"] == content_modules
+    assert len(body["videos"]) == video_count
+    assert len(body["livestream"]) == live_count
+    assert len(body["seven_day_plan"]) == calendar_count
+
+
+def test_request_rejects_empty_content_module_selection():
+    with pytest.raises(ValidationError):
+        sample_request(content_modules=[])
+
+
+def test_response_rejects_module_presence_mismatch():
+    valid = DeterministicMarketingProvider().generate(sample_request()).model_dump()
+    valid["included_modules"] = ["videos", "calendar"]
+
+    with pytest.raises(ValidationError, match="livestream presence"):
+        MarketingPlanResponse.model_validate(valid)
 
 
 def test_response_requires_ordered_days_and_distinct_videos():
@@ -114,6 +442,101 @@ def test_public_preview_endpoint_needs_no_account(client: TestClient):
     assert body["provider"] == "mock"
     assert len(body["videos"]) == 3
     assert len(body["seven_day_plan"]) == 7
+
+
+def test_public_regeneration_replaces_only_selected_video(client: TestClient):
+    request = sample_request()
+    current = DeterministicMarketingProvider().generate(request)
+    payload = {
+        "request": request.model_dump(mode="json"),
+        "current_plan": current.model_dump(mode="json"),
+        "target": "video",
+        "route_id": "people-story",
+        "variation_index": 2,
+    }
+
+    response = client.post("/v1/marketing/regenerate/preview", json=payload)
+
+    assert response.status_code == 200
+    regenerated = response.json()
+    before_by_route = {item["route_id"]: item for item in current.model_dump(mode="json")["videos"]}
+    after_by_route = {item["route_id"]: item for item in regenerated["videos"]}
+    assert after_by_route["people-story"] != before_by_route["people-story"]
+    assert after_by_route["practical-hook"] == before_by_route["practical-hook"]
+    assert after_by_route["playful-contrast"] == before_by_route["playful-contrast"]
+    assert regenerated["livestream"] == current.model_dump(mode="json")["livestream"]
+    assert regenerated["seven_day_plan"] == current.model_dump(mode="json")["seven_day_plan"]
+
+
+@pytest.mark.parametrize(
+    ("target", "changed_field"),
+    [("livestream", "livestream"), ("calendar", "seven_day_plan")],
+)
+def test_public_regeneration_replaces_only_requested_module(
+    client: TestClient,
+    target: str,
+    changed_field: str,
+):
+    request = sample_request()
+    current = DeterministicMarketingProvider().generate(request)
+    current_json = current.model_dump(mode="json")
+
+    response = client.post(
+        "/v1/marketing/regenerate/preview",
+        json={
+            "request": request.model_dump(mode="json"),
+            "current_plan": current_json,
+            "target": target,
+            "variation_index": 3,
+        },
+    )
+
+    assert response.status_code == 200
+    regenerated = response.json()
+    assert regenerated[changed_field] != current_json[changed_field]
+    for stable_field in {"videos", "livestream", "seven_day_plan"} - {changed_field}:
+        assert regenerated[stable_field] == current_json[stable_field]
+
+
+def test_public_regeneration_rejects_unavailable_module(client: TestClient):
+    request = sample_request(content_modules=["videos"])
+    current = marketing.generate_marketing_preview(request)
+
+    response = client.post(
+        "/v1/marketing/regenerate/preview",
+        json={
+            "request": request.model_dump(mode="json"),
+            "current_plan": current.model_dump(mode="json"),
+            "target": "livestream",
+            "variation_index": 1,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_public_trend_discovery_returns_ranked_fallback_without_account(
+    client: TestClient,
+):
+    response = client.post(
+        "/v1/trends/discover",
+        json={
+            "product_name": "当季番茄",
+            "selling_points": ["自然成熟", "当天采摘"],
+            "audience": "年轻家庭",
+            "platform": "douyin",
+            "limit": 4,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["used_fallback"] is True
+    assert len(body["items"]) >= 2
+    assert all(
+        item["candidate"]["source_type"] in {"seasonal", "evergreen"} for item in body["items"]
+    )
+    assert "不是实时热度" in body["metric_note"]
 
 
 def test_configured_generation_endpoint_requires_account(client: TestClient):
@@ -187,7 +610,7 @@ def test_configured_generation_degrades_to_mock(monkeypatch):
 
 
 def _openai_settings(**overrides) -> Settings:
-    values = {
+    values: dict[str, Any] = {
         "ai_provider": "openai-compatible",
         "ai_base_url": "https://model.example/v1",
         "ai_model": "domestic-model",
@@ -253,6 +676,68 @@ def test_openai_compatible_provider_accepts_fenced_json(monkeypatch):
     assert result.provider == "openai-compatible"
     assert result.model == "domestic-model"
     assert len(result.videos) == 3
+    assert len(result.creative_routes) == 3
+    assert len(result.topic_signals) == 3
+
+
+def test_openai_provider_skips_revision_when_quality_is_sufficient(monkeypatch):
+    source = DeterministicMarketingProvider().generate(sample_request()).model_dump()
+    body = {"choices": [{"message": {"content": json.dumps(source, ensure_ascii=False)}}]}
+    calls = []
+
+    def fake_post(*args, **kwargs):
+        calls.append(kwargs["json"])
+        return _FakeResponse(body)
+
+    monkeypatch.setattr(marketing.httpx, "post", fake_post)
+    monkeypatch.setattr(marketing, "_plan_revision_issues", lambda request, plan: [])
+
+    OpenAICompatibleMarketingProvider(_openai_settings()).generate(sample_request())
+
+    assert len(calls) == 1
+
+
+def test_openai_provider_revises_low_quality_plan_at_most_once(monkeypatch):
+    source = DeterministicMarketingProvider().generate(sample_request()).model_dump()
+    body = {"choices": [{"message": {"content": json.dumps(source, ensure_ascii=False)}}]}
+    calls = []
+    quality_checks = iter(
+        [
+            [{"route_id": "practical-hook", "total_score": 60, "issues": []}],
+            [],
+        ]
+    )
+
+    def fake_post(*args, **kwargs):
+        calls.append(kwargs["json"])
+        return _FakeResponse(body)
+
+    monkeypatch.setattr(marketing.httpx, "post", fake_post)
+    monkeypatch.setattr(
+        marketing,
+        "_plan_revision_issues",
+        lambda request, plan: next(quality_checks),
+    )
+
+    OpenAICompatibleMarketingProvider(_openai_settings()).generate(sample_request())
+
+    assert len(calls) == 2
+    assert len(calls[1]["messages"]) == 4
+    assert "quality_issues" in calls[1]["messages"][-1]["content"]
+
+
+def test_openai_compatible_provider_rejects_legacy_response_without_intelligence(monkeypatch):
+    source = DeterministicMarketingProvider().generate(sample_request()).model_dump()
+    source.pop("creative_routes")
+    body = {"choices": [{"message": {"content": json.dumps(source, ensure_ascii=False)}}]}
+    monkeypatch.setattr(
+        marketing.httpx,
+        "post",
+        lambda *args, **kwargs: _FakeResponse(body),
+    )
+
+    with pytest.raises(MarketingProviderError):
+        OpenAICompatibleMarketingProvider(_openai_settings()).generate(sample_request())
 
 
 def test_degraded_result_is_not_cached_after_provider_recovers(monkeypatch):

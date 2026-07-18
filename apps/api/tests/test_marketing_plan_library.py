@@ -22,13 +22,22 @@ def marketing_request(
         "platform": platform,
         "tone": "warm",
         "trend": "",
+        "content_modules": ["videos", "livestream", "calendar"],
     }
 
 
 def generated_content(client, request_payload: dict) -> dict:
     response = client.post("/v1/marketing/preview", json=request_payload)
     assert response.status_code == 200, response.text
-    return response.json()
+    return _drop_none(response.json())
+
+
+def _drop_none(value):
+    if isinstance(value, dict):
+        return {key: _drop_none(item) for key, item in value.items() if item is not None}
+    if isinstance(value, list):
+        return [_drop_none(item) for item in value]
+    return value
 
 
 def plan_payload(client, **request_overrides) -> dict:

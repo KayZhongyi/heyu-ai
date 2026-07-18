@@ -29,6 +29,19 @@ jobs:
           alembic downgrade base
           alembic upgrade head
       - run: pytest --cov=app --cov-report=term-missing --cov-fail-under=80
+      - name: Audit three farmer marketing scenarios
+        run: >-
+          python ../../scripts/audit-marketing-intelligence.py
+          --json-output ../../outputs/marketing-intelligence-audit.json
+          --markdown-output ../../outputs/marketing-intelligence-audit.md
+      - name: Upload marketing intelligence audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketing-intelligence-audit
+          path: |
+            outputs/marketing-intelligence-audit.json
+            outputs/marketing-intelligence-audit.md
+          if-no-files-found: error
 
   repository-audit:
     runs-on: ubuntu-latest

@@ -6,9 +6,20 @@ import secrets
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Literal
 from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -21,17 +32,30 @@ from app.abuse import enforce_limit, network_subject, normalize_identifier
 from app.config import Settings, get_settings
 from app.database import Base, engine, get_db
 from app.document_import import (
+    DOCX_MEDIA_TYPE,
     PDF_MEDIA_TYPE,
     PPTX_MEDIA_TYPE,
     DocumentImportError,
     extract_document_text,
 )
+from app.knowledge_indexing import index_knowledge_source, retrieve_knowledge_context
 from app.marketing import (
+    MarketingModuleRegenerationRequest,
     MarketingPlanRequest,
     MarketingPlanResponse,
     MarketingProviderError,
     generate_marketing_plan,
     generate_marketing_preview,
+    regenerate_marketing_plan,
+    regenerate_marketing_preview,
+)
+from app.marketing_documents import export_marketing_plan_document
+from app.marketing_exports import export_saved_marketing_plan
+from app.media_analysis import (
+    MAX_VIDEO_BYTES,
+    get_media_asset,
+    locate_media_asset,
+    save_and_analyze_video,
 )
 from app.models import (
     AuditEvent,
@@ -45,16 +69,48 @@ from app.models import (
     Role,
     User,
 )
+from app.operation_feedback import (
+    commit_operation_data,
+    create_performance_review,
+    preview_operation_data,
+)
+from app.operation_imports import OperationImportError
+from app.platform_exports import PlatformValidationError
 from app.presentation_export import (
     ContentItem,
     PresentationInput,
     ReviewMetadata,
     generate_presentation_pptx,
 )
+from app.provider_connections import (
+    create_provider_connection,
+    delete_provider_connection,
+    list_provider_connections,
+    provider_connection_view,
+    test_provider_connection,
+    update_provider_connection,
+)
+from app.publication_workflow import (
+    confirm_manual_publication,
+    create_marketing_plan_publication_task,
+    create_publication_task,
+    get_latest_export_package,
+    get_publication_task,
+    list_publication_task_events,
+    list_publication_tasks,
+    locate_export_package_download,
+    transition_publication_task,
+)
+from app.quality_runs import (
+    get_evaluation_run,
+    list_evaluation_runs,
+    run_offline_marketing_evaluation,
+)
 from app.schemas import (
     Actor,
     AssetReview,
     AuditEventRead,
+    BackgroundTaskRead,
     BootstrapRequest,
     BrandCreate,
     BrandRead,
@@ -81,6 +137,7 @@ from app.schemas import (
     ContentVersionRead,
     DocumentFragmentRead,
     DocumentImportPreviewRead,
+    EvaluationRunRead,
     GenerationRead,
     GenerationRunRead,
     GenerationSourceRead,
@@ -93,6 +150,9 @@ from app.schemas import (
     InvitationInspect,
     InvitationRead,
     KnowledgeReview,
+    KnowledgeSearchHit,
+    KnowledgeSearchPreviewRead,
+    KnowledgeSearchPreviewRequest,
     KnowledgeSourceCreate,
     KnowledgeSourceRead,
     KnowledgeSourceRevisionCreate,
@@ -102,17 +162,36 @@ from app.schemas import (
     MarketingPlanDetailRead,
     MarketingPlanRead,
     MarketingPlanVersionCreate,
+    MarketingPublicationTaskCreate,
+    MediaAssetRead,
     MemberRead,
     MemberRoleUpdate,
+    OperationImportBatchRead,
+    OperationImportPreviewRead,
+    OperationImportRowRead,
+    PerformanceReviewRead,
     PerformanceSnapshotCreate,
     PerformanceSnapshotRead,
+    PlatformExportPackageRead,
     ProductCreate,
     ProductRead,
     ProductUpdate,
+    ProviderConnectionCreate,
+    ProviderConnectionProbe,
+    ProviderConnectionProbeRead,
+    ProviderConnectionRead,
+    ProviderConnectionUpdate,
+    PublicationConfirmation,
     PublicationCreate,
     PublicationDetailRead,
     PublicationRead,
+    PublicationTaskCreate,
+    PublicationTaskCreated,
+    PublicationTaskEventRead,
+    PublicationTaskRead,
+    PublicationTaskTransition,
     TokenResponse,
+    VideoAnalysisUploadRead,
     VideoDiagnosisCreate,
     VideoDiagnosisRead,
 )
@@ -188,6 +267,11 @@ from app.services import (
 )
 from app.services import (
     create_marketing_plan as create_saved_marketing_plan,
+)
+from app.trend_discovery import (
+    TrendDiscoveryRequest,
+    TrendDiscoveryResult,
+    TrendDiscoveryService,
 )
 
 
@@ -309,6 +393,7 @@ workspace_pages = {
     "review",
     "audit",
     "members",
+    "providers",
 }
 if web_assets.is_dir():
     app.mount("/assets", StaticFiles(directory=web_assets), name="assets")
@@ -357,6 +442,14 @@ def preview_marketing_plan(payload: MarketingPlanRequest) -> MarketingPlanRespon
     return generate_marketing_preview(payload)
 
 
+@app.post("/v1/trends/discover", response_model=TrendDiscoveryResult)
+async def discover_marketing_trends(
+    payload: TrendDiscoveryRequest,
+) -> TrendDiscoveryResult:
+    """Discover traceable topic signals and rank them for the current farm product."""
+    return await run_in_threadpool(TrendDiscoveryService().discover, payload)
+
+
 @app.post("/v1/marketing/generate", response_model=MarketingPlanResponse)
 def create_marketing_plan(
     payload: MarketingPlanRequest,
@@ -372,9 +465,33 @@ def create_marketing_plan(
         ) from exc
 
 
+@app.post("/v1/marketing/regenerate/preview", response_model=MarketingPlanResponse)
+def preview_regenerated_marketing_module(
+    payload: MarketingModuleRegenerationRequest,
+) -> MarketingPlanResponse:
+    """Regenerate one selected deliverable in the zero-cost public demo."""
+    return regenerate_marketing_preview(payload)
+
+
+@app.post("/v1/marketing/regenerate", response_model=MarketingPlanResponse)
+def create_regenerated_marketing_module(
+    payload: MarketingModuleRegenerationRequest,
+    _: Actor = Depends(current_actor),
+) -> MarketingPlanResponse:
+    """Regenerate one deliverable with the configured provider."""
+    try:
+        return regenerate_marketing_plan(payload)
+    except MarketingProviderError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The configured marketing model could not regenerate the selected module.",
+        ) from exc
+
+
 @app.post(
     "/v1/marketing-plans",
     response_model=MarketingPlanDetailRead,
+    response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
 )
 def post_marketing_plan(
@@ -387,7 +504,11 @@ def post_marketing_plan(
     return create_saved_marketing_plan(db, actor, data)
 
 
-@app.get("/v1/marketing-plans", response_model=list[MarketingPlanRead])
+@app.get(
+    "/v1/marketing-plans",
+    response_model=list[MarketingPlanRead],
+    response_model_exclude_none=True,
+)
 def get_marketing_plans(
     db: Session = Depends(get_db),
     actor: Actor = Depends(current_actor),
@@ -395,7 +516,11 @@ def get_marketing_plans(
     return list_marketing_plans(db, actor)
 
 
-@app.get("/v1/marketing-plans/{plan_id}", response_model=MarketingPlanDetailRead)
+@app.get(
+    "/v1/marketing-plans/{plan_id}",
+    response_model=MarketingPlanDetailRead,
+    response_model_exclude_none=True,
+)
 def get_marketing_plan_detail(
     plan_id: str,
     db: Session = Depends(get_db),
@@ -407,6 +532,7 @@ def get_marketing_plan_detail(
 @app.post(
     "/v1/marketing-plans/{plan_id}/versions",
     response_model=MarketingPlanDetailRead,
+    response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
 )
 def post_marketing_plan_version(
@@ -423,6 +549,7 @@ def post_marketing_plan_version(
 @app.post(
     "/v1/marketing-plans/{plan_id}/copy",
     response_model=MarketingPlanDetailRead,
+    response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
 )
 def post_marketing_plan_copy(
@@ -434,6 +561,97 @@ def post_marketing_plan_copy(
     ),
 ) -> MarketingPlanDetailRead:
     return copy_marketing_plan(db, actor, plan_id, data)
+
+
+@app.get("/v1/marketing-plans/{plan_id}/export")
+def get_marketing_plan_export(
+    plan_id: str,
+    route_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> Response:
+    """Download one generated route as a platform-ready manual upload package."""
+
+    plan = get_marketing_plan(db, actor, plan_id)
+    try:
+        exported = export_saved_marketing_plan(plan, route_id)
+    except PlatformValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+    return Response(
+        content=exported.package.zip_bytes(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{exported.filename}"',
+            "Cache-Control": "private, no-store",
+            "X-Heyu-Content-SHA256": exported.package.content_hash,
+        },
+    )
+
+
+@app.get("/v1/marketing-plans/{plan_id}/document")
+def get_marketing_plan_document(
+    plan_id: str,
+    format: Literal["docx", "pdf"],
+    version_id: str | None = None,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> Response:
+    """Download a saved plan version as an editable Word file or portable PDF."""
+
+    plan = get_marketing_plan(db, actor, plan_id)
+    try:
+        exported = export_marketing_plan_document(
+            plan,
+            format,
+            version_id=version_id,
+        )
+    except PlatformValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+    return Response(
+        content=exported.content,
+        media_type=exported.media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{exported.filename}"',
+            "Cache-Control": "private, no-store",
+            "X-Heyu-Content-SHA256": hashlib.sha256(exported.content).hexdigest(),
+        },
+    )
+
+
+@app.post(
+    "/v1/marketing-plans/{plan_id}/publication-tasks",
+    response_model=PublicationTaskCreated,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_marketing_plan_publication_task(
+    plan_id: str,
+    data: MarketingPublicationTaskCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> PublicationTaskCreated:
+    bundle = create_marketing_plan_publication_task(
+        db,
+        actor,
+        marketing_plan_id=plan_id,
+        marketing_plan_version_id=data.marketing_plan_version_id,
+        route_id=data.route_id,
+        calendar_day=data.calendar_day,
+        execution_mode=data.execution_mode,
+        scheduled_for=data.scheduled_for,
+        note=data.note,
+    )
+    return PublicationTaskCreated(
+        task=PublicationTaskRead.model_validate(bundle.task),
+        package=PlatformExportPackageRead.model_validate(bundle.package),
+    )
 
 
 @app.get("/ready")
@@ -564,6 +782,72 @@ def login(
 @app.get("/v1/me", response_model=Actor)
 def me(actor: Actor = Depends(current_actor)) -> Actor:
     return actor
+
+
+@app.get("/v1/provider-connections", response_model=list[ProviderConnectionRead])
+def get_provider_connections(
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
+) -> list[ProviderConnectionRead]:
+    return [
+        ProviderConnectionRead.model_validate(provider_connection_view(row))
+        for row in list_provider_connections(db, actor)
+    ]
+
+
+@app.post(
+    "/v1/provider-connections",
+    response_model=ProviderConnectionRead,
+    status_code=201,
+)
+def add_provider_connection(
+    data: ProviderConnectionCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
+    settings: Settings = Depends(get_settings),
+) -> ProviderConnectionRead:
+    row = create_provider_connection(db, actor, data, settings)
+    return ProviderConnectionRead.model_validate(provider_connection_view(row))
+
+
+@app.patch(
+    "/v1/provider-connections/{connection_id}",
+    response_model=ProviderConnectionRead,
+)
+def edit_provider_connection(
+    connection_id: str,
+    data: ProviderConnectionUpdate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
+    settings: Settings = Depends(get_settings),
+) -> ProviderConnectionRead:
+    row = update_provider_connection(db, actor, connection_id, data, settings)
+    return ProviderConnectionRead.model_validate(provider_connection_view(row))
+
+
+@app.delete("/v1/provider-connections/{connection_id}", status_code=204)
+def remove_provider_connection(
+    connection_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
+) -> Response:
+    delete_provider_connection(db, actor, connection_id)
+    return Response(status_code=204)
+
+
+@app.post(
+    "/v1/provider-connections/{connection_id}/test",
+    response_model=ProviderConnectionProbeRead,
+)
+def probe_provider_connection(
+    connection_id: str,
+    data: ProviderConnectionProbe,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
+    settings: Settings = Depends(get_settings),
+) -> ProviderConnectionProbeRead:
+    _, result = test_provider_connection(db, actor, connection_id, data, settings)
+    return ProviderConnectionProbeRead.model_validate(result)
 
 
 @app.get("/v1/members", response_model=list[MemberRead])
@@ -1079,6 +1363,26 @@ def add_knowledge_source(
 MAX_DOCUMENT_UPLOAD_BYTES = 15 * 1024 * 1024
 
 
+def _parse_field_mapping(raw: str) -> dict[str, str] | None:
+    if not raw.strip():
+        return None
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="field_mapping_json must be valid JSON",
+        ) from exc
+    if not isinstance(payload, dict) or not all(
+        isinstance(key, str) and isinstance(value, str) for key, value in payload.items()
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="field_mapping_json must be an object of string keys and values",
+        )
+    return payload
+
+
 @app.post(
     "/v1/document-imports/preview",
     response_model=DocumentImportPreviewRead,
@@ -1097,7 +1401,7 @@ async def preview_document_import(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail={
                 "code": "document_too_large",
-                "message": "PDF and PPTX files must be 15 MB or smaller.",
+                "message": "PDF, PPTX, and DOCX files must be 15 MB or smaller.",
             },
         )
     try:
@@ -1113,21 +1417,28 @@ async def preview_document_import(
             detail={"code": exc.code, "message": exc.detail},
         ) from exc
 
-    media_type = PDF_MEDIA_TYPE if extraction.document_kind == "pdf" else PPTX_MEDIA_TYPE
+    media_types = {
+        "pdf": PDF_MEDIA_TYPE,
+        "pptx": PPTX_MEDIA_TYPE,
+        "docx": DOCX_MEDIA_TYPE,
+    }
+    labels = {
+        "page": "Page",
+        "slide": "Slide",
+        "paragraph": "Paragraph",
+    }
     sections = [
         DocumentFragmentRead(
             kind=fragment.kind,
             number=fragment.number,
-            label=(
-                f"Page {fragment.number}" if fragment.kind == "page" else f"Slide {fragment.number}"
-            ),
+            label=f"{labels[fragment.kind]} {fragment.number}",
             text=fragment.text,
         )
         for fragment in extraction.fragments
     ]
     return DocumentImportPreviewRead(
         filename=filename,
-        media_type=media_type,
+        media_type=media_types[extraction.document_kind],
         content_sha256=hashlib.sha256(content).hexdigest(),
         text=extraction.full_text,
         sections=sections,
@@ -1177,6 +1488,48 @@ def review_source(
     actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.reviewer)),
 ) -> KnowledgeSourceRead:
     return review_knowledge_source(db, actor, source_id, data)
+
+
+@app.post("/v1/knowledge/{source_id}/reindex", response_model=KnowledgeSourceRead)
+def reindex_source(
+    source_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin, Role.product_manager)),
+) -> KnowledgeSourceRead:
+    return index_knowledge_source(db, actor, source_id)
+
+
+@app.post("/v1/knowledge/search/preview", response_model=KnowledgeSearchPreviewRead)
+def preview_knowledge_search(
+    data: KnowledgeSearchPreviewRequest,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> KnowledgeSearchPreviewRead:
+    output = retrieve_knowledge_context(
+        db,
+        actor,
+        query=data.query,
+        source_ids=set(data.source_ids),
+    )
+    hits = [
+        KnowledgeSearchHit(
+            source_id=source.id,
+            chunk_id=source.chunk_id or "",
+            title=source.title,
+            citation_label=source.citation_label or source.title,
+            excerpt=source.content,
+            locator=source.locator or {},
+            lexical_rank=manifest.get("lexical_rank"),
+            vector_rank=manifest.get("vector_rank"),
+            rrf_score=float(manifest.get("rrf_score", 0.0)),
+        )
+        for source, manifest in zip(output.sources, output.manifest, strict=True)
+    ]
+    return KnowledgeSearchPreviewRead(
+        strategy=output.retrieval.strategy,
+        fallback_reason=output.retrieval.fallback_reason,
+        hits=hits,
+    )
 
 
 @app.post("/v1/content-projects", response_model=ContentProjectRead, status_code=201)
@@ -1654,6 +2007,257 @@ def edit_content_project(
     return update_content_project(db, actor, project_id, data)
 
 
+@app.post("/v1/operation-imports/preview", response_model=OperationImportPreviewRead)
+async def preview_operation_import(
+    file: UploadFile = File(...),
+    field_mapping_json: str = Form(default=""),
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.product_manager, Role.creator)
+    ),
+) -> OperationImportPreviewRead:
+    filename = Path(file.filename or "operation-data.csv").name
+    content = await file.read(20 * 1024 * 1024 + 1)
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Operation data file must be 20 MB or smaller")
+    mapping = _parse_field_mapping(field_mapping_json)
+    try:
+        preview = preview_operation_data(
+            db,
+            actor,
+            content,
+            filename=filename,
+            media_type=file.content_type,
+            field_mapping=mapping,
+        )
+    except OperationImportError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": exc.detail},
+        ) from exc
+    rows = [
+        OperationImportRowRead(
+            row_number=row.row_number,
+            normalized=dict(row.normalized),
+            errors=[
+                {
+                    "code": error.code,
+                    "message": error.message,
+                    "field": error.field,
+                    "value": error.value,
+                }
+                for error in row.errors
+            ],
+            source_fingerprint=row.source_fingerprint,
+            duplicate=row.duplicate,
+            publication_id=publication_id,
+        )
+        for row, publication_id in zip(
+            preview.result.rows,
+            preview.matched_publication_ids,
+            strict=True,
+        )
+    ]
+    return OperationImportPreviewRead(
+        import_kind=preview.result.import_kind,
+        sheet_name=preview.result.sheet_name,
+        headers=list(preview.result.headers),
+        field_mapping=dict(preview.result.field_mapping),
+        warnings=list(preview.result.warnings),
+        total_rows=len(rows),
+        valid_rows=len(preview.result.valid_rows),
+        invalid_rows=len(preview.result.invalid_rows),
+        matched_rows=sum(item.publication_id is not None for item in rows),
+        rows=rows,
+    )
+
+
+@app.post(
+    "/v1/operation-imports",
+    response_model=OperationImportBatchRead,
+    status_code=201,
+)
+async def import_operation_data(
+    file: UploadFile = File(...),
+    field_mapping_json: str = Form(default=""),
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.product_manager, Role.creator)
+    ),
+) -> OperationImportBatchRead:
+    filename = Path(file.filename or "operation-data.csv").name
+    content = await file.read(20 * 1024 * 1024 + 1)
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Operation data file must be 20 MB or smaller")
+    mapping = _parse_field_mapping(field_mapping_json)
+    try:
+        return commit_operation_data(
+            db,
+            actor,
+            content,
+            filename=filename,
+            media_type=file.content_type,
+            field_mapping=mapping,
+        )
+    except OperationImportError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": exc.detail},
+        ) from exc
+
+
+@app.post(
+    "/v1/publications/{publication_id}/performance-reviews",
+    response_model=PerformanceReviewRead,
+    status_code=201,
+)
+def add_performance_review(
+    publication_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.product_manager, Role.creator)
+    ),
+) -> PerformanceReviewRead:
+    return create_performance_review(db, actor, publication_id)
+
+
+@app.post(
+    "/v1/publication-tasks",
+    response_model=PublicationTaskCreated,
+    status_code=201,
+)
+def add_publication_task(
+    data: PublicationTaskCreate,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> PublicationTaskCreated:
+    bundle = create_publication_task(
+        db,
+        actor,
+        project_id=data.project_id,
+        content_version_id=data.content_version_id,
+        platform=data.platform,
+        execution_mode=data.execution_mode,
+        export_payload=data.export_payload.model_dump(),
+        scheduled_for=data.scheduled_for,
+        note=data.note,
+    )
+    return PublicationTaskCreated(
+        task=PublicationTaskRead.model_validate(bundle.task),
+        package=PlatformExportPackageRead.model_validate(bundle.package),
+    )
+
+
+@app.get("/v1/publication-tasks", response_model=list[PublicationTaskRead])
+def get_publication_tasks(
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> list[PublicationTaskRead]:
+    return [PublicationTaskRead.model_validate(task) for task in list_publication_tasks(db, actor)]
+
+
+@app.get("/v1/publication-tasks/{task_id}", response_model=PublicationTaskRead)
+def get_publication_task_detail(
+    task_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> PublicationTaskRead:
+    return PublicationTaskRead.model_validate(get_publication_task(db, actor, task_id))
+
+
+@app.get(
+    "/v1/publication-tasks/{task_id}/events",
+    response_model=list[PublicationTaskEventRead],
+)
+def get_publication_task_events(
+    task_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> list[PublicationTaskEventRead]:
+    return [
+        PublicationTaskEventRead.model_validate(event)
+        for event in list_publication_task_events(db, actor, task_id)
+    ]
+
+
+@app.get(
+    "/v1/publication-tasks/{task_id}/packages/latest",
+    response_model=PlatformExportPackageRead,
+)
+def get_publication_task_latest_package(
+    task_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> PlatformExportPackageRead:
+    return PlatformExportPackageRead.model_validate(get_latest_export_package(db, actor, task_id))
+
+
+@app.post(
+    "/v1/publication-tasks/{task_id}/transition",
+    response_model=PublicationTaskRead,
+)
+def update_publication_task_status(
+    task_id: str,
+    data: PublicationTaskTransition,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> PublicationTaskRead:
+    return PublicationTaskRead.model_validate(
+        transition_publication_task(
+            db,
+            actor,
+            task_id,
+            to_status=data.to_status,
+            details=data.details,
+        )
+    )
+
+
+@app.post(
+    "/v1/publication-tasks/{task_id}/confirm",
+    response_model=PublicationRead,
+    status_code=201,
+)
+def confirm_publication_task(
+    task_id: str,
+    data: PublicationConfirmation,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> PublicationRead:
+    return PublicationRead.model_validate(
+        confirm_manual_publication(
+            db,
+            actor,
+            task_id,
+            external_url=data.external_url,
+            external_content_id=data.external_content_id,
+            published_at=data.published_at,
+            note=data.note,
+        )
+    )
+
+
+@app.get("/v1/publication-tasks/{task_id}/packages/latest/download")
+def download_publication_task_latest_package(
+    task_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> FileResponse:
+    package = get_latest_export_package(db, actor, task_id)
+    download = locate_export_package_download(db, actor, package.id)
+    return FileResponse(
+        path=download.path,
+        media_type="application/zip",
+        filename=f"heyu-{package.platform}-{task_id}.zip",
+    )
+
+
 @app.post("/v1/publications", response_model=PublicationRead, status_code=201)
 def add_publication(
     data: PublicationCreate,
@@ -1679,6 +2283,66 @@ def get_publication(
     actor: Actor = Depends(current_actor),
 ) -> PublicationDetailRead:
     return get_publication_detail(db, actor, publication_id)
+
+
+@app.post(
+    "/v1/publications/{publication_id}/video-analysis",
+    response_model=VideoAnalysisUploadRead,
+    status_code=201,
+)
+async def upload_video_for_analysis(
+    publication_id: str,
+    file: UploadFile = File(...),
+    manual_transcript: str = Form(default=""),
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(
+        require_roles(Role.owner, Role.admin, Role.creator, Role.product_manager)
+    ),
+) -> VideoAnalysisUploadRead:
+    content = await file.read(MAX_VIDEO_BYTES + 1)
+    if len(content) > MAX_VIDEO_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Video file must be {MAX_VIDEO_BYTES // (1024 * 1024)} MB or smaller",
+        )
+    result = save_and_analyze_video(
+        db,
+        actor,
+        publication_id=publication_id,
+        original_filename=Path(file.filename or "video.mp4").name,
+        media_type=file.content_type or "application/octet-stream",
+        content=content,
+        manual_transcript=manual_transcript,
+    )
+    return VideoAnalysisUploadRead(
+        asset=MediaAssetRead.model_validate(result.asset),
+        task=BackgroundTaskRead.model_validate(result.task),
+        diagnosis=VideoDiagnosisRead.model_validate(result.diagnosis),
+    )
+
+
+@app.get("/v1/media-assets/{asset_id}", response_model=MediaAssetRead)
+def get_media_asset_detail(
+    asset_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> MediaAssetRead:
+    return MediaAssetRead.model_validate(get_media_asset(db, actor, asset_id))
+
+
+@app.get("/v1/media-assets/{asset_id}/download")
+def download_media_asset(
+    asset_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(current_actor),
+) -> FileResponse:
+    asset = get_media_asset(db, actor, asset_id)
+    path = locate_media_asset(db, actor, asset_id)
+    return FileResponse(
+        path=path,
+        media_type=asset.media_type,
+        filename=asset.original_filename,
+    )
 
 
 @app.post(
@@ -1735,6 +2399,35 @@ def get_video_diagnoses(
     actor: Actor = Depends(current_actor),
 ) -> list[VideoDiagnosisRead]:
     return list_video_diagnoses(db, actor, publication_id)
+
+
+@app.post(
+    "/v1/evaluation-runs/marketing",
+    response_model=EvaluationRunRead,
+    status_code=201,
+)
+def run_marketing_quality_evaluation(
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
+) -> EvaluationRunRead:
+    return EvaluationRunRead.model_validate(run_offline_marketing_evaluation(db, actor))
+
+
+@app.get("/v1/evaluation-runs", response_model=list[EvaluationRunRead])
+def get_quality_evaluation_runs(
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
+) -> list[EvaluationRunRead]:
+    return [EvaluationRunRead.model_validate(run) for run in list_evaluation_runs(db, actor)]
+
+
+@app.get("/v1/evaluation-runs/{run_id}", response_model=EvaluationRunRead)
+def get_quality_evaluation_run(
+    run_id: str,
+    db: Session = Depends(get_db),
+    actor: Actor = Depends(require_roles(Role.owner, Role.admin)),
+) -> EvaluationRunRead:
+    return EvaluationRunRead.model_validate(get_evaluation_run(db, actor, run_id))
 
 
 @app.post(

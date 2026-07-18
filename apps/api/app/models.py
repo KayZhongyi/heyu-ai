@@ -2,7 +2,18 @@ import uuid
 from datetime import UTC, date, datetime
 from enum import StrEnum
 
-from sqlalchemy import JSON, Date, DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -39,6 +50,13 @@ class KnowledgeKind(StrEnum):
     faq = "faq"
     policy = "policy"
     other = "other"
+
+
+class KnowledgeIndexStatus(StrEnum):
+    pending = "pending"
+    indexing = "indexing"
+    ready = "ready"
+    failed = "failed"
 
 
 class ContentType(StrEnum):
@@ -79,6 +97,117 @@ class Organization(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String(160))
     slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class OrganizationDataPolicy(Base):
+    __tablename__ = "organization_data_policies"
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"),
+        primary_key=True,
+    )
+    media_retention_days: Mapped[int] = mapped_column(default=90)
+    export_retention_days: Mapped[int] = mapped_column(default=30)
+    generation_log_retention_days: Mapped[int] = mapped_column(default=365)
+    allow_model_training: Mapped[bool] = mapped_column(default=False)
+    updated_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class ProviderConnection(Base):
+    __tablename__ = "provider_connections"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name"),
+        Index("ix_provider_connections_org_enabled", "organization_id", "enabled"),
+    )
+    id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        default=new_id,
+    )
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    provider_type: Mapped[str] = mapped_column(String(40), default="openai-compatible")
+    base_url: Mapped[str] = mapped_column(String(2048))
+    chat_model: Mapped[str] = mapped_column(String(120))
+    embedding_model: Mapped[str] = mapped_column(String(120), default="")
+    encrypted_api_key: Mapped[str] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(default=True)
+    is_primary: Mapped[bool] = mapped_column(default=False)
+    is_fallback: Mapped[bool] = mapped_column(default=False)
+    last_test_status: Mapped[str] = mapped_column(String(32), default="untested")
+    last_tested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_test_error: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class BackgroundTask(Base):
+    __tablename__ = "background_tasks"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "idempotency_key"),
+        Index("ix_background_tasks_status_lease", "status", "lease_expires_at"),
+        Index("ix_background_tasks_org_created", "organization_id", "created_at"),
+    )
+    id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        default=new_id,
+    )
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    task_type: Mapped[str] = mapped_column(String(80), index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(160))
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    progress: Mapped[dict] = mapped_column(JSON, default=dict)
+    attempt_count: Mapped[int] = mapped_column(default=0)
+    max_attempts: Mapped[int] = mapped_column(default=3)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class EvaluationRun(Base):
+    __tablename__ = "evaluation_runs"
+    __table_args__ = (Index("ix_evaluation_runs_org_created", "organization_id", "created_at"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    evaluation_type: Mapped[str] = mapped_column(String(80))
+    dataset_version: Mapped[str] = mapped_column(String(120))
+    evaluator_version: Mapped[str] = mapped_column(String(120))
+    status: Mapped[str] = mapped_column(String(32), default="running")
+    passed: Mapped[bool | None] = mapped_column()
+    overall_score: Mapped[float | None] = mapped_column()
+    report: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MediaAsset(Base):
+    __tablename__ = "media_assets"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "sha256"),
+        Index("ix_media_assets_org_created", "organization_id", "created_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    purpose: Mapped[str] = mapped_column(String(80))
+    original_filename: Mapped[str] = mapped_column(String(255))
+    media_type: Mapped[str] = mapped_column(String(120))
+    size_bytes: Mapped[int] = mapped_column()
+    sha256: Mapped[str] = mapped_column(String(64))
+    storage_key: Mapped[str] = mapped_column(String(1024))
+    status: Mapped[str] = mapped_column(String(32), default="ready")
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
@@ -173,6 +302,7 @@ class KnowledgeSource(Base):
     citation_label: Mapped[str] = mapped_column(String(255), default="")
     source_filename: Mapped[str] = mapped_column(String(255), default="")
     media_type: Mapped[str] = mapped_column(String(120), default="text/plain")
+    document_sections: Mapped[list] = mapped_column(JSON, default=list)
     content_sha256: Mapped[str] = mapped_column(String(64), default="")
     source_group_id: Mapped[str] = mapped_column(String(36), index=True)
     parent_source_id: Mapped[str | None] = mapped_column(
@@ -185,7 +315,60 @@ class KnowledgeSource(Base):
     reviewed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
     review_note: Mapped[str] = mapped_column(Text, default="")
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    index_status: Mapped[KnowledgeIndexStatus] = mapped_column(
+        Enum(KnowledgeIndexStatus),
+        default=KnowledgeIndexStatus.pending,
+    )
+    index_version: Mapped[int] = mapped_column(default=0)
+    indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    index_error: Mapped[str] = mapped_column(Text, default="")
+    chunk_count: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class KnowledgeChunk(Base):
+    __tablename__ = "knowledge_chunks"
+    __table_args__ = (
+        UniqueConstraint("source_id", "ordinal", "index_version"),
+        Index("ix_knowledge_chunks_org_source", "organization_id", "source_id"),
+        Index("ix_knowledge_chunks_source_hash", "source_id", "text_sha256"),
+        Index("ix_knowledge_chunks_org_version", "organization_id", "index_version"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    source_id: Mapped[str] = mapped_column(ForeignKey("knowledge_sources.id"), index=True)
+    ordinal: Mapped[int] = mapped_column()
+    text: Mapped[str] = mapped_column(Text)
+    text_sha256: Mapped[str] = mapped_column(String(64))
+    locator: Mapped[dict] = mapped_column(JSON, default=dict)
+    token_count: Mapped[int] = mapped_column(default=0)
+    lexical_text: Mapped[str] = mapped_column(Text, default="")
+    embedding: Mapped[list | None] = mapped_column(JSON)
+    embedding_provider: Mapped[str | None] = mapped_column(String(80))
+    embedding_model: Mapped[str | None] = mapped_column(String(120))
+    embedding_dimensions: Mapped[int | None] = mapped_column()
+    index_version: Mapped[int] = mapped_column(default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class KnowledgeIndexTask(Base):
+    __tablename__ = "knowledge_index_tasks"
+    __table_args__ = (
+        UniqueConstraint("source_id", "target_index_version"),
+        Index("ix_knowledge_index_tasks_status_lease", "status", "lease_expires_at"),
+        Index("ix_knowledge_index_tasks_org_created", "organization_id", "created_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    source_id: Mapped[str] = mapped_column(ForeignKey("knowledge_sources.id"), index=True)
+    target_index_version: Mapped[int] = mapped_column()
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    attempt_count: Mapped[int] = mapped_column(default=0)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ContentProject(Base):
@@ -459,16 +642,177 @@ class ContentVersion(Base):
 
 class Publication(Base):
     __tablename__ = "publications"
+    __table_args__ = (
+        Index(
+            "uq_publications_org_platform_external_content_id",
+            "organization_id",
+            "platform",
+            "external_content_id",
+            unique=True,
+            sqlite_where=text("external_content_id <> ''"),
+            postgresql_where=text("external_content_id <> ''"),
+        ),
+        Index(
+            "uq_publications_org_platform_external_url",
+            "organization_id",
+            "platform",
+            "external_url",
+            unique=True,
+            sqlite_where=text("external_url <> ''"),
+            postgresql_where=text("external_url <> ''"),
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
-    project_id: Mapped[str] = mapped_column(ForeignKey("content_projects.id"), index=True)
-    content_version_id: Mapped[str] = mapped_column(ForeignKey("content_versions.id"), index=True)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("content_projects.id"), index=True)
+    content_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("content_versions.id"), index=True
+    )
+    marketing_plan_id: Mapped[str | None] = mapped_column(
+        ForeignKey("marketing_plans.id"), index=True
+    )
+    marketing_plan_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("marketing_plan_versions.id"), index=True
+    )
+    route_id: Mapped[str] = mapped_column(String(80), default="")
+    calendar_day: Mapped[int | None] = mapped_column()
     platform: Mapped[str] = mapped_column(String(80))
     external_url: Mapped[str] = mapped_column(String(2048), default="")
     external_content_id: Mapped[str] = mapped_column(String(255), default="")
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     note: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class PublicationTask(Base):
+    __tablename__ = "publication_tasks"
+    __table_args__ = (
+        Index("ix_publication_tasks_org_status", "organization_id", "status"),
+        Index("ix_publication_tasks_content_platform", "content_version_id", "platform"),
+        Index(
+            "ix_publication_tasks_marketing_platform",
+            "marketing_plan_version_id",
+            "platform",
+        ),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("content_projects.id"), index=True)
+    content_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("content_versions.id"), index=True
+    )
+    marketing_plan_id: Mapped[str | None] = mapped_column(
+        ForeignKey("marketing_plans.id"), index=True
+    )
+    marketing_plan_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("marketing_plan_versions.id"), index=True
+    )
+    route_id: Mapped[str] = mapped_column(String(80), default="")
+    calendar_day: Mapped[int | None] = mapped_column()
+    platform: Mapped[str] = mapped_column(String(80))
+    execution_mode: Mapped[str] = mapped_column(String(32), default="export_only")
+    status: Mapped[str] = mapped_column(String(32), default="draft")
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    external_url: Mapped[str] = mapped_column(String(2048), default="")
+    external_content_id: Mapped[str] = mapped_column(String(255), default="")
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class PublicationTaskEvent(Base):
+    __tablename__ = "publication_task_events"
+    __table_args__ = (
+        Index("ix_publication_task_events_task_created", "publication_task_id", "created_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    publication_task_id: Mapped[str] = mapped_column(
+        ForeignKey("publication_tasks.id"),
+        index=True,
+    )
+    from_status: Mapped[str] = mapped_column(String(32), default="")
+    to_status: Mapped[str] = mapped_column(String(32))
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class PlatformExportPackage(Base):
+    __tablename__ = "platform_export_packages"
+    __table_args__ = (
+        Index(
+            "ix_platform_export_packages_task_created",
+            "publication_task_id",
+            "created_at",
+        ),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    publication_task_id: Mapped[str] = mapped_column(
+        ForeignKey("publication_tasks.id"),
+        index=True,
+    )
+    platform: Mapped[str] = mapped_column(String(80))
+    execution_mode: Mapped[str] = mapped_column(String(32))
+    content_sha256: Mapped[str] = mapped_column(String(64))
+    archive_sha256: Mapped[str] = mapped_column(String(64))
+    archive_size_bytes: Mapped[int] = mapped_column()
+    storage_key: Mapped[str] = mapped_column(String(1024))
+    manifest: Mapped[dict] = mapped_column(JSON)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class OperationImportBatch(Base):
+    __tablename__ = "operation_import_batches"
+    __table_args__ = (
+        Index("ix_operation_import_batches_org_created", "organization_id", "created_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    original_filename: Mapped[str] = mapped_column(String(255))
+    media_type: Mapped[str] = mapped_column(String(120), default="")
+    file_sha256: Mapped[str] = mapped_column(String(64))
+    field_mapping: Mapped[dict] = mapped_column(JSON, default=dict)
+    warnings: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(32), default="preview")
+    total_rows: Mapped[int] = mapped_column(default=0)
+    valid_rows: Mapped[int] = mapped_column(default=0)
+    invalid_rows: Mapped[int] = mapped_column(default=0)
+    imported_rows: Mapped[int] = mapped_column(default=0)
+    duplicate_rows: Mapped[int] = mapped_column(default=0)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class OperationImportRecord(Base):
+    __tablename__ = "operation_import_rows"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "source_fingerprint"),
+        Index("ix_operation_import_rows_batch_row", "batch_id", "row_number"),
+        Index("ix_operation_import_rows_publication", "publication_id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    batch_id: Mapped[str] = mapped_column(
+        ForeignKey("operation_import_batches.id"),
+        index=True,
+    )
+    publication_id: Mapped[str | None] = mapped_column(ForeignKey("publications.id"))
+    performance_snapshot_id: Mapped[str | None] = mapped_column(
+        ForeignKey("performance_snapshots.id"),
+        unique=True,
+    )
+    row_number: Mapped[int] = mapped_column()
+    source_fingerprint: Mapped[str] = mapped_column(String(64))
+    normalized: Mapped[dict] = mapped_column(JSON, default=dict)
+    errors: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(32), default="valid")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
@@ -483,11 +827,35 @@ class PerformanceSnapshot(Base):
     comments: Mapped[int | None] = mapped_column()
     shares: Mapped[int | None] = mapped_column()
     saves: Mapped[int | None] = mapped_column()
+    clicks: Mapped[int | None] = mapped_column()
     followers_gained: Mapped[int | None] = mapped_column()
     orders: Mapped[int | None] = mapped_column()
     revenue_minor: Mapped[int | None] = mapped_column()
     currency: Mapped[str] = mapped_column(String(3), default="CNY")
+    extra_metrics: Mapped[dict] = mapped_column(JSON, default=dict)
+    capture_method: Mapped[str] = mapped_column(String(32), default="manual")
     note: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class PerformanceReview(Base):
+    __tablename__ = "performance_reviews"
+    __table_args__ = (
+        Index("ix_performance_reviews_publication_created", "publication_id", "created_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    publication_id: Mapped[str] = mapped_column(ForeignKey("publications.id"), index=True)
+    latest_snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey("performance_snapshots.id"),
+        index=True,
+    )
+    methodology: Mapped[str] = mapped_column(String(80), default="rule-based-v1")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    signals: Mapped[list] = mapped_column(JSON, default=list)
+    recommendations: Mapped[list] = mapped_column(JSON, default=list)
+    limitations: Mapped[list] = mapped_column(JSON, default=list)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
@@ -497,6 +865,12 @@ class VideoDiagnosis(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
     publication_id: Mapped[str] = mapped_column(ForeignKey("publications.id"), index=True)
+    media_asset_id: Mapped[str | None] = mapped_column(
+        ForeignKey("media_assets.id"),
+        index=True,
+    )
+    analysis_mode: Mapped[str] = mapped_column(String(32), default="manual")
+    analysis_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     title: Mapped[str] = mapped_column(String(255))
     summary: Mapped[str] = mapped_column(Text, default="")
