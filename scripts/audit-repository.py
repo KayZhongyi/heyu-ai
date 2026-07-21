@@ -83,6 +83,11 @@ GENERIC_SECRET_PLACEHOLDERS = {
     "test",
 }
 
+EXPECTED_GIT_IDENTITY_EMAIL = "297893870+KayZhongyi@users.noreply.github.com"
+BLOCKED_GIT_IDENTITY_EMAILS = {
+    "kaylee@users.noreply.github.com",
+}
+
 
 def is_placeholder_secret(value: str) -> bool:
     unquoted = value.strip("\"'")
@@ -132,8 +137,48 @@ def audit(paths: list[str]) -> list[str]:
     return findings
 
 
+def audit_tip_identity(author_email: str, committer_email: str) -> list[str]:
+    """Validate the current branch tip uses the repo owner noreply identity.
+
+    The repository keeps a .mailmap for historical display aliases. This guard is
+    intentionally narrower: it only checks the new tip commit so CI can prevent
+    future accidental Kaylee-attributed commits without rewriting history.
+    """
+
+    findings: list[str] = []
+    identities = {
+        "author": author_email.strip(),
+        "committer": committer_email.strip(),
+    }
+    for role, email in identities.items():
+        normalized = email.lower()
+        if normalized in BLOCKED_GIT_IDENTITY_EMAILS:
+            findings.append(
+                f"blocked git {role} identity on HEAD: {email}; use "
+                f"{EXPECTED_GIT_IDENTITY_EMAIL}"
+            )
+        elif email != EXPECTED_GIT_IDENTITY_EMAIL:
+            findings.append(
+                f"unexpected git {role} identity on HEAD: {email}; expected "
+                f"{EXPECTED_GIT_IDENTITY_EMAIL}"
+            )
+    return findings
+
+
+def audit_head_commit_identity() -> list[str]:
+    result = subprocess.run(
+        ["git", "log", "-1", "--format=%ae%x00%ce"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    author_email, committer_email = result.stdout.rstrip("\n").split("\0", maxsplit=1)
+    return audit_tip_identity(author_email, committer_email)
+
+
 def main() -> int:
-    findings = audit(tracked_paths())
+    findings = [*audit(tracked_paths()), *audit_head_commit_identity()]
     if findings:
         print("Repository audit failed:", file=sys.stderr)
         for finding in findings:

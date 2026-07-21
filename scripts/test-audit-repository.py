@@ -71,6 +71,25 @@ def main() -> None:
         finally:
             MODULE.ROOT = old_root
 
+        assert MODULE.audit_tip_identity(
+            MODULE.EXPECTED_GIT_IDENTITY_EMAIL,
+            MODULE.EXPECTED_GIT_IDENTITY_EMAIL,
+        ) == []
+        assert MODULE.audit_tip_identity(
+            "kaylee@users.noreply.github.com",
+            MODULE.EXPECTED_GIT_IDENTITY_EMAIL,
+        ) == [
+            "blocked git author identity on HEAD: kaylee@users.noreply.github.com; "
+            f"use {MODULE.EXPECTED_GIT_IDENTITY_EMAIL}"
+        ]
+        assert MODULE.audit_tip_identity(
+            MODULE.EXPECTED_GIT_IDENTITY_EMAIL,
+            "someone@example.com",
+        ) == [
+            "unexpected git committer identity on HEAD: someone@example.com; "
+            f"expected {MODULE.EXPECTED_GIT_IDENTITY_EMAIL}"
+        ]
+
     print("Repository audit rule self-test passed.")
 
 

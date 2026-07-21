@@ -1,0 +1,94 @@
+<svg width="1600" height="620" viewBox="0 0 1600 620" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>禾语 AI</title>
+  <desc>让产地的真实，成为内容的底气。面向农产品内容生产与持续经营的开源 AI 平台。</desc>
+  <defs>
+    <linearGradient id="bg" x1="80" y1="40" x2="1510" y2="620" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B2118"/>
+      <stop offset="0.55" stop-color="#123529"/>
+      <stop offset="1" stop-color="#1B4D3D"/>
+    </linearGradient>
+    <linearGradient id="card" x1="1030" y1="130" x2="1450" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7F1E4"/>
+      <stop offset="1" stop-color="#E7EEDB"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(1330 82) rotate(132) scale(550 440)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8FC3A7" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#8FC3A7" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grain" width="48" height="48" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1" fill="#FFFFFF" fill-opacity="0.045"/>
+    </pattern>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0 0L8 4L0 8V0Z" fill="#BFD2B5"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="620" rx="34" fill="url(#bg)"/>
+  <rect width="1600" height="620" rx="34" fill="url(#glow)"/>
+  <rect width="1600" height="620" rx="34" fill="url(#grain)"/>
+
+  <path d="M0 500C180 455 315 460 490 510C665 560 790 565 965 518C1125 475 1325 453 1600 515V620H0V500Z" fill="#E8E2CD" fill-opacity="0.08"/>
+  <path d="M0 542C215 486 400 510 568 551C735 592 940 572 1110 530C1285 486 1435 490 1600 536" stroke="#CBD9BF" stroke-opacity="0.16" stroke-width="2"/>
+
+  <g transform="translate(100 68)">
+    <rect width="38" height="38" rx="12" fill="#E7D7A3"/>
+    <path d="M11 24C18 24 24 19 27 11C21 12 15 15 12 20C11 21.5 10.5 23 11 24Z" fill="#173C2F"/>
+    <path d="M13 27C17 21 21 17 28 14" stroke="#173C2F" stroke-width="2.2" stroke-linecap="round"/>
+    <text x="56" y="29" fill="#F7F3E8" font-size="26" font-weight="700" font-family="'Noto Sans SC','Microsoft YaHei',Arial,sans-serif">禾语 AI</text>
+    <text x="190" y="28" fill="#BFD2B5" font-size="15" font-weight="600" letter-spacing="2.8" font-family="Inter,Arial,sans-serif">HEYU AI</text>
+  </g>
+
+  <g font-family="'Noto Sans SC','Microsoft YaHei',Arial,sans-serif">
+    <text x="100" y="225" fill="#F7F3E8" font-size="74" font-weight="760">让产地的真实，</text>
+    <text x="100" y="318" fill="#F7F3E8" font-size="74" font-weight="760">成为内容的底气。</text>
+    <text x="104" y="376" fill="#C8D8CB" font-size="23" font-weight="400">把基层调研、产品资料与经营反馈，变成下一条可以直接开拍的方案。</text>
+  </g>
+
+  <g font-family="'Noto Sans SC','Microsoft YaHei',Arial,sans-serif">
+    <rect x="100" y="426" width="174" height="44" rx="22" fill="#F7F3E8" fill-opacity="0.1" stroke="#D9E3D5" stroke-opacity="0.24"/>
+    <text x="187" y="454" text-anchor="middle" fill="#E5ECE2" font-size="16" font-weight="600">基层知识记忆</text>
+
+    <rect x="286" y="426" width="140" height="44" rx="22" fill="#F7F3E8" fill-opacity="0.1" stroke="#D9E3D5" stroke-opacity="0.24"/>
+    <text x="356" y="454" text-anchor="middle" fill="#E5ECE2" font-size="16" font-weight="600">持续经营</text>
+
+    <rect x="438" y="426" width="140" height="44" rx="22" fill="#F7F3E8" fill-opacity="0.1" stroke="#D9E3D5" stroke-opacity="0.24"/>
+    <text x="508" y="454" text-anchor="middle" fill="#E5ECE2" font-size="16" font-weight="600">三语界面</text>
+
+    <rect x="590" y="426" width="164" height="44" rx="22" fill="#F7F3E8" fill-opacity="0.1" stroke="#D9E3D5" stroke-opacity="0.24"/>
+    <text x="672" y="454" text-anchor="middle" fill="#E5ECE2" font-size="16" font-weight="600">模型可替换</text>
+  </g>
+
+  <g font-family="'Noto Sans SC','Microsoft YaHei',Arial,sans-serif">
+    <path d="M1112 212L1150 244" stroke="#BFD2B5" stroke-width="2" stroke-linecap="round" marker-end="url(#arrow)"/>
+    <path d="M1263 327L1302 359" stroke="#BFD2B5" stroke-width="2" stroke-linecap="round" marker-end="url(#arrow)"/>
+
+    <g transform="translate(925 104) rotate(-4 180 86)">
+      <rect width="360" height="172" rx="24" fill="#183E31" stroke="#7FA48E" stroke-opacity="0.55"/>
+      <rect x="24" y="24" width="52" height="28" rx="14" fill="#E7D7A3"/>
+      <text x="50" y="44" text-anchor="middle" fill="#173C2F" font-size="13" font-weight="700">01</text>
+      <text x="24" y="91" fill="#F7F3E8" font-size="25" font-weight="700">真实资料</text>
+      <text x="24" y="127" fill="#BED0C2" font-size="17">访谈 · 产地 · 产品档案</text>
+      <path d="M284 115C305 83 324 70 340 63C332 92 315 113 284 127V115Z" fill="#8CB29A" fill-opacity="0.65"/>
+    </g>
+
+    <g transform="translate(1080 232) rotate(2 180 86)">
+      <rect width="360" height="172" rx="24" fill="url(#card)"/>
+      <rect x="24" y="24" width="52" height="28" rx="14" fill="#173C2F"/>
+      <text x="50" y="44" text-anchor="middle" fill="#F7F3E8" font-size="13" font-weight="700">02</text>
+      <text x="24" y="91" fill="#173C2F" font-size="25" font-weight="700">可拍方案</text>
+      <text x="24" y="127" fill="#587063" font-size="17">选题 · 口播 · 分镜 · 发布</text>
+      <rect x="284" y="57" width="42" height="58" rx="8" stroke="#6C8A79" stroke-width="3"/>
+      <circle cx="305" cy="104" r="3" fill="#6C8A79"/>
+    </g>
+
+    <g transform="translate(1230 368) rotate(-3 150 74)">
+      <rect width="300" height="148" rx="24" fill="#173C2F" stroke="#9FBAA7" stroke-opacity="0.55"/>
+      <rect x="22" y="22" width="52" height="28" rx="14" fill="#E7D7A3"/>
+      <text x="48" y="42" text-anchor="middle" fill="#173C2F" font-size="13" font-weight="700">03</text>
+      <text x="22" y="88" fill="#F7F3E8" font-size="24" font-weight="700">经营记忆</text>
+      <text x="22" y="121" fill="#BED0C2" font-size="16">发布 · 反馈 · 下一轮</text>
+    </g>
+  </g>
+
+  <text x="100" y="563" fill="#AFC4B4" font-size="15" font-weight="600" letter-spacing="2.4" font-family="Inter,Arial,sans-serif">OPEN SOURCE · LOCAL FIRST · TRILINGUAL · MODEL-PLUGGABLE</text>
+</svg>

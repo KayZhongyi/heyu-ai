@@ -637,6 +637,72 @@ class _FakeResponse:
         return self.body
 
 
+def test_openai_compatible_provider_sends_expected_request_contract(monkeypatch):
+    source = DeterministicMarketingProvider().generate(sample_request()).model_dump()
+    calls = []
+
+    def fake_post(url, *, headers, json, timeout):
+        calls.append(
+            {
+                "url": url,
+                "headers": headers,
+                "json": json,
+                "timeout": timeout,
+            }
+        )
+        return _FakeResponse(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json_module.dumps(source, ensure_ascii=False),
+                        }
+                    }
+                ]
+            }
+        )
+
+    json_module = json
+    monkeypatch.setattr(marketing.httpx, "post", fake_post)
+    settings = _openai_settings(ai_base_url="https://model.example/v1/")
+
+    result = OpenAICompatibleMarketingProvider(settings).generate(sample_request())
+
+    assert result.provider == "openai-compatible"
+    assert result.model == "domestic-model"
+    assert len(calls) == 2
+    call = calls[0]
+    assert call["url"] == "https://model.example/v1/chat/completions"
+    assert call["headers"] == {"Authorization": "Bearer test-only-key"}
+    assert call["timeout"] == settings.ai_timeout_seconds
+    payload = call["json"]
+    assert payload["model"] == "domestic-model"
+    assert payload["response_format"] == {"type": "json_object"}
+    assert payload["messages"][0] == {"role": "system", "content": marketing.SYSTEM_PROMPT}
+    assert payload["messages"][1]["role"] == "user"
+    user_content = json.loads(payload["messages"][1]["content"])
+    assert user_content["request"] == sample_request().model_dump()
+    assert "required_response_schema" in user_content
+    assert user_content["required_response_schema"]["title"] == "MarketingPlanResponse"
+
+    revision_call = calls[1]
+    assert revision_call["url"] == call["url"]
+    assert revision_call["headers"] == call["headers"]
+    assert revision_call["timeout"] == call["timeout"]
+    revision_payload = revision_call["json"]
+    assert revision_payload["model"] == "domestic-model"
+    assert revision_payload["response_format"] == {"type": "json_object"}
+    assert [message["role"] for message in revision_payload["messages"]] == [
+        "system",
+        "user",
+        "assistant",
+        "user",
+    ]
+    revision_content = json.loads(revision_payload["messages"][-1]["content"])
+    assert revision_content["quality_issues"]
+    assert revision_content["required_response_schema"]["title"] == "MarketingPlanResponse"
+
+
 @pytest.mark.parametrize(
     "body",
     [
