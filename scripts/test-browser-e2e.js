@@ -150,7 +150,12 @@ async function generateDemoCase(
     true,
     `${caseId} did not select ${expectedPlatformValue}`,
   );
-  assert.equal(await page.locator(".result-tabs button").count(), 6);
+  assert.equal(await page.locator(".result-tabs button").count(), 5);
+  assert.equal(await page.locator('[data-tab="live"]').count(), 0);
+  assert.equal(
+    await page.locator('[name="content_modules"][value="livestream"]').count(),
+    0,
+  );
   const strategyCards = page.locator("#result-content .result-card");
   assert.ok((await strategyCards.count()) >= 2);
   await strategyCards.nth(1).getByText(expectedPlatformName, { exact: false }).waitFor();
@@ -174,8 +179,6 @@ async function generateDemoCase(
   assert.equal(await page.locator("#result-content .route-card.selected").count(), 1);
   await page.locator('[data-tab="prep"]').click();
   assert.ok(await page.locator("#result-content .prep-hero").count());
-  await page.locator('[data-tab="live"]').click();
-  assert.ok(await page.locator("#result-content .result-card").count());
   await page.locator('[data-tab="calendar"]').click();
   assert.equal(await page.locator("#result-content .day-list > li").count(), 7);
   assert.ok(await page.locator("#result-content [data-save-plan]").count());
@@ -397,7 +400,26 @@ async function main() {
     await bootstrap.locator('[name="display_name"]').fill("验收负责人");
     await bootstrap.locator('[name="email"]').fill(ownerEmail);
     await bootstrap.locator('[name="password"]').fill(password);
+    const bootstrapResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url() === `${baseUrl}/v1/auth/bootstrap`
+        && response.request().method() === "POST",
+    );
     await bootstrap.locator('button[type="submit"]').click();
+    const bootstrapResponse = await bootstrapResponsePromise;
+    if (bootstrapResponse.status() !== 201) {
+      const retryAfter = bootstrapResponse.headers()["retry-after"];
+      const responseBody = (await bootstrapResponse.text()).slice(0, 500);
+      throw new Error(
+        [
+          `workspace bootstrap failed with status ${bootstrapResponse.status()}`,
+          retryAfter ? `retry-after=${retryAfter}s` : "",
+          responseBody,
+        ]
+          .filter(Boolean)
+          .join("; "),
+      );
+    }
     await page.locator("#workspace").waitFor({ state: "visible" });
 
     await page.locator('[data-page="assets"]').click();

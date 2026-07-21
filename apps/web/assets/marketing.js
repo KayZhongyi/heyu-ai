@@ -1,13 +1,13 @@
 (() => {
   const copy = {
     "zh-CN": {
-      demoMode:"零成本演示模式",proWorkspace:"团队专业工作台 ↗",headline:"把一份农产品资料，<br><em>变成一周能执行的内容。</em>",subhead:"先告诉禾语你是谁、想卖什么、准备发到哪里。平台会整理卖点，生成三套差异化短视频、直播话术与七天运营安排。",stepLabel:"填写经营任务",resultLabel:"获得内容方案",briefKicker:"经营简报",briefTitle:"先从你最熟悉的产品开始",demoCasesLabel:"一键演示案例",demoCasesHint:"选择后自动填充完整表单并生成预览。",demoTomato:"番茄",demoTea:"高山茶叶",demoFruit:"当季水果",identityTitle:"你是谁，想完成什么？",identityLabel:"经营身份",personaFarmer:"农户 / 家庭农场",personaCoop:"合作社",personaOperator:"乡村运营团队",goalLabel:"本次主要目标（最多三项）",goalSell:"直接销售",goalBrand:"建立品牌",goalFans:"积累关注",goalTourism:"引流到村",productTitle:"这次要讲什么产品？",productLabel:"产品名称",originLabel:"产地",descriptionLabel:"用自己的话介绍它",pointsLabel:"你认为最重要的卖点",audienceLabel:"最想卖给谁（可选）",channelTitle:"准备发布到哪里？",douyinName:"抖音",douyinHint:"快节奏 · 强开头",redName:"小红书",redHint:"经验感 · 可收藏",channelsName:"视频号",channelsHint:"信任感 · 私域连接",kuaishouName:"快手",kuaishouHint:"真实感 · 强互动",toneLabel:"表达风格",tonePlain:"朴实自然",toneWarm:"温暖故事",toneLively:"活泼有梗",tonePremium:"克制高级",trendLabel:"想结合的热点（可选）",costTitle:"本次演示不消耗模型额度",costBody:"使用稳定 Mock 生成器；登录团队账号后可切换国产 OpenAI-compatible API。",generate:"生成完整经营方案",emptyTitle:"一份输入，<br>得到一组能直接开拍的内容。",emptyVideos:"三条不同角度的短视频",emptyLive:"一套直播话术结构",emptyPlan:"七天发布与复盘计划",loadingTitle:"正在理解产品与经营目标",loadingBody:"整理卖点 · 匹配平台 · 设计内容角度 · 编排七天任务",resultKicker:"本次经营方案",editBrief:"修改简报",tabStrategy:"策略",tabVideos:"短视频",tabLive:"直播",tabCalendar:"7天计划",copyResult:"复制当前方案",positioningLabel:"产品定位",strategyLabel:"平台策略",trendFitLabel:"热点融入",nextActionsLabel:"接下来就这样做",videoLabel:"短视频",liveLabel:"直播环节",hookLabel:"开头钩子",claimError:"输入中包含需要核验的医疗、认证或绝对化宣传，请修改后再生成。",genericError:"生成失败，请检查输入后重试。",footer:"从一句农家话，到一周新媒体经营方案。"
+      demoMode:"零成本演示模式",proWorkspace:"团队专业工作台 ↗",headline:"把一份农产品资料，<br><em>变成一周能执行的内容。</em>",subhead:"先告诉禾语你是谁、想卖什么、准备发到哪里。平台会整理卖点，生成三套差异化短视频、手机分镜、拍摄准备与七天运营安排。",stepLabel:"填写经营任务",resultLabel:"获得内容方案",briefKicker:"经营简报",briefTitle:"先从你最熟悉的产品开始",demoCasesLabel:"一键演示案例",demoCasesHint:"选择后自动填充完整表单并生成预览。",demoTomato:"番茄",demoTea:"高山茶叶",demoFruit:"当季水果",identityTitle:"你是谁，想完成什么？",identityLabel:"经营身份",personaFarmer:"农户 / 家庭农场",personaCoop:"合作社",personaOperator:"乡村运营团队",goalLabel:"本次主要目标（最多三项）",goalSell:"直接销售",goalBrand:"建立品牌",goalFans:"积累关注",goalTourism:"引流到村",productTitle:"这次要讲什么产品？",productLabel:"产品名称",originLabel:"产地",descriptionLabel:"用自己的话介绍它",pointsLabel:"你认为最重要的卖点",audienceLabel:"最想卖给谁（可选）",channelTitle:"准备发布到哪里？",douyinName:"抖音",douyinHint:"快节奏 · 强开头",redName:"小红书",redHint:"经验感 · 可收藏",channelsName:"视频号",channelsHint:"信任感 · 私域连接",kuaishouName:"快手",kuaishouHint:"真实感 · 强互动",toneLabel:"表达风格",tonePlain:"朴实自然",toneWarm:"温暖故事",toneLively:"活泼有梗",tonePremium:"克制高级",trendLabel:"想结合的热点（可选）",costTitle:"本次演示不消耗模型额度",costBody:"使用稳定 Mock 生成器；登录团队账号后可切换国产 OpenAI-compatible API。",generate:"生成完整经营方案",emptyTitle:"一份输入，<br>得到一组能直接开拍的内容。",emptyVideos:"三条不同角度的短视频",emptyPlan:"七天发布与复盘计划",loadingTitle:"正在理解产品与经营目标",loadingBody:"整理卖点 · 匹配平台 · 设计内容角度 · 编排七天任务",resultKicker:"本次经营方案",editBrief:"修改简报",tabStrategy:"策略",tabVideos:"短视频",tabCalendar:"7天计划",copyResult:"复制当前方案",positioningLabel:"产品定位",strategyLabel:"平台策略",trendFitLabel:"热点融入",nextActionsLabel:"接下来就这样做",videoLabel:"短视频",hookLabel:"开头钩子",claimError:"输入中包含需要核验的医疗、认证或绝对化宣传，请修改后再生成。",genericError:"生成失败，请检查输入后重试。",footer:"从一句农家话，到一周新媒体经营方案。"
     },
     "zh-HK": {
-      demoMode:"零成本演示模式",proWorkspace:"團隊專業工作台 ↗",headline:"把一份農產品資料，<br><em>變成一週能執行的內容。</em>",subhead:"先告訴禾語你是誰、想賣甚麼、準備發到哪裡。平台會整理賣點，生成三套差異化短影片、直播話術與七天營運安排。",stepLabel:"填寫經營任務",resultLabel:"獲得內容方案",briefKicker:"經營簡報",briefTitle:"先從你最熟悉的產品開始",demoCasesLabel:"一鍵演示案例",demoCasesHint:"選擇後會自動填妥整份表單並生成預覽。",demoTomato:"番茄",demoTea:"高山茶葉",demoFruit:"時令水果",identityTitle:"你是誰，想完成甚麼？",identityLabel:"經營身份",personaFarmer:"農戶 / 家庭農場",personaCoop:"合作社",personaOperator:"鄉村營運團隊",goalLabel:"本次主要目標（最多三項）",goalSell:"直接銷售",goalBrand:"建立品牌",goalFans:"累積關注",goalTourism:"引流到村",productTitle:"這次要講甚麼產品？",productLabel:"產品名稱",originLabel:"產地",descriptionLabel:"用自己的話介紹它",pointsLabel:"你認為最重要的賣點",audienceLabel:"最想賣給誰（可選）",channelTitle:"準備發佈到哪裡？",douyinName:"抖音",douyinHint:"快節奏 · 強開頭",redName:"小紅書",redHint:"經驗感 · 可收藏",channelsName:"視頻號",channelsHint:"信任感 · 私域連接",kuaishouName:"快手",kuaishouHint:"真實感 · 強互動",toneLabel:"表達風格",tonePlain:"樸實自然",toneWarm:"溫暖故事",toneLively:"活潑有趣",tonePremium:"克制高級",trendLabel:"想結合的熱點（可選）",costTitle:"本次演示不消耗模型額度",costBody:"使用穩定 Mock 生成器；登入團隊帳戶後可切換國產 OpenAI-compatible API。",generate:"生成完整經營方案",emptyTitle:"一份輸入，<br>得到一組能直接開拍的內容。",emptyVideos:"三條不同角度的短影片",emptyLive:"一套直播話術結構",emptyPlan:"七天發佈與復盤計劃",loadingTitle:"正在理解產品與經營目標",loadingBody:"整理賣點 · 配對平台 · 設計內容角度 · 編排七天任務",resultKicker:"本次經營方案",editBrief:"修改簡報",tabStrategy:"策略",tabVideos:"短影片",tabLive:"直播",tabCalendar:"7天計劃",copyResult:"複製目前方案",positioningLabel:"產品定位",strategyLabel:"平台策略",trendFitLabel:"熱點融入",nextActionsLabel:"接下來就這樣做",videoLabel:"短影片",liveLabel:"直播環節",hookLabel:"開場鉤子",claimError:"輸入中包含需要核實的醫療、認證或絕對化宣傳，請修改後再生成。",genericError:"生成失敗，請檢查輸入後再試。",footer:"從一句農家話，到一週新媒體經營方案。"
+      demoMode:"零成本演示模式",proWorkspace:"團隊專業工作台 ↗",headline:"把一份農產品資料，<br><em>變成一週能執行的內容。</em>",subhead:"先告訴禾語你是誰、想賣甚麼、準備發到哪裡。平台會整理賣點，生成三套差異化短影片、手機分鏡、拍攝準備及七天營運安排。",stepLabel:"填寫經營任務",resultLabel:"獲得內容方案",briefKicker:"經營簡報",briefTitle:"先從你最熟悉的產品開始",demoCasesLabel:"一鍵演示案例",demoCasesHint:"選擇後會自動填妥整份表單並生成預覽。",demoTomato:"番茄",demoTea:"高山茶葉",demoFruit:"時令水果",identityTitle:"你是誰，想完成甚麼？",identityLabel:"經營身份",personaFarmer:"農戶 / 家庭農場",personaCoop:"合作社",personaOperator:"鄉村營運團隊",goalLabel:"本次主要目標（最多三項）",goalSell:"直接銷售",goalBrand:"建立品牌",goalFans:"累積關注",goalTourism:"引流到村",productTitle:"這次要講甚麼產品？",productLabel:"產品名稱",originLabel:"產地",descriptionLabel:"用自己的話介紹它",pointsLabel:"你認為最重要的賣點",audienceLabel:"最想賣給誰（可選）",channelTitle:"準備發佈到哪裡？",douyinName:"抖音",douyinHint:"快節奏 · 強開頭",redName:"小紅書",redHint:"經驗感 · 可收藏",channelsName:"視頻號",channelsHint:"信任感 · 私域連接",kuaishouName:"快手",kuaishouHint:"真實感 · 強互動",toneLabel:"表達風格",tonePlain:"樸實自然",toneWarm:"溫暖故事",toneLively:"活潑有趣",tonePremium:"克制高級",trendLabel:"想結合的熱點（可選）",costTitle:"本次演示不消耗模型額度",costBody:"使用穩定 Mock 生成器；登入團隊帳戶後可切換國產 OpenAI-compatible API。",generate:"生成完整經營方案",emptyTitle:"一份輸入，<br>得到一組能直接開拍的內容。",emptyVideos:"三條不同角度的短影片",emptyPlan:"七天發佈與復盤計劃",loadingTitle:"正在理解產品與經營目標",loadingBody:"整理賣點 · 配對平台 · 設計內容角度 · 編排七天任務",resultKicker:"本次經營方案",editBrief:"修改簡報",tabStrategy:"策略",tabVideos:"短影片",tabCalendar:"7天計劃",copyResult:"複製目前方案",positioningLabel:"產品定位",strategyLabel:"平台策略",trendFitLabel:"熱點融入",nextActionsLabel:"接下來就這樣做",videoLabel:"短影片",hookLabel:"開場鉤子",claimError:"輸入中包含需要核實的醫療、認證或絕對化宣傳，請修改後再生成。",genericError:"生成失敗，請檢查輸入後再試。",footer:"從一句農家話，到一週新媒體經營方案。"
     },
     en: {
-      demoMode:"Zero-cost demo",proWorkspace:"Professional workspace ↗",headline:"Turn one farm product brief<br><em>into a week of executable content.</em>",subhead:"Tell Heyu who you are, what you sell and where you plan to publish. The platform structures the value proposition and creates three video directions, a live-selling outline and a seven-day plan.",stepLabel:"Describe the task",resultLabel:"Receive the plan",briefKicker:"OPERATING BRIEF",briefTitle:"Start with the product you know best",demoCasesLabel:"One-click demo cases",demoCasesHint:"Choose a case to fill the full brief and generate its preview.",demoTomato:"Tomatoes",demoTea:"High-mountain tea",demoFruit:"Seasonal fruit",identityTitle:"Who are you and what do you need?",identityLabel:"Your role",personaFarmer:"Farmer / family farm",personaCoop:"Cooperative",personaOperator:"Rural operations team",goalLabel:"Primary goals (up to three)",goalSell:"Sell directly",goalBrand:"Build the brand",goalFans:"Grow an audience",goalTourism:"Attract visits",productTitle:"Which product are we telling?",productLabel:"Product name",originLabel:"Origin",descriptionLabel:"Describe it in your own words",pointsLabel:"Most important selling points",audienceLabel:"Priority audience (optional)",channelTitle:"Where will you publish?",douyinName:"Douyin",douyinHint:"Fast · strong hook",redName:"Xiaohongshu",redHint:"Useful · saveable",channelsName:"WeChat Channels",channelsHint:"Trust · private traffic",kuaishouName:"Kuaishou",kuaishouHint:"Authentic · interactive",toneLabel:"Voice",tonePlain:"Plain and natural",toneWarm:"Warm story",toneLively:"Lively",tonePremium:"Quietly premium",trendLabel:"Trend to use (optional)",costTitle:"This demo uses no model credits",costBody:"The stable Mock provider is active. Signed-in teams can switch to a domestic OpenAI-compatible API.",generate:"Generate the operating plan",emptyTitle:"One brief becomes<br>a practical filming and operating kit.",emptyVideos:"Three distinct short videos",emptyLive:"One live-selling structure",emptyPlan:"Seven-day publishing plan",loadingTitle:"Understanding the product and goal",loadingBody:"Structuring value · matching platform · designing angles · planning seven days",resultKicker:"OPERATING PLAN",editBrief:"Edit brief",tabStrategy:"Strategy",tabVideos:"Videos",tabLive:"Live",tabCalendar:"7 days",copyResult:"Copy this section",positioningLabel:"Product positioning",strategyLabel:"Platform strategy",trendFitLabel:"Trend fit",nextActionsLabel:"What to do next",videoLabel:"Video",liveLabel:"Live segment",hookLabel:"Hook",claimError:"The brief contains a medical, certification or absolute claim that must be verified before generation.",genericError:"Generation failed. Please check the input and try again.",footer:"From a farmer's own words to a week of content operations."
+      demoMode:"Zero-cost demo",proWorkspace:"Professional workspace ↗",headline:"Turn one farm product brief<br><em>into a week of executable content.</em>",subhead:"Tell Heyu who you are, what you sell and where you plan to publish. The platform structures the value proposition and creates three video directions, mobile shot lists, filming preparation and a seven-day plan.",stepLabel:"Describe the task",resultLabel:"Receive the plan",briefKicker:"OPERATING BRIEF",briefTitle:"Start with the product you know best",demoCasesLabel:"One-click demo cases",demoCasesHint:"Choose a case to fill the full brief and generate its preview.",demoTomato:"Tomatoes",demoTea:"High-mountain tea",demoFruit:"Seasonal fruit",identityTitle:"Who are you and what do you need?",identityLabel:"Your role",personaFarmer:"Farmer / family farm",personaCoop:"Cooperative",personaOperator:"Rural operations team",goalLabel:"Primary goals (up to three)",goalSell:"Sell directly",goalBrand:"Build the brand",goalFans:"Grow an audience",goalTourism:"Attract visits",productTitle:"Which product are we telling?",productLabel:"Product name",originLabel:"Origin",descriptionLabel:"Describe it in your own words",pointsLabel:"Most important selling points",audienceLabel:"Priority audience (optional)",channelTitle:"Where will you publish?",douyinName:"Douyin",douyinHint:"Fast · strong hook",redName:"Xiaohongshu",redHint:"Useful · saveable",channelsName:"WeChat Channels",channelsHint:"Trust · private traffic",kuaishouName:"Kuaishou",kuaishouHint:"Authentic · interactive",toneLabel:"Voice",tonePlain:"Plain and natural",toneWarm:"Warm story",toneLively:"Lively",tonePremium:"Quietly premium",trendLabel:"Trend to use (optional)",costTitle:"This demo uses no model credits",costBody:"The stable Mock provider is active. Signed-in teams can switch to a domestic OpenAI-compatible API.",generate:"Generate the operating plan",emptyTitle:"One brief becomes<br>a practical filming and operating kit.",emptyVideos:"Three distinct short videos",emptyPlan:"Seven-day publishing plan",loadingTitle:"Understanding the product and goal",loadingBody:"Structuring value · matching platform · designing angles · planning seven days",resultKicker:"OPERATING PLAN",editBrief:"Edit brief",tabStrategy:"Strategy",tabVideos:"Videos",tabCalendar:"7 days",copyResult:"Copy this section",positioningLabel:"Product positioning",strategyLabel:"Platform strategy",trendFitLabel:"Trend fit",nextActionsLabel:"What to do next",videoLabel:"Video",hookLabel:"Hook",claimError:"The brief contains a medical, certification or absolute claim that must be verified before generation.",genericError:"Generation failed. Please check the input and try again.",footer:"From a farmer's own words to a week of content operations."
     }
   };
   Object.assign(copy["zh-CN"], {
@@ -21,6 +21,7 @@
     openSavedPlan: "前往经营方案库",
     saveError: "保存失败，请重新登录后再试。",
     initialSaveSummary: "从农户创建页保存完整经营方案",
+    emptyPrep: "一套手机拍摄执行清单",
     resultStepsLabel: "方案执行步骤",
     tabTopics: "选题适配",
     tabRoutes: "创意路线",
@@ -53,7 +54,6 @@
     nextToTopics: "下一步：看选题适配",
     nextToRoutes: "下一步：选择创意路线",
     nextToPrep: "下一步：准备拍摄",
-    nextToLive: "下一步：准备直播",
     nextToCalendar: "下一步：安排7天计划",
     nextToLibrary: "保存并前往经营方案库",
     workflowHint: "按顺序完成，每一步都能直接进入下一项。",
@@ -73,6 +73,7 @@
     openSavedPlan: "前往營運方案庫",
     saveError: "儲存失敗，請重新登入後再試。",
     initialSaveSummary: "由農戶建立頁儲存完整營運方案",
+    emptyPrep: "一套手機拍攝執行清單",
     resultStepsLabel: "方案執行步驟",
     tabTopics: "選題配對",
     tabRoutes: "創意路線",
@@ -105,7 +106,6 @@
     nextToTopics: "下一步：查看選題配對",
     nextToRoutes: "下一步：選擇創意路線",
     nextToPrep: "下一步：準備拍攝",
-    nextToLive: "下一步：準備直播",
     nextToCalendar: "下一步：安排7天計劃",
     nextToLibrary: "儲存並前往營運方案庫",
     workflowHint: "按次序完成，每一步都可直接進入下一項。",
@@ -125,6 +125,7 @@
     openSavedPlan: "Go to plan library",
     saveError: "Could not save. Please sign in again and retry.",
     initialSaveSummary: "Saved from the farmer creation flow",
+    emptyPrep: "One mobile filming checklist",
     resultStepsLabel: "Plan execution steps",
     tabTopics: "Topic fit",
     tabRoutes: "Creative routes",
@@ -157,7 +158,6 @@
     nextToTopics: "Next: review topic fit",
     nextToRoutes: "Next: choose a creative route",
     nextToPrep: "Next: prepare the shoot",
-    nextToLive: "Next: prepare the live session",
     nextToCalendar: "Next: build the 7-day plan",
     nextToLibrary: "Save and go to plan library",
     workflowHint: "Work through the steps in order; each one leads directly to the next action.",
@@ -199,11 +199,9 @@
     moduleTitle: "选择这次要生成的内容",
     moduleHint: "按本次经营任务自由组合，之后仍可单独换一个版本。",
     moduleVideos: "短视频脚本与分镜",
-    moduleLive: "直播话术",
     moduleCalendar: "七天运营计划",
     moduleRequired: "请至少选择一项要生成的内容。",
     regenerateVideo: "换一个版本",
-    regenerateLive: "重新生成直播话术",
     regenerateCalendar: "重新安排七天计划",
     regenerating: "正在生成新版本…",
     regenerateError: "局部生成失败，请稍后重试。"
@@ -241,11 +239,9 @@
     moduleTitle: "選擇今次要生成的內容",
     moduleHint: "按今次營運任務自由組合，之後仍可單獨換一個版本。",
     moduleVideos: "短影片腳本與分鏡",
-    moduleLive: "直播話術",
     moduleCalendar: "七天營運計劃",
     moduleRequired: "請至少選擇一項要生成的內容。",
     regenerateVideo: "換一個版本",
-    regenerateLive: "重新生成直播話術",
     regenerateCalendar: "重新安排七天計劃",
     regenerating: "正在生成新版本…",
     regenerateError: "局部生成失敗，請稍後再試。"
@@ -283,11 +279,9 @@
     moduleTitle: "Choose what to generate this time",
     moduleHint: "Combine the deliverables needed for this task. Each part can be regenerated later.",
     moduleVideos: "Video scripts and shot lists",
-    moduleLive: "Live-selling talk track",
     moduleCalendar: "Seven-day operating plan",
     moduleRequired: "Choose at least one deliverable to generate.",
     regenerateVideo: "Generate another version",
-    regenerateLive: "Regenerate live talk track",
     regenerateCalendar: "Rebuild the seven-day plan",
     regenerating: "Generating a new version…",
     regenerateError: "Could not regenerate this section. Please retry."
@@ -420,7 +414,6 @@
       <p class="field-hint" data-copy="moduleHint"></p>
       <div class="content-module-grid">
         <label><input type="checkbox" name="content_modules" value="videos" checked><span data-copy="moduleVideos"></span></label>
-        <label><input type="checkbox" name="content_modules" value="livestream" checked><span data-copy="moduleLive"></span></label>
         <label><input type="checkbox" name="content_modules" value="calendar" checked><span data-copy="moduleCalendar"></span></label>
       </div>
     </fieldset>
@@ -448,7 +441,7 @@
   let lastGenerationMode = "rules";
   let savedPlanId = "";
   const regenerationCounts = new Map();
-  const tabOrder = ["strategy", "topics", "routes", "prep", "live", "calendar"];
+  const tabOrder = ["strategy", "topics", "routes", "prep", "calendar"];
 
   function generationMode() {
     return form.elements.generation_mode.value === "model" ? "model" : "rules";
@@ -632,7 +625,6 @@
     const modules = new Set(list(result?.included_modules));
     return tabOrder.filter((tab) => {
       if (["routes", "prep"].includes(tab)) return modules.has("videos");
-      if (tab === "live") return modules.has("livestream");
       if (tab === "calendar") return modules.has("calendar");
       return true;
     });
@@ -656,7 +648,6 @@
       topics: copy[locale].nextToTopics,
       routes: copy[locale].nextToRoutes,
       prep: copy[locale].nextToPrep,
-      live: copy[locale].nextToLive,
       calendar: copy[locale].nextToCalendar
     };
     return `<div class="flow-next"><span>${escape(copy[locale].workflowHint)}</span><button type="button" data-next-tab="${escape(resolved)}">${escape(labels[resolved] || label)} <b>→</b></button></div>`;
@@ -937,9 +928,7 @@
         <article class="result-card"><span>${escape(copy[locale].prepChecklist)}</span><ol class="shot-list prep-list">${list(video.shots).map((shot) => `<li><b>${escape(shot.seconds)}</b><span>${escape(shot.visual)}</span><span>${escape(shot.voiceover)}</span>${shot.filming_tip ? `<small><strong>${escape(copy[locale].filmingTip)}：</strong>${escape(shot.filming_tip)}</small>` : ""}</li>`).join("")}</ol></article>
         ${checklist.length ? `<article class="result-card"><span>${escape(copy[locale].prepChecklist)}</span><ul class="check-list">${checklist.map((item) => `<li>${escape(item)}</li>`).join("")}</ul></article>` : ""}
         ${video.call_to_action ? `<article class="result-card action-card"><span>${escape(copy[locale].callToAction)}</span><h3>${escape(video.call_to_action)}</h3></article>` : ""}
-        ${flowFooter("live", copy[locale].nextToLive)}`;
-    } else if (activeTab === "live") {
-      content.innerHTML = `<div class="module-toolbar"><button type="button" class="module-regenerate" data-regenerate-target="livestream">${escape(copy[locale].regenerateLive)}</button></div>` + list(result.livestream).map((section, index) => `<article class="result-card"><span>${escape(copy[locale].liveLabel)} ${String(index + 1).padStart(2, "0")}</span><h3>${escape(section.section)}</h3><div class="tag-row">${list(section.talking_points).map((item) => `<b>${escape(item)}</b>`).join("")}</div></article>`).join("") + flowFooter("calendar", copy[locale].nextToCalendar);
+        ${flowFooter("calendar", copy[locale].nextToCalendar)}`;
     } else {
       content.innerHTML = `<div class="module-toolbar"><button type="button" class="module-regenerate" data-regenerate-target="calendar">${escape(copy[locale].regenerateCalendar)}</button></div><ol class="day-list">${list(result.seven_day_plan).map((day) => `<li><b>${String(day.day).padStart(2, "0")}</b><div><strong>${escape(day.objective)}</strong><span>${escape(day.content)}</span><span>→ ${escape(day.action)}</span></div></li>`).join("")}</ol><div class="flow-next final"><span>${escape(copy[locale].workflowHint)}</span><button type="button" data-save-plan>${escape(copy[locale].nextToLibrary)} <b>→</b></button></div>`;
     }

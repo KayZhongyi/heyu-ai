@@ -45,6 +45,10 @@ def _default_goals() -> list[Goal]:
 
 
 def _default_content_modules() -> list[MarketingContentModule]:
+    return ["videos", "calendar"]
+
+
+def _all_content_modules() -> list[MarketingContentModule]:
     return ["videos", "livestream", "calendar"]
 
 
@@ -324,7 +328,7 @@ class MarketingPlanResponse(StrictModel):
     livestream: list[LivestreamSection] = Field(default_factory=list, max_length=8)
     seven_day_plan: list[DailyPlan] = Field(default_factory=list, max_length=7)
     included_modules: list[MarketingContentModule] = Field(
-        default_factory=_default_content_modules,
+        default_factory=_all_content_modules,
         min_length=1,
         max_length=3,
     )
@@ -1759,7 +1763,7 @@ class DeterministicMarketingProvider:
                 platform_name=platform_name,
                 content_focus="前三秒提出具体问题或选择，中段立刻给视觉证据，结尾用一个评论动作承接互动。",
                 recommended_duration="25–40秒；人物故事可延长至60秒",
-                conversion_action="先用评论问题承接互动，再按所选路线引导规格咨询、下一条内容或直播。",
+                conversion_action="先用评论问题承接互动，再按所选路线引导规格咨询、下一条内容或私信承接。",
             ),
             trend=trend_brief,
             creative_routes=creative_routes,
@@ -1809,7 +1813,7 @@ class DeterministicMarketingProvider:
                     day=2,
                     objective="解释产品差异",
                     content=f"发布“{blueprints[1]['title']}”人物视频",
-                    action="把评论问题加入直播问答",
+                    action="把高频评论整理成下一条选题",
                 ),
                 DailyPlan(
                     day=3,
@@ -1825,21 +1829,21 @@ class DeterministicMarketingProvider:
                 ),
                 DailyPlan(
                     day=5,
-                    objective="直播预热",
-                    content="发布装箱、备货或直播预告",
-                    action="明确直播时间和主推规格",
+                    objective="补充产品信息",
+                    content="发布装箱、备货或产品细节补充视频",
+                    action="在评论区补充规格、食用和发货信息",
                 ),
                 DailyPlan(
                     day=6,
                     objective="集中转化",
-                    content=f"围绕{product}完成一场30–60分钟直播",
-                    action="记录高频问题、停留峰值和成交节点",
+                    content=f"集中回复{product}的规格、食用和发货问题",
+                    action="记录高频问题、私信咨询和转化线索",
                 ),
                 DailyPlan(
                     day=7,
                     objective="复盘并再利用",
-                    content="剪辑直播中的高价值问答",
-                    action="保留有效开头，改写表现较弱的脚本",
+                    content="把高价值评论整理成下一轮内容素材",
+                    action="保留有效开头，将高频问题改写为下一条脚本",
                 ),
             ],
             next_actions=[
@@ -2274,7 +2278,7 @@ class DeterministicMarketingProvider:
                 platform_name=platform_name,
                 content_focus="Open with a specific question or choice, provide visual evidence immediately, and finish with one interaction action.",
                 recommended_duration="25–40 seconds; up to 60 seconds for a farmer story",
-                conversion_action="Use a route-specific comment question first, then guide viewers to details, the next episode or a live session.",
+                conversion_action="Use a route-specific comment question first, then guide viewers to product details, the next episode or direct messages.",
             ),
             trend=trend,
             creative_routes=creative_routes,
@@ -2331,7 +2335,7 @@ class DeterministicMarketingProvider:
                     day=2,
                     objective="Explain the difference",
                     content=f"Publish “{blueprints[1]['title']}”",
-                    action="Add comment questions to the live Q&A",
+                    action="Add recurring comment questions to the next topic list",
                 ),
                 DailyPlan(
                     day=3,
@@ -2347,21 +2351,21 @@ class DeterministicMarketingProvider:
                 ),
                 DailyPlan(
                     day=5,
-                    objective="Prepare the live session",
-                    content="Show packing, stock preparation or a live preview",
-                    action="State the live time and featured specification",
+                    objective="Add product detail",
+                    content="Publish a packing, product-detail or use-case follow-up",
+                    action="Reply with product, serving and delivery information",
                 ),
                 DailyPlan(
                     day=6,
                     objective="Convert demand",
-                    content=f"Run a 30–60 minute {product} live session",
-                    action="Record common questions and conversion moments",
+                    content=f"Reply to specification, serving and delivery questions about {product}",
+                    action="Record recurring questions, direct messages and conversion signals",
                 ),
                 DailyPlan(
                     day=7,
                     objective="Review and reuse",
-                    content="Cut the strongest Q&A moments from the live session",
-                    action="Keep strong openings and rewrite weaker scripts",
+                    content="Turn valuable comments into the next content cycle",
+                    action="Keep strong openings and rewrite recurring questions as the next script",
                 ),
             ],
             next_actions=[
@@ -2405,6 +2409,9 @@ For every route:
 Also provide three explainable topic signals and seven daily actions, then end with
 route selection, shoot preparation and publication follow-up. Keep the requested
 locale natural and adapt pacing and interaction to the selected Chinese platform.
+Keep livestream talking points isolated to the legacy livestream field. Do not
+schedule livestream activity in the seven-day plan. Focus on publishing, comments,
+direct-message follow-up and content reuse.
 Use only supplied product facts. Do not invent certifications, prices, medical
 effects, stock, popularity metrics, views, sales or trend rankings."""
 
@@ -2844,7 +2851,7 @@ def merge_regenerated_marketing_module(
 
 def generate_marketing_preview(request: MarketingPlanRequest) -> MarketingPlanResponse:
     """Always-free preview used by the public/local demo."""
-    provider_request = request.model_copy(update={"content_modules": _default_content_modules()})
+    provider_request = request.model_copy(update={"content_modules": _all_content_modules()})
     result = DeterministicMarketingProvider().generate(provider_request)
     return select_marketing_modules(result, request.content_modules)
 
@@ -2858,7 +2865,7 @@ def generate_marketing_plan(request: MarketingPlanRequest) -> MarketingPlanRespo
     if cached is not None:
         return select_marketing_modules(cached, request.content_modules)
 
-    provider_request = request.model_copy(update={"content_modules": _default_content_modules()})
+    provider_request = request.model_copy(update={"content_modules": _all_content_modules()})
     try:
         result = provider.generate(provider_request)
     except MarketingProviderError:
@@ -2883,7 +2890,7 @@ def regenerate_marketing_preview(
     payload: MarketingModuleRegenerationRequest,
 ) -> MarketingPlanResponse:
     provider_request = payload.request.model_copy(
-        update={"content_modules": _default_content_modules()}
+        update={"content_modules": _all_content_modules()}
     )
     candidate = DeterministicMarketingProvider().generate(provider_request)
     return merge_regenerated_marketing_module(payload, candidate)
@@ -2893,7 +2900,7 @@ def regenerate_marketing_plan(
     payload: MarketingModuleRegenerationRequest,
 ) -> MarketingPlanResponse:
     provider_request = payload.request.model_copy(
-        update={"content_modules": _default_content_modules()}
+        update={"content_modules": _all_content_modules()}
     )
     candidate = generate_marketing_plan(provider_request)
     return merge_regenerated_marketing_module(payload, candidate)
