@@ -1788,20 +1788,12 @@ def create_campaign_package(
             ("hero_short_video", ContentType.short_video_30s, 10, True),
             ("title_cover", ContentType.title_and_cover, 20, True),
             ("platform_caption", ContentType.social_post, 30, True),
-            ("livestream_opening", ContentType.livestream_opening, 40, True),
-            (
-                "livestream_product_pitch",
-                ContentType.livestream_product_pitch,
-                50,
-                True,
-            ),
-            ("livestream_interaction", ContentType.livestream_interaction, 60, False),
-            ("comment_reply_bank", ContentType.comment_reply, 70, False),
+            ("comment_reply_bank", ContentType.comment_reply, 40, False),
             (
                 "mobile_shooting_checklist",
                 ContentType.mobile_shooting_checklist,
-                80,
-                False,
+                50,
+                True,
             ),
         )
         for slot_key, content_type, position, required in default_items:

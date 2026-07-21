@@ -19,9 +19,16 @@ async function main() {
 
   try {
     await page.goto(`${baseUrl}/create/?lang=en`, { waitUntil: "networkidle" });
-    await page
-      .locator('[name="content_modules"][value="livestream"]')
-      .uncheck({ force: true });
+    assert.equal(
+      await page.locator('[name="content_modules"][value="livestream"]').count(),
+      0,
+      "the new content flow must not expose a livestream module",
+    );
+    assert.equal(
+      await page.locator('.result-tabs [data-tab="live"]').count(),
+      0,
+      "the new content flow must not expose a livestream tab",
+    );
     await page
       .locator('[name="content_modules"][value="calendar"]')
       .uncheck({ force: true });
@@ -39,11 +46,6 @@ async function main() {
       await page.locator('.result-tabs [data-tab="routes"]').isVisible(),
       true,
       "video route tab should remain visible",
-    );
-    assert.equal(
-      await page.locator('.result-tabs [data-tab="live"]').isVisible(),
-      false,
-      "unselected livestream tab should be hidden",
     );
     assert.equal(
       await page.locator('.result-tabs [data-tab="calendar"]').isVisible(),

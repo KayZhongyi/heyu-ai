@@ -86,6 +86,29 @@ form label,.result-panel>label{display:grid;gap:7px;margin:17px 0;color:var(--mu
 .calendar-publication{margin-top:13px;padding-top:10px;border-top:1px solid var(--line)}.calendar-publication summary{color:var(--accent-dark);font-size:10px;font-weight:750;cursor:pointer}.marketing-publication-task-form{display:grid;gap:8px;margin-top:11px}.marketing-publication-task-form label{margin:0;font-size:9px}.marketing-publication-task-form input,.marketing-publication-task-form select{min-height:36px;padding:7px 9px;font-size:10px}.marketing-publication-task-form button{margin-top:3px}.publication-task-panel{margin-top:20px;border:1px solid var(--line);background:linear-gradient(135deg,#f3faf8e8,#f7f9fce8 52%,#fff5f0d9)}.publication-task-panel h2{padding:0;border:0}.publication-task-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:22px}.publication-task-list.empty{display:block}.publication-task-card{border:1px solid var(--line)!important;background:#ffffffd9!important}.publication-task-card .badge{margin-top:0}.publication-task-card .source-meta{margin:12px 0}.publication-confirmation{margin-top:14px;padding:13px;border:1px solid var(--line);background:#f8fbfa}.publication-confirmation summary{color:var(--accent-dark);font-size:10px;font-weight:750;cursor:pointer}.publication-confirmation-form{display:grid;grid-template-columns:1fr 1fr;gap:0 12px;margin-top:12px}.publication-confirmation-form label{margin:0 0 10px}.publication-confirmation-form textarea,.publication-confirmation-form .form-note,.publication-confirmation-form button{grid-column:1/-1}
 @media(max-width:760px){.operation-import-controls,.performance-review-grid,.publication-task-list,.publication-confirmation-form{grid-template-columns:1fr}.operation-preview-summary{align-items:flex-start;flex-direction:column}.operation-import-panel,.publication-task-panel{padding:24px 16px}.publication-operation-card{padding:18px!important}.publication-confirmation-form>*{grid-column:1}}
 
+/* Demo readability: generated copy and the operating loop must remain legible
+   when the workspace is captured at a standard notebook resolution. */
+.panel-heading>*{min-width:0}
+.panel-heading h2,.panel-heading h3{overflow-wrap:anywhere}
+.generation-preview{font-size:16px;line-height:1.85}
+.review-reading-copy{font-size:15px;line-height:1.85}
+.plan-preview-section p,
+.plan-preview-section li,
+.plan-preview-section small{font-size:13px;line-height:1.7}
+.plan-preview-section dt{font-size:11px}
+.plan-preview-section dd{font-size:13px;line-height:1.65}
+.plan-video-card>span{font-size:10px}
+.plan-video-card h4{font-size:16px;line-height:1.45}
+.plan-video-card summary,
+.plan-editor-wrap summary{font-size:12px}
+.plan-calendar article b{font-size:10px}
+.plan-calendar h4{font-size:14px;line-height:1.45}
+.plan-calendar article p{font-size:12px;line-height:1.65}
+.performance-review h4{font-size:13px}
+.performance-review ul{font-size:12px;line-height:1.7}
+.review-signals small{font-size:10px;line-height:1.5}
+.performance-review summary{font-size:12px}
+
 /* Administrator model connections */
 .provider-hero{position:relative;display:flex;align-items:flex-end;justify-content:space-between;gap:28px;margin-top:20px;padding:34px;border:1px solid var(--line);overflow:hidden;background:radial-gradient(circle at 88% 12%,#ff876f35 0,transparent 27%),linear-gradient(125deg,#fbfffde8,#e6f5f0e8 62%,#edf2f7e0)}
 .provider-hero:after{content:"";position:absolute;right:9%;top:-90px;width:230px;height:230px;border:1px solid #15996e2c;border-radius:50%;box-shadow:0 0 0 30px #15996e0a,0 0 0 62px #ff806e0a}

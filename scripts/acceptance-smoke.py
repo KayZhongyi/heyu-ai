@@ -230,8 +230,8 @@ class AcceptanceRun:
             len(plan.get("videos", [])) == 3, "preview did not return three videos"
         )
         self.require(
-            len(plan.get("livestream", [])) >= 4,
-            "preview did not return the livestream outline",
+            plan.get("livestream", []) == [],
+            "default preview unexpectedly returned legacy livestream content",
         )
         self.require(
             len(plan.get("seven_day_plan", [])) == 7,
@@ -241,7 +241,7 @@ class AcceptanceRun:
             "provider": plan.get("provider"),
             "model": plan.get("model"),
             "videos": len(plan["videos"]),
-            "livestream_sections": len(plan["livestream"]),
+            "livestream_sections": 0,
             "operating_days": len(plan["seven_day_plan"]),
         }
 

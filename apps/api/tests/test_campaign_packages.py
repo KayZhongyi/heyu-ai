@@ -467,8 +467,8 @@ def test_campaign_can_create_the_default_marketing_pack_in_one_request(
     assert response.status_code == 201, response.text
     campaign = response.json()
     assert campaign["progress"] == {
-        "total": 8,
-        "required": 5,
+        "total": 5,
+        "required": 4,
         "generated": 0,
         "approved": 0,
         "published": 0,
@@ -489,21 +489,21 @@ def test_campaign_can_create_the_default_marketing_pack_in_one_request(
         "hero_short_video",
         "title_cover",
         "platform_caption",
-        "livestream_opening",
-        "livestream_product_pitch",
-        "livestream_interaction",
         "comment_reply_bank",
         "mobile_shooting_checklist",
     ]
-    assert db.scalar(select(func.count()).select_from(ContentProject)) == before + 8
+    assert db.scalar(select(func.count()).select_from(ContentProject)) == before + 5
     assert all(item["project"]["brand_id"] == brand["id"] for item in campaign["items"])
     assert all(item["project"]["product_id"] == product["id"] for item in campaign["items"])
     assert all(chr(0x00B7) in item["project"]["title"] for item in campaign["items"])
+    assert not any(
+        item["project"]["content_type"].startswith("livestream") for item in campaign["items"]
+    )
     shooting_item = next(
         item for item in campaign["items"] if item["slot_key"] == "mobile_shooting_checklist"
     )
     assert shooting_item["project"]["content_type"] == "mobile_shooting_checklist"
-    assert shooting_item["required"] is False
+    assert shooting_item["required"] is True
 
 
 def test_campaign_update_rejects_brand_or_product_reassignment(

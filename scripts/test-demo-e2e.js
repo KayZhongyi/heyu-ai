@@ -57,8 +57,8 @@ const baseUrl = process.env.HEYU_BASE_URL || "http://127.0.0.1:8765";
     await assertVisibleText(page, "routes", ["实用吸睛", "人物故事", "轻松反差"]);
     assert.equal(await page.locator(".route-card").count(), 3);
     await assertVisibleText(page, "prep", ["当前拍摄路线", "开头钩子", "拍摄提示"]);
-    await assertVisibleText(page, "live", ["开场留人", "产品讲解", "成交引导"]);
-    await assertVisibleText(page, "calendar", ["让用户认识产品", "直播预热", "复盘并再利用"]);
+    assert.equal(await page.locator('[data-tab="live"]').count(), 0);
+    await assertVisibleText(page, "calendar", ["让用户认识产品", "补充产品信息", "复盘并再利用"]);
 
     const saveResponsePromise = page.waitForResponse(
       (response) =>

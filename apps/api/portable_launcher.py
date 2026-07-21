@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import secrets
 import sys
 import threading
 import time
@@ -26,6 +27,20 @@ def application_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def load_or_create_app_secret(data_dir: Path) -> str:
+    secret_path = data_dir / "app-secret.txt"
+    if secret_path.is_file():
+        app_secret = secret_path.read_text(encoding="ascii").strip()
+    else:
+        app_secret = secrets.token_urlsafe(32)
+        secret_path.write_text(app_secret, encoding="ascii")
+    if len(app_secret) < 32:
+        raise RuntimeError(
+            f"The local APP_SECRET is invalid. Delete {secret_path} and start Heyu AI again."
+        )
+    return app_secret
+
+
 def configure_environment() -> Path:
     root = application_root()
     os.chdir(root)
@@ -36,6 +51,8 @@ def configure_environment() -> Path:
     os.environ["DATABASE_URL"] = f"sqlite:///{database_path}"
     os.environ["AUTO_CREATE_SCHEMA"] = "false"
     os.environ.setdefault("APP_ENV", "development")
+    if not os.environ.get("APP_SECRET"):
+        os.environ["APP_SECRET"] = load_or_create_app_secret(data_dir)
     os.environ.setdefault("PYTHONUTF8", "1")
     return data_dir
 

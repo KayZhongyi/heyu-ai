@@ -374,6 +374,9 @@ def test_request_deduplicates_goals_and_rejects_high_risk_claims():
     request = sample_request(goals=["sell", "sell", "build-brand"])
     assert request.goals == ["sell", "build-brand"]
 
+    request = sample_request()
+    assert request.content_modules == ["videos", "calendar"]
+
     request = sample_request(content_modules=["videos", "videos", "calendar"])
     assert request.content_modules == ["videos", "calendar"]
 
@@ -409,13 +412,28 @@ def test_public_preview_returns_only_selected_content_modules(
     assert len(body["seven_day_plan"]) == calendar_count
 
 
+def test_public_preview_defaults_to_video_and_calendar(client: TestClient):
+    response = client.post(
+        "/v1/marketing/preview",
+        json=sample_request().model_dump(mode="json"),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["included_modules"] == ["videos", "calendar"]
+    assert len(body["videos"]) == 3
+    assert body["livestream"] == []
+    assert len(body["seven_day_plan"]) == 7
+
+
 def test_request_rejects_empty_content_module_selection():
     with pytest.raises(ValidationError):
         sample_request(content_modules=[])
 
 
 def test_response_rejects_module_presence_mismatch():
-    valid = DeterministicMarketingProvider().generate(sample_request()).model_dump()
+    request = sample_request(content_modules=["videos", "livestream", "calendar"])
+    valid = DeterministicMarketingProvider().generate(request).model_dump()
     valid["included_modules"] = ["videos", "calendar"]
 
     with pytest.raises(ValidationError, match="livestream presence"):
@@ -446,7 +464,7 @@ def test_public_preview_endpoint_needs_no_account(client: TestClient):
 
 def test_public_regeneration_replaces_only_selected_video(client: TestClient):
     request = sample_request()
-    current = DeterministicMarketingProvider().generate(request)
+    current = marketing.generate_marketing_preview(request)
     payload = {
         "request": request.model_dump(mode="json"),
         "current_plan": current.model_dump(mode="json"),
@@ -477,8 +495,12 @@ def test_public_regeneration_replaces_only_requested_module(
     target: str,
     changed_field: str,
 ):
-    request = sample_request()
-    current = DeterministicMarketingProvider().generate(request)
+    request = (
+        sample_request(content_modules=["videos", "livestream", "calendar"])
+        if target == "livestream"
+        else sample_request()
+    )
+    current = marketing.generate_marketing_preview(request)
     current_json = current.model_dump(mode="json")
 
     response = client.post(
